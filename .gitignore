@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+backend/.venv/
+recon.db
+*.sqlite3
+
+# Node
+node_modules/
+frontend/dist/
+frontend/package-lock.json
+
+# Env
+.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

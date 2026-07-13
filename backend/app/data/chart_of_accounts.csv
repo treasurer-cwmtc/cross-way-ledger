@@ -1,0 +1,68 @@
+AccountNo,Category,StatementCategory,StatementItem,StatementDetail,StatementDescription,IsTaxDeductible,IsMandatory
+I000000,Income,,,,Income,,
+I101010,Income,Income,Pledges,,Income - Income - Pledges,Yes,
+I111010,Income,Income,Restricted Gifts - Missions,Restricted,Income - Income - Restricted Gifts - Missions - Restricted,Yes,
+I111110,Income,Income,Restricted Gifts - Missions,Navjeevan,Income - Income - Restricted Gifts - Missions - Navjeevan,Yes,
+I111210,Income,Income,Restricted Gifts - Missions,Oklahoma Mission,Income - Income - Restricted Gifts - Missions - Oklahoma Mission,Yes,
+I111310,Income,Income,Restricted Gifts - Missions,India-House rebuild,Income - Income - Restricted Gifts - Missions - India-House rebuild,Yes,
+I111410,Income,Income,Restricted Gifts - Missions,Light to Life,Income - Income - Restricted Gifts - Missions - Light to Life,Yes,
+I111510,Income,Income,Restricted Gifts - Missions,Our Calling,Income - Income - Restricted Gifts - Missions - Our Calling,Yes,
+I111610,Income,Income,Restricted Gifts - Missions,Texas Flood Relief,Income - Income - Restricted Gifts - Missions - Texas Flood Relief,Yes,
+I111710,Income,Income,Restricted Gifts - Missions,OneCollective,Income - Income - Restricted Gifts - Missions - OneCollective,Yes,
+I121010,Income,Income,Sunday Offertory,,Income - Income - Sunday Offertory,Yes,
+I131010,Income,Income,Thanksgiving Offertory,,Income - Income - Thanksgiving Offertory,Yes,
+I141010,Income,Income,Miscellaneous Activities,Retreat-Donation,Income - Income - Miscellaneous Activities - Retreat-Donation,,
+I141011,Income,Income,Miscellaneous Activities,Retreat-Registration,Income - Income - Miscellaneous Activities - Retreat-Registration,,
+I141110,Income,Income,Miscellaneous Activities,Golf Tournament-Donation,Income - Income - Miscellaneous Activities - Golf Tournament-Donation,,
+I141111,Income,Income,Miscellaneous Activities,Golf Tournament-Registration,Income - Income - Miscellaneous Activities - Golf Tournament-Registration,,
+I141210,Income,Income,Miscellaneous Activities,First Communion-Share,Income - Income - Miscellaneous Activities - First Communion-Share,,
+I141211,Income,Income,Miscellaneous Activities,First Communion-Registration,Income - Income - Miscellaneous Activities - First Communion-Registration,,
+I141310,Income,Income,Miscellaneous Activities,VBS-Donation,Income - Income - Miscellaneous Activities - VBS-Donation,,
+I141311,Income,Income,Miscellaneous Activities,VBS-Registration,Income - Income - Miscellaneous Activities - VBS-Registration,,
+I141410,Income,Income,Miscellaneous Activities,Cross Way Couples Date Night-Donation,Income - Income - Miscellaneous Activities - Cross Way Couples Date Night-Donation,,
+I141411,Income,Income,Miscellaneous Activities,Cross Way Couples Date Night-Registration,Income - Income - Miscellaneous Activities - Cross Way Couples Date Night-Registration,,
+I141513,Income,Income,Miscellaneous Activities,Achen Farewell,Income - Income - Miscellaneous Activities - Achen Farewell,,
+I151010,Income,Income,Rental Fee,,Income - Income - Rental Fee,,
+I161010,Income,Income,Interest & Dividend Income,,Income - Income - Interest & Dividend Income,,
+I171010,Income,Income,Restricted Gifts,VBS,Income - Income - Restricted Gifts - VBS,Yes,
+I171110,Income,Income,Restricted Gifts,Retreat,Income - Income - Restricted Gifts - Retreat,Yes,
+I171210,Income,Income,Restricted Gifts,Golf Tournament,Income - Income - Restricted Gifts - Golf Tournament,Yes,
+I171310,Income,Income,Restricted Gifts,Audio Video,Income - Income - Restricted Gifts - Audio Video,Yes,
+I171410,Income,Income,Restricted Gifts,Conference,Income - Income - Restricted Gifts - Conference,Yes,
+I171510,Income,Income,Restricted Gifts,Connect Groups,Income - Income - Restricted Gifts - Connect Groups,Yes,
+I171610,Income,Income,Restricted Gifts,Life Groups,Income - Income - Restricted Gifts - Life Groups,Yes,
+I171710,Income,Income,Restricted Gifts,Media,Income - Income - Restricted Gifts - Media,Yes,
+I171810,Income,Income,Restricted Gifts,Praise and Worship,Income - Income - Restricted Gifts - Praise and Worship,Yes,
+I171910,Income,Income,Restricted Gifts,Sunday School,Income - Income - Restricted Gifts - Sunday School,Yes,
+I172010,Income,Income,Restricted Gifts,Youth Fellowship,Income - Income - Restricted Gifts - Youth Fellowship,Yes,
+I172110,Income,Income,Restricted Gifts,Christmas Fellowship,Income - Income - Restricted Gifts - Christmas Fellowship,Yes,
+I172210,Income,Income,Restricted Gifts,Church Picnic,Income - Income - Restricted Gifts - Church Picnic,Yes,
+I172310,Income,Income,Restricted Gifts,Episcopal Visit,Income - Income - Restricted Gifts - Episcopal Visit,Yes,
+I172410,Income,Income,Restricted Gifts,Parish Day,Income - Income - Restricted Gifts - Parish Day,Yes,
+I172510,Income,Income,Restricted Gifts,General,Income - Income - Restricted Gifts - General,Yes,
+I172610,Income,Income,Restricted Gifts,Christmas Play,Income - Income - Restricted Gifts - Christmas Play,Yes,
+I172710,Income,Income,Restricted Gifts,Passthrough,Income - Income - Restricted Gifts - Passthrough,Yes,
+I172810,Income,Income,Restricted Gifts,Building fund,Income - Income - Restricted Gifts - Building fund,Yes,
+I172910,Income,Income,Restricted Gifts,PW Fundraiser,Income - Income - Restricted Gifts - PW Fundraiser,Yes,
+I181210,Income,Income,Restricted Net Assets - Building Improvement,General,Income - Income - Restricted Net Assets - Building Improvement - General,,
+I191010,Income,Income,Restricted Net Assets - Bank Transfer,General,Income - Income - Restricted Net Assets - Bank Transfer - General,,
+I201010,Income,Income,Restricted Net Assets - Missions,General,Income - Income - Restricted Net Assets - Missions - General,,
+I211510,Income,Income,Restricted Net Assets - Technology,General,Income - Income - Restricted Net Assets - Technology - General,,
+I221010,Income,Income,Miscellaneous Activities,General,Income - Income - Miscellaneous Activities - General,,
+I221810,Income,Income,General Donations,,Income - Income - General Donations,,
+E000000,Expense,,,,Expense,,
+E101710,Expense,Vicar Related,Salaries and Benefits,,Expense - Vicar Related - Salaries and Benefits,,Yes
+E101810,Expense,Vicar Related,Travel Allowance,Toll,Expense - Vicar Related - Travel Allowance - Toll,,Yes
+E141711,Expense,Property,Church-Utilities,Trash,Expense - Property - Church-Utilities - Trash,,Yes
+E141712,Expense,Property,Church-Utilities,Electricity,Expense - Property - Church-Utilities - Electricity,,Yes
+E141713,Expense,Property,Church-Utilities,Gas,Expense - Property - Church-Utilities - Gas,,Yes
+E141714,Expense,Property,Church-Utilities,Internet,Expense - Property - Church-Utilities - Internet,,Yes
+E151010,Expense,Administration,Banking Fees,Chase,Expense - Administration - Banking Fees - Chase,,Yes
+E151011,Expense,Administration,Banking Fees,Stripe,Expense - Administration - Banking Fees - Stripe,,Yes
+E151110,Expense,Administration,Church Management System,Planning Center,Expense - Administration - Church Management System - Planning Center,,Yes
+E151710,Expense,Administration,Refreshments,Supplies,Expense - Administration - Refreshments - Supplies,,Yes
+E151711,Expense,Administration,Refreshments,Food,Expense - Administration - Refreshments - Food,,Yes
+E151910,Expense,Administration,Supplies,Service related,Expense - Administration - Supplies - Service related,,Yes
+E221212,Expense,Parsonage,Parsonage-Utilities,Internet,Expense - Parsonage - Parsonage-Utilities - Internet,,Yes
+E221213,Expense,Parsonage,Parsonage-Utilities,Gas,Expense - Parsonage - Parsonage-Utilities - Gas,,Yes
+E221214,Expense,Parsonage,Parsonage-Maintenance,Landscaping,Expense - Parsonage - Parsonage-Maintenance - Landscaping,,Yes
