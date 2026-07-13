@@ -33,8 +33,9 @@ docker compose up -d --build
 - Backend API + docs: http://localhost:8000/api/health, http://localhost:8000/docs
 
 The Chart of Accounts and a starter set of rules are seeded automatically on first
-startup. See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the full VPS
-(headless) setup, HTTPS, boot-on-startup, and backups. See
+startup. See **[docs/STATUS.md](docs/STATUS.md)** for where development left off
+(read this first when resuming). See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
+for the full VPS (headless) setup, HTTPS, boot-on-startup, and backups. See
 **[docs/PROJECT.md](docs/PROJECT.md)** for the project knowledge base.
 
 ## Authentication
