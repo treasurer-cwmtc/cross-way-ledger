@@ -26,14 +26,16 @@ app:
 
 ```bash
 cp .env.example .env      # edit POSTGRES_PASSWORD
-docker compose up --build
+docker compose up -d --build
 ```
 
 - Frontend: http://localhost:8080
 - Backend API + docs: http://localhost:8000/api/health, http://localhost:8000/docs
 
 The Chart of Accounts and a starter set of rules are seeded automatically on first
-startup.
+startup. See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the full VPS
+(headless) setup, HTTPS, boot-on-startup, and backups. See
+**[docs/PROJECT.md](docs/PROJECT.md)** for the project knowledge base.
 
 ## Run locally without Docker (POC)
 
