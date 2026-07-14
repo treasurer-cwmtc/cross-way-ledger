@@ -3,6 +3,7 @@ import { accrualApi, AccrualEntry, AccrualEntryCreate } from "../../api/accrual"
 import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
 import { METHOD_OPTIONS } from "../ledger/columns";
+import AccountPicker from "../ledger/AccountPicker";
 
 /** Fast, keyboard-driven entry: fill in the fields, hit Enter (or click Add),
  * the entry saves and the form resets for the next one. Date/Statement
@@ -109,17 +110,11 @@ export default function QuickAddModal(props: {
 
           <label className="field">
             <span>Statement Description (Chart of Accounts)</span>
-            <select
+            <AccountPicker
               value={sticky.account_no}
-              onChange={(e) => setSticky((s) => ({ ...s, account_no: e.target.value }))}
-            >
-              <option value="">— uncategorized —</option>
-              {props.accounts.map((a) => (
-                <option key={a.account_no} value={a.account_no}>
-                  {a.account_no} · {a.statement_description}
-                </option>
-              ))}
-            </select>
+              accounts={props.accounts}
+              onChange={(v) => setSticky((s) => ({ ...s, account_no: v }))}
+            />
           </label>
 
           <label className="field">

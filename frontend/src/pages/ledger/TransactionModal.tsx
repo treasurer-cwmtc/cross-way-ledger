@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
 import { METHOD_OPTIONS } from "./columns";
+import AccountPicker from "./AccountPicker";
 import {
-  AccountCell,
   BankAccountCell,
   CheckboxCell,
   CurrencyCell,
@@ -127,7 +127,7 @@ export default function TransactionModal(props: {
 
         <label className="field">
           <span>Statement Description (Chart of Accounts)</span>
-          <AccountCell
+          <AccountPicker
             value={e.account_no}
             accounts={props.accounts}
             onChange={(v) => set({ account_no: v })}

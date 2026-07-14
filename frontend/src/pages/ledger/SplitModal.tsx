@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChartAccount } from "../../api/accounts";
+import AccountPicker from "./AccountPicker";
 import { LedgerEntry, SplitLine } from "./types";
 
 interface DraftLine {
@@ -95,17 +96,11 @@ export default function SplitModal(props: {
             </label>
             <label className="field">
               <span>Statement Description</span>
-              <select
+              <AccountPicker
                 value={line.account_no}
-                onChange={(ev) => updateLine(i, { account_no: ev.target.value })}
-              >
-                <option value="">— uncategorized —</option>
-                {props.accounts.map((a) => (
-                  <option key={a.account_no} value={a.account_no}>
-                    {a.account_no} · {a.statement_description}
-                  </option>
-                ))}
-              </select>
+                accounts={props.accounts}
+                onChange={(v) => updateLine(i, { account_no: v })}
+              />
             </label>
             <label className="field" style={{ maxWidth: 120 }}>
               <span>Amount</span>
