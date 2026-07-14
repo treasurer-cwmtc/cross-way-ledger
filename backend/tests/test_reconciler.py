@@ -63,11 +63,11 @@ def test_donation_amounts_use_net_and_sum_to_bank():
 def test_fund_categorization():
     result = run_pipeline()
     by_donor = {l.description: l for l in result.lines if l.source == "stripe"}
-    assert by_donor["Christy Philips"].account_no == "I121010"  # Sunday Offertory
+    assert by_donor["Christy Philips"].account_no == "I101210"  # Sunday Offertory
     assert by_donor["Alen Mathew"].account_no == "I101010"  # Pledges
-    assert by_donor["Robin Koshy"].account_no == "I172510"  # General -> Restricted Gifts General
+    assert by_donor["Robin Koshy"].account_no == "I101725"  # General -> Restricted Gifts General
     # Registration donor comes from planning_center_person_name; fund 'VBS 2026'.
-    assert by_donor["Kainey Varughese"].account_no == "I141310"  # VBS-Donation
+    assert by_donor["Kainey Varughese"].account_no == "I101416"  # VBS-Donation
 
 
 def test_bank_keyword_categorization():
@@ -79,7 +79,7 @@ def test_bank_keyword_categorization():
             if key.lower() in l.description.lower():
                 by_desc[key] = l
     assert by_desc["DIRECT ENERGY"].account_no == "E141712"
-    assert by_desc["CitiTurf"].account_no == "E221214"
+    assert by_desc["CitiTurf"].account_no == "E221310"
     assert by_desc["SAMS CLUB"].account_no == "E151910"
     assert by_desc["Diocese of North America"].account_no == "E101710"
     # Unmatched line has no account and is flagged.

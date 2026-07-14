@@ -3,17 +3,83 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class StatementCategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    category: str
+    no: str
+    name: str
+
+
+class StatementCategoryCreate(BaseModel):
+    category: str  # Budget | Expense | Income
+    name: str
+
+
+class StatementItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    statement_category_id: int
+    no: str
+    name: str
+
+
+class StatementItemCreate(BaseModel):
+    statement_category_id: int
+    name: str
+
+
 class ChartOfAccountOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     account_no: str
+    statement_item_id: int
     category: str
     statement_category: str
+    statement_category_no: str
     statement_item: str
+    statement_item_no: str
     statement_detail: str
+    statement_detail_no: str
     statement_description: str
     is_tax_deductible: str
     is_mandatory: str
+    grouping: str
+    is_youth_chaplain_share: str
+    is_missions: str
+
+
+class ChartOfAccountCreate(BaseModel):
+    statement_item_id: int
+    statement_detail: str = ""
+    statement_description: str = ""  # blank -> auto-generated
+    is_tax_deductible: str = ""
+    is_mandatory: str = ""
+    grouping: str = ""
+    is_youth_chaplain_share: str = ""
+    is_missions: str = ""
+
+
+class ChartOfAccountUpdate(BaseModel):
+    """Only descriptive fields are editable. The hierarchy names/numbers and
+    account_no are immutable after creation, since rules and past
+    reconciliation runs reference account_no by value."""
+
+    statement_description: str | None = None
+    is_tax_deductible: str | None = None
+    is_mandatory: str | None = None
+    grouping: str | None = None
+    is_youth_chaplain_share: str | None = None
+    is_missions: str | None = None
+
+
+class AccountNoPreview(BaseModel):
+    account_no: str
+    statement_category_no: str
+    statement_item_no: str
+    statement_detail_no: str
 
 
 class CategoryRuleBase(BaseModel):

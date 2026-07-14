@@ -27,6 +27,14 @@ _Where we left off — read this first when resuming in a new session._
 - ✅ **#1 Authentication** — per-user accounts, PBKDF2 hashing, JWT, admin
   user-management (Users tab), all API routes protected, env-seeded admin.
   Frontend login + logout + 401 handling.
+- ✅ **Chart of Accounts CRUD with a real 3-level hierarchy** —
+  StatementCategory → StatementItem → Account(Detail), each its own table
+  with a true auto-increment code scoped to its parent (never reused, even
+  after delete). `AccountNo` and `StatementDescription` are always derived by
+  concatenating the chain, never hand-typed. Add/edit/delete in the Chart of
+  Accounts tab (3 top-down creation forms + accounts table). CSV import was
+  removed (flagged as a future request); seed data replaced with the full
+  376-account church chart (was a partial 68-row guess before).
 
 **Tests:** 12 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
@@ -47,6 +55,9 @@ Tracked as issues on the repo. Suggested order:
 - **#5 Automated Stripe & Chase pulls** (replace manual CSV upload).
 - **#6 Confirm Net vs gross+fee** handling for exploded donations (bookkeeping
   decision — affects reconciler logic).
+- **Chart of Accounts CSV bulk import** — removed when CRUD was added; add back
+  (as an upsert, not the old destructive replace) if bulk onboarding of many
+  accounts at once turns out to be needed.
 
 ---
 

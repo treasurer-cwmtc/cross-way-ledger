@@ -19,3 +19,7 @@ frontend/package-lock.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local dev server logs
+*_out.log
+*_err.log

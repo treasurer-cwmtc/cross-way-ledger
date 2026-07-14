@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -19,16 +28,75 @@ class User(Base):
     )
 
 
+class StatementCategory(Base):
+    """Top level of the Chart of Accounts hierarchy, scoped to a Type
+    (Budget/Expense/Income). `no` auto-increments within that Type and is
+    never reused, even if a category is later deleted."""
+
+    __tablename__ = "statement_categories"
+    __table_args__ = (UniqueConstraint("category", "no", name="uq_statement_category_no"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    category: Mapped[str] = mapped_column(String(20))  # Budget | Expense | Income
+    no: Mapped[str] = mapped_column(String(2))
+    name: Mapped[str] = mapped_column(String(120))
+
+    items: Mapped[list["StatementItem"]] = relationship(
+        back_populates="statement_category", cascade="all, delete-orphan"
+    )
+
+
+class StatementItem(Base):
+    """Second level of the hierarchy. `no` auto-increments within its parent
+    StatementCategory and is never reused."""
+
+    __tablename__ = "statement_items"
+    __table_args__ = (
+        UniqueConstraint("statement_category_id", "no", name="uq_statement_item_no"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    statement_category_id: Mapped[int] = mapped_column(ForeignKey("statement_categories.id"))
+    no: Mapped[str] = mapped_column(String(2))
+    name: Mapped[str] = mapped_column(String(120))
+
+    statement_category: Mapped[StatementCategory] = relationship(back_populates="items")
+    accounts: Mapped[list["ChartOfAccount"]] = relationship(
+        back_populates="parent_item", cascade="all, delete-orphan"
+    )
+
+
 class ChartOfAccount(Base):
+    """The Detail level / leaf of the hierarchy - one row per account.
+    account_no is derived, never hand-typed:
+    <TypePrefix><StatementCategoryNo><StatementItemNo><StatementDetailNo>
+    where TypePrefix is B/E/I for category Budget/Expense/Income.
+    statement_detail_no auto-increments within its parent StatementItem (or
+    is "00" when the detail name is left blank). See services/coa_numbering.py.
+
+    category/statement_category/statement_item and their *_no codes are
+    denormalized copies of the parent chain (kept in sync at creation time)
+    so the reconciler/categorizer/rules UI can read a flat row without joins.
+    """
+
     __tablename__ = "chart_of_accounts"
     account_no: Mapped[str] = mapped_column(String(20), primary_key=True)
-    category: Mapped[str] = mapped_column(String(50))
+    statement_item_id: Mapped[int] = mapped_column(ForeignKey("statement_items.id"))
+    category: Mapped[str] = mapped_column(String(50))  # Budget | Expense | Income
     statement_category: Mapped[str] = mapped_column(String(120), default="")
+    statement_category_no: Mapped[str] = mapped_column(String(2), default="")
     statement_item: Mapped[str] = mapped_column(String(120), default="")
+    statement_item_no: Mapped[str] = mapped_column(String(2), default="")
     statement_detail: Mapped[str] = mapped_column(String(120), default="")
+    statement_detail_no: Mapped[str] = mapped_column(String(2), default="")
     statement_description: Mapped[str] = mapped_column(String(300))
     is_tax_deductible: Mapped[str] = mapped_column(String(10), default="")
     is_mandatory: Mapped[str] = mapped_column(String(10), default="")
+    grouping: Mapped[str] = mapped_column(String(120), default="")
+    is_youth_chaplain_share: Mapped[str] = mapped_column(String(10), default="")
+    is_missions: Mapped[str] = mapped_column(String(10), default="")
+
+    parent_item: Mapped[StatementItem] = relationship(back_populates="accounts")
 
 
 class CategoryRule(Base):
