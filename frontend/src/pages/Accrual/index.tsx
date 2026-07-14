@@ -1,32 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { accountsApi, ChartAccount } from "../../api/accounts";
+import { accrualApi, AccrualEntry, AccrualEntryUpdate } from "../../api/accrual";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
-import { ledgerApi, ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
 import { settingsApi } from "../../api/settings";
 import { COLUMNS, setPriorYearEndDate } from "../ledger/columns";
 import ColumnHealthStrip from "../ledger/ColumnHealthStrip";
 import RegisterRow from "../ledger/RegisterRow";
 import TransactionModal from "../ledger/TransactionModal";
+import QuickAddModal from "./QuickAddModal";
 
-export default function Reconciliation() {
-  const [entries, setEntries] = useState<ReconciliationEntry[]>([]);
+export default function Accrual() {
+  const [entries, setEntries] = useState<AccrualEntry[]>([]);
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
-  const [cutoffInput, setCutoffInput] = useState("");
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   async function load() {
     try {
       const [e, a, b, cutoff] = await Promise.all([
-        ledgerApi.list(),
+        accrualApi.list(),
         accountsApi.listAccounts(),
         bankAccountsApi.list(),
         settingsApi.get("prior_year_end_date"),
       ]);
-      setPriorYearEndDate(cutoff.value); // affects columns.ts CY/PY derivation
-      setCutoffInput(cutoff.value);
+      setPriorYearEndDate(cutoff.value); // shared with Reconciliation's CY/PY columns
       setEntries(e);
       setAccounts(a);
       setBankAccounts(b);
@@ -38,17 +38,6 @@ export default function Reconciliation() {
   useEffect(() => {
     load();
   }, []);
-
-  async function saveCutoff() {
-    try {
-      const updated = await settingsApi.update("prior_year_end_date", cutoffInput);
-      setPriorYearEndDate(updated.value);
-      setCutoffInput(updated.value);
-      setEntries((prev) => [...prev]); // re-trigger CY/PY re-render with new cutoff
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
 
   const completeness = useMemo(() => {
     const map = new Map<string, { complete: boolean; missingCount: number }>();
@@ -64,22 +53,21 @@ export default function Reconciliation() {
     ? entries.filter((e) => !activeColumn.isPopulated(e))
     : entries;
 
-  async function onUpdate(id: number, patch: ReconciliationEntryUpdate) {
-    // Optimistic local update so typing/toggling feels instant.
+  async function onUpdate(id: number, patch: AccrualEntryUpdate) {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
     try {
-      const updated = await ledgerApi.update(id, patch);
+      const updated = await accrualApi.update(id, patch);
       setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
     } catch (err) {
       setError((err as Error).message);
-      await load(); // roll back to server state on failure
+      await load();
     }
   }
 
   async function onDelete(id: number) {
-    if (!confirm("Delete this reconciliation entry?")) return;
+    if (!confirm("Delete this accrual entry?")) return;
     try {
-      await ledgerApi.delete(id);
+      await accrualApi.delete(id);
       setEntries((prev) => prev.filter((e) => e.id !== id));
     } catch (err) {
       setError((err as Error).message);
@@ -91,27 +79,17 @@ export default function Reconciliation() {
   return (
     <div>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        The permanent, editable ledger — push rows here from the Upload tab.
-        Click a row to open every field for editing. Statement Description is
-        always whatever the linked Chart of Accounts account currently says.
-        Click a chip below to filter down to just the rows missing that column.
+        Manually-entered ledger for recording an expense or reimbursement as
+        incurred, before the actual payment clears the bank and shows up in
+        Reconciliation. Same fields, same Chart of Accounts lookup, same
+        split/undo-split as Reconciliation.
       </p>
       <div className="toolbar">
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-          <span>Prior year ends:</span>
-          <input
-            type="date"
-            value={cutoffInput}
-            onChange={(e) => setCutoffInput(e.target.value)}
-          />
-        </label>
-        <button className="btn secondary" onClick={saveCutoff} disabled={!cutoffInput}>
-          Save
+        <button className="btn" onClick={() => setShowQuickAdd(true)}>
+          + Quick add
         </button>
         <span style={{ color: "var(--muted)", fontSize: 12 }}>
-          Drives the CY/PY columns (shared with the Accrual tab) — dates after
-          this are "CY". Update once a year at rollover (matches the old
-          sheet's Configurations tab).
+          Opens a form you can keep hitting Enter on to add several entries in a row.
         </span>
       </div>
       {error && <div className="error">{error}</div>}
@@ -161,7 +139,7 @@ export default function Reconciliation() {
                 <tr>
                   <td colSpan={7} style={{ color: "var(--muted)" }}>
                     {entries.length === 0
-                      ? "No entries yet — push a completed run from the Upload tab."
+                      ? "No entries yet — click Quick Add to enter one."
                       : "No rows match this filter."}
                   </td>
                 </tr>
@@ -180,9 +158,18 @@ export default function Reconciliation() {
           onDelete={onDelete}
           onClose={() => setOpenEntryId(null)}
           onReload={load}
-          onSplit={(id, lines) => ledgerApi.split(id, lines)}
-          onUnsplit={(parentId) => ledgerApi.unsplit(parentId)}
-          splitHint="For an aggregated bank line (e.g. a deposit slip covering several checks)."
+          onSplit={(id, lines) => accrualApi.split(id, lines)}
+          onUnsplit={(parentId) => accrualApi.unsplit(parentId)}
+          splitHint="For one lump entry that actually covers several people or purchases."
+        />
+      )}
+
+      {showQuickAdd && (
+        <QuickAddModal
+          accounts={accounts}
+          bankAccounts={bankAccounts}
+          onCreated={(entry) => setEntries((prev) => [entry, ...prev])}
+          onClose={() => setShowQuickAdd(false)}
         />
       )}
     </div>

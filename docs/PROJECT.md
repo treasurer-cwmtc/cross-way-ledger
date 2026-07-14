@@ -183,7 +183,9 @@ Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
   computed live from `account_no` / the date fields, never stored, so
   Statement Description etc. can never drift out of sync with the Chart of
   Accounts. See `backend/app/routers/reconciliation.py` and
-  `frontend/src/pages/Reconciliation/`.
+  `frontend/src/pages/Reconciliation/` (page-specific) /
+  `frontend/src/pages/ledger/` (shared register/popup/split UI - see
+  Accrual tab below).
 - **Dedup on import**: pushing an Upload run to Reconciliation computes a
   `dedup_key` per line (`transaction_date + amount + Check/Invoice Name (or
   Bank Description as fallback)`) and skips any row whose key already exists
@@ -212,7 +214,9 @@ Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
   "CY", "PY")`), not the server's real-world date. Modeled as an `AppSetting`
   row (`prior_year_end_date`), editable via a small control at the top of the
   Reconciliation page - see `backend/app/routers/settings.py` and
-  `frontend/src/pages/Reconciliation/columns.ts` (`setPriorYearEndDate`).
+  `frontend/src/pages/ledger/columns.ts` (`setPriorYearEndDate`) - the
+  setting is shared with the Accrual tab (below), which reads it but only
+  Reconciliation exposes the editor.
 - **Stripe fund matching parity**: the legacy `Match_Stripe_2!AB` ("LKP_COA")
   column is a hardcoded `IFS()`/`REGEXMATCH()` chain, one clause per fund
   name, each mapping to a literal account code - architecturally the same
@@ -239,6 +243,38 @@ Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
   (`split_parent_id`). "Undo split" removes the children and restores the
   original. See `backend/app/routers/reconciliation.py`
   (`/{id}/split`, `/{id}/unsplit`, `/split-group/{id}`).
+
+### The Accrual tab (manually-entered, same shape as Reconciliation)
+
+A second persistent ledger for recording an expense/reimbursement as
+**incurred**, before the actual payment clears the bank and shows up in
+Reconciliation - e.g. a reimbursement approved today that won't hit the
+Chase statement for another week. Structurally identical to
+`ReconciliationEntry` (same fields, same Chart-of-Accounts-derived reporting
+columns, same split/undo-split), but entirely hand-entered: there's no
+Upload run to push from, so no `dedup_key`/`source_run_id` and no import
+step - `AccrualEntry` (`accrual_entries` table), `backend/app/routers/accrual.py`.
+
+- **Shared UI, separate data**: Reconciliation and Accrual are two different
+  tables/endpoints presenting through the *same* register/detail-popup/split
+  components (`frontend/src/pages/ledger/` - `types.ts` defines a structural
+  `LedgerEntry` interface both entities satisfy). The shared components never
+  import an API module directly; each page passes its own `ledgerApi`/
+  `accrualApi` calls down as props (`onUpdate`, `onSplit`, `onUnsplit`, etc.),
+  so adding a third ledger-shaped tab later means writing a new
+  page + API module, not touching the shared UI.
+- **Quick add popup** (`frontend/src/pages/Accrual/QuickAddModal.tsx`): the
+  fast entry path the tab exists for. Fields split into two groups - sticky
+  (Transaction Date, Date Posted, Statement Description, Bank Account,
+  Method, Is Reimbursement) persist across saves since a batch of accrual
+  entries usually shares them (e.g. five people reimbursed for the same VBS
+  purchase on the same day); per-entry (Description, Amount, Check/Invoice
+  Name, Notes) clear after each save and focus returns to Description. A
+  native form submit (button click or Enter while focused in the form) posts
+  the entry, prepends it to the register, and resets for the next row.
+- **No dedup**: unlike Reconciliation, every Accrual row is a deliberate
+  manual entry, so there's no import-collision scenario to guard against -
+  no `dedup_key` on the model at all.
 
 ---
 
@@ -267,6 +303,9 @@ Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
 - `bank_accounts` — named bank account lookup (e.g. "Chase Operating").
 - `reconciliation_entries` — the persistent, editable Reconciliation ledger;
   `dedup_key` prevents re-importing the same transaction twice.
+- `accrual_entries` — the persistent, editable Accrual ledger; same shape as
+  `reconciliation_entries` minus `dedup_key`/`source_run_id` (always
+  hand-entered, never imported).
 
 ### API surface
 
@@ -281,8 +320,12 @@ Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
   `GET/POST/DELETE /api/accounts/statement-items`,
   `POST /api/accounts/preview-number`
 - `GET/POST/DELETE /api/bank-accounts`
-- `GET/PUT/DELETE /api/reconciliation`, `POST /api/reconciliation/import-run/{run_id}`
-  (the Reconciliation tab)
+- `GET/PUT/DELETE /api/reconciliation`, `POST /api/reconciliation/import-run/{run_id}`,
+  `POST /api/reconciliation/{id}/split`, `POST /api/reconciliation/{id}/unsplit`,
+  `GET /api/reconciliation/split-group/{id}` (the Reconciliation tab)
+- `GET/POST/PUT/DELETE /api/accrual`, `POST /api/accrual/{id}/split`,
+  `POST /api/accrual/{id}/unsplit`, `GET /api/accrual/split-group/{id}`
+  (the Accrual tab)
 - `GET  /api/health` (public)
 
 All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.

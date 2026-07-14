@@ -267,3 +267,67 @@ class ReconciliationImportRequest(BaseModel):
 class ReconciliationImportResult(BaseModel):
     imported: int
     skipped_duplicates: int
+
+
+class AccrualEntryOut(BaseModel):
+    """Same shape as ReconciliationEntryOut minus source_run_id (Accrual
+    entries are always hand-entered, never imported)."""
+
+    id: int
+    transaction_date: date | None
+    date_posted: date | None
+    reconciled: bool
+    is_reimbursement: bool
+    account_no: str
+    description: str
+    bank_account_id: int | None
+    bank_account_name: str
+    method: str
+    amount: float
+    check_invoice_name: str
+    bank_description: str
+    notes: str
+    split_parent_id: int | None
+    statement_description: str
+    category: str
+    statement_category: str
+    statement_item: str
+    statement_detail: str
+    grouping: str
+    is_youth_chaplain_share: str
+    is_missions: str
+
+
+class AccrualEntryCreate(BaseModel):
+    transaction_date: date | None = None
+    date_posted: date | None = None
+    reconciled: bool = False
+    is_reimbursement: bool = False
+    account_no: str = ""
+    description: str = ""
+    bank_account_id: int | None = None
+    method: str = ""
+    amount: float = 0.0
+    check_invoice_name: str = ""
+    bank_description: str = ""
+    notes: str = ""
+
+
+class AccrualEntryUpdate(BaseModel):
+    transaction_date: date | None = None
+    date_posted: date | None = None
+    reconciled: bool | None = None
+    is_reimbursement: bool | None = None
+    account_no: str | None = None
+    description: str | None = None
+    bank_account_id: int | None = None
+    method: str | None = None
+    amount: float | None = None
+    check_invoice_name: str | None = None
+    bank_description: str | None = None
+    notes: str | None = None
+
+
+class AccrualSplitGroupOut(BaseModel):
+    parent: AccrualEntryOut
+    children: list[AccrualEntryOut]

@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
-import { ledgerApi, ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
 import { METHOD_OPTIONS } from "./columns";
+import AccountPicker from "./AccountPicker";
 import {
-  AccountCell,
   BankAccountCell,
   CheckboxCell,
   CurrencyCell,
@@ -13,22 +12,28 @@ import {
   TextCell,
 } from "./cells";
 import SplitModal from "./SplitModal";
+import { LedgerEntry, LedgerEntryUpdate, SplitLine } from "./types";
 
 /** Full editor for one entry - every field, including the Chart of Accounts
  * picker (only mounted here, one at a time, so its ~370 options never touch
  * the register). Opened by clicking a RegisterRow; changes auto-save the
- * same way inline cells always have. */
+ * same way inline cells always have. Shared by Reconciliation and Accrual -
+ * split/unsplit are passed in as callbacks so this component doesn't need
+ * to know which ledger's API it's talking to. */
 export default function TransactionModal(props: {
-  entry: ReconciliationEntry;
+  entry: LedgerEntry;
   accounts: ChartAccount[];
   bankAccounts: BankAccount[];
-  onUpdate: (id: number, patch: ReconciliationEntryUpdate) => void;
+  onUpdate: (id: number, patch: LedgerEntryUpdate) => void;
   onDelete: (id: number) => void;
   onClose: () => void;
   onReload: () => void;
+  onSplit: (id: number, lines: SplitLine[]) => Promise<LedgerEntry[]>;
+  onUnsplit: (parentId: number) => Promise<LedgerEntry>;
+  splitHint?: string;
 }) {
   const e = props.entry;
-  const set = (patch: ReconciliationEntryUpdate) => props.onUpdate(e.id, patch);
+  const set = (patch: LedgerEntryUpdate) => props.onUpdate(e.id, patch);
   const [showSplit, setShowSplit] = useState(false);
   const [unsplitting, setUnsplitting] = useState(false);
   const [error, setError] = useState("");
@@ -50,7 +55,7 @@ export default function TransactionModal(props: {
     setUnsplitting(true);
     setError("");
     try {
-      await ledgerApi.unsplit(e.split_parent_id);
+      await props.onUnsplit(e.split_parent_id);
       props.onReload();
       props.onClose();
     } catch (err) {
@@ -88,7 +93,8 @@ export default function TransactionModal(props: {
               Split into multiple lines
             </button>
             <span style={{ color: "var(--muted)", fontSize: 12 }}>
-              For an aggregated bank line (e.g. a deposit slip covering several checks).
+              {props.splitHint ||
+                "For one lump entry that actually covers several people or purchases."}
             </span>
           </div>
         )}
@@ -121,7 +127,7 @@ export default function TransactionModal(props: {
 
         <label className="field">
           <span>Statement Description (Chart of Accounts)</span>
-          <AccountCell
+          <AccountPicker
             value={e.account_no}
             accounts={props.accounts}
             onChange={(v) => set({ account_no: v })}
@@ -228,7 +234,8 @@ export default function TransactionModal(props: {
         <SplitModal
           entry={e}
           accounts={props.accounts}
-          onSplit={() => {
+          onSubmit={(lines) => props.onSplit(e.id, lines)}
+          onSuccess={() => {
             setShowSplit(false);
             props.onReload();
             props.onClose();

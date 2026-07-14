@@ -1,17 +1,17 @@
 import { memo } from "react";
 import { BankAccount } from "../../api/bankAccounts";
-import { ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
+import { LedgerEntry, LedgerEntryUpdate } from "./types";
 
 /** One compact, cheap-to-render register row (Quicken-style). No Chart of
  * Accounts <select> here on purpose - with 600+ rows, rendering a ~370-option
  * dropdown per row is what made the page take seconds to load. Full editing
  * (including the account picker) happens in the detail popup, which only
  * mounts one at a time. Memoized so editing one row doesn't re-render the
- * rest of the register. */
+ * rest of the register. Shared by Reconciliation and Accrual. */
 function RegisterRow(props: {
-  entry: ReconciliationEntry;
+  entry: LedgerEntry;
   bankAccounts: BankAccount[];
-  onUpdate: (id: number, patch: ReconciliationEntryUpdate) => void;
+  onUpdate: (id: number, patch: LedgerEntryUpdate) => void;
   onOpen: (id: number) => void;
 }) {
   const e = props.entry;

@@ -246,3 +246,44 @@ class ReconciliationEntry(Base):
     is_split: Mapped[bool] = mapped_column(Boolean, default=False)
 
     bank_account: Mapped[BankAccount | None] = relationship()
+
+
+class AccrualEntry(Base):
+    """One row of the Accrual ledger (the "Accrual" tab) - same shape as
+    ReconciliationEntry (same Chart-of-Accounts-driven derived fields, same
+    split/undo-split mechanics) but entirely hand-entered: there's no Upload
+    run to import from, so no dedup_key/source_run_id. Typical use: recording
+    an expense/reimbursement as incurred, before the actual payment clears
+    the bank and shows up in Reconciliation.
+    """
+
+    __tablename__ = "accrual_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    date_posted: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
+    account_no: Mapped[str] = mapped_column(String(20), default="")
+    description: Mapped[str] = mapped_column(String(300), default="")
+    bank_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bank_accounts.id"), nullable=True
+    )
+    method: Mapped[str] = mapped_column(String(40), default="")
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    check_invoice_name: Mapped[str] = mapped_column(String(200), default="")
+    bank_description: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # Same split/undo-split mechanics as ReconciliationEntry: splitting keeps
+    # the original row (hidden via is_split) and creates children
+    # (split_parent_id) rather than deleting anything.
+    split_parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accrual_entries.id"), nullable=True
+    )
+    is_split: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    bank_account: Mapped[BankAccount | None] = relationship()

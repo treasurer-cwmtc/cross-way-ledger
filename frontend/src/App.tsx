@@ -3,12 +3,13 @@ import { auth, AuthError } from "./api/client";
 import { authApi, User } from "./api/auth";
 import Upload from "./pages/Upload";
 import Reconciliation from "./pages/Reconciliation";
+import Accrual from "./pages/Accrual";
 import Rules from "./pages/Rules";
 import Accounts from "./pages/Accounts";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
 
-type Tab = "upload" | "reconciliation" | "rules" | "accounts" | "users";
+type Tab = "upload" | "reconciliation" | "accrual" | "rules" | "accounts" | "users";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("upload");
@@ -89,6 +90,12 @@ export default function App() {
           Reconciliation
         </button>
         <button
+          className={tab === "accrual" ? "active" : ""}
+          onClick={() => setTab("accrual")}
+        >
+          Accrual
+        </button>
+        <button
           className={tab === "rules" ? "active" : ""}
           onClick={() => setTab("rules")}
         >
@@ -112,6 +119,7 @@ export default function App() {
 
       {tab === "upload" && <Upload />}
       {tab === "reconciliation" && <Reconciliation />}
+      {tab === "accrual" && <Accrual />}
       {tab === "rules" && <Rules />}
       {tab === "accounts" && <Accounts />}
       {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}

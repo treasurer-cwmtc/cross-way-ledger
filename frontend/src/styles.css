@@ -365,3 +365,43 @@ tr.register-row td {
   justify-content: space-between;
   margin-top: 20px;
 }
+
+/* Type-to-filter Chart of Accounts picker (replaces a 350+ option <select>) */
+.autocomplete {
+  position: relative;
+}
+
+.autocomplete-list {
+  position: absolute;
+  z-index: 200;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.autocomplete-option {
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autocomplete-option.active {
+  background: #eef2ff;
+  color: var(--primary);
+}
+
+.autocomplete-empty {
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--muted);
+}

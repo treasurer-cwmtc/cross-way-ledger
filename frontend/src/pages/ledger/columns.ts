@@ -1,4 +1,4 @@
-import { ReconciliationEntry } from "../../api/ledger";
+import { LedgerEntry } from "./types";
 
 export type CellType = "checkbox" | "date" | "text" | "currency" | "select" | "account" | "readonly";
 
@@ -9,9 +9,9 @@ export interface ColumnDef {
   /** Whether this row has a value for this column - drives the green/red
    * header bar and the "show only bad rows" filter. Checkbox columns are
    * always considered populated (a boolean always has a value). */
-  isPopulated: (e: ReconciliationEntry) => boolean;
+  isPopulated: (e: LedgerEntry) => boolean;
   /** Read-only display text, for derived (non-editable) columns. */
-  getDisplay?: (e: ReconciliationEntry) => string;
+  getDisplay?: (e: LedgerEntry) => string;
 }
 
 const nonEmpty = (v: string | null | undefined) => !!v && v.trim() !== "";
@@ -24,7 +24,9 @@ const MONTH_NAMES = [
 // CY/PY is "is this date after the Prior Year End cutoff" - matching the
 // legacy sheet's Configurations!B2 ("Prior Year Date"), which the treasurer
 // updates by hand at year-end rather than deriving from today's real date.
-// Set via setPriorYearEndDate() once the /api/settings value loads.
+// Set via setPriorYearEndDate() once the /api/settings value loads. Shared
+// across both the Reconciliation and Accrual pages (one setting, edited
+// from the Reconciliation page).
 let priorYearEndDate = `${new Date().getUTCFullYear() - 1}-12-31`;
 
 export function setPriorYearEndDate(iso: string) {

@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-14
+**Last updated:** 2026-07-14 (Accrual tab)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -96,8 +96,27 @@ _Where we left off — read this first when resuming in a new session._
   real $30 deposit line into $18 + $12, confirmed re-import still skips it
   (0 imported), then undid the split and confirmed the register returned to
   its exact original state.
+- ✅ **Accrual tab** — a second, manually-entered ledger for recording an
+  expense/reimbursement as incurred, before the actual payment clears the
+  bank and shows up in Reconciliation. Same shape, same Chart-of-Accounts
+  lookup, same split/undo-split as Reconciliation, but with no Upload run to
+  push from and no dedup (every row is deliberately hand-entered, so there's
+  no import-collision risk). The Reconciliation and Accrual pages now share
+  one UI module (`frontend/src/pages/ledger/` - columns, cells, register
+  row, detail popup, split popup) behind a structural `LedgerEntry`
+  interface, with each page injecting its own API calls as props; this also
+  makes future ledger-shaped tabs cheap to add. Accrual adds a **Quick add**
+  popup: sticky fields (Date, Statement Description, Bank Account, Method,
+  Is Reimbursement) persist across saves since a batch of accrual entries
+  usually shares them (e.g. five people reimbursed for the same purchase on
+  the same day), while per-entry fields (Description, Amount, Check/Invoice
+  Name, Notes) clear after each save and focus returns to Description -
+  fill in who/how much and hit Enter to keep adding rows without retyping
+  the shared data. Verified live: Quick Add (submit via button and via
+  native Enter-in-form submission), Split (a lump entry into two balanced
+  lines), and Undo split (children removed, original amount/line restored).
 
-**Tests:** 19 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 24 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---

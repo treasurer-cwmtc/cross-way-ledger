@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
 
 const CELL_STYLE = { width: "100%", border: "none", background: "transparent", font: "inherit" };
@@ -107,27 +106,6 @@ export function BankAccountCell(props: {
       {props.bankAccounts.map((a) => (
         <option key={a.id} value={a.id}>
           {a.name}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-/** The "Statement Description" cell - what's actually being picked is the
- * Chart of Accounts account (account_no); the text shown is always that
- * account's current statement_description, so it can never drift out of
- * sync with the Chart of Accounts. */
-export function AccountCell(props: {
-  value: string;
-  accounts: ChartAccount[];
-  onChange: (accountNo: string) => void;
-}) {
-  return (
-    <select style={CELL_STYLE} value={props.value} onChange={(e) => props.onChange(e.target.value)}>
-      <option value="">— uncategorized —</option>
-      {props.accounts.map((a) => (
-        <option key={a.account_no} value={a.account_no}>
-          {a.account_no} · {a.statement_description}
         </option>
       ))}
     </select>
