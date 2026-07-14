@@ -5,6 +5,7 @@ relevant table is empty."""
 from __future__ import annotations
 
 import csv
+from datetime import date
 from pathlib import Path
 
 from sqlalchemy import select
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .models import (
+    AppSetting,
     BankAccount,
     CategoryRule,
     ChartOfAccount,
@@ -160,4 +162,16 @@ def seed(db: Session) -> None:
 
     if db.scalar(select(BankAccount).limit(1)) is None:
         db.add(BankAccount(name="Chase Operating"))
+        db.commit()
+
+    if db.get(AppSetting, "prior_year_end_date") is None:
+        # Matches the legacy sheet's Configurations!B2 ("Prior Year Date") -
+        # the treasurer updates this by hand at year-end rollover; this is
+        # just a reasonable one-time default (Dec 31 of last year).
+        db.add(
+            AppSetting(
+                key="prior_year_end_date",
+                value=date(date.today().year - 1, 12, 31).isoformat(),
+            )
+        )
         db.commit()

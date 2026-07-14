@@ -172,6 +172,17 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+class AppSettingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    value: str
+
+
+class AppSettingUpdate(BaseModel):
+    value: str
+
+
 class BankAccountOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

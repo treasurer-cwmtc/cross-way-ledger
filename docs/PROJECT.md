@@ -200,6 +200,28 @@ Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
   the grid down to just the rows missing that column. This applies literally
   to every column, including ones that are commonly blank by nature (Notes,
   Grouping, etc.) - a permanently-red header there is expected, not a bug.
+- **`Type` quirk (verified against the live source formulas)**: `Type` is
+  not simply `= Category`. The legacy sheet hardcodes every `Budget`-category
+  row to `Type=Income` regardless of what it actually represents - confirmed
+  by inspecting `Import-ChartOfAccounts!L` directly (View > Show Formulas).
+  Reproduced exactly rather than "cleaned up", since the goal is fidelity to
+  the existing reporting.
+- **CY/PY is a manual annual toggle, not derived from today's date**: the
+  source sheet compares each transaction date to a `Configurations` tab cell
+  the treasurer updates once a year at rollover (`IF(date > Configurations!B2,
+  "CY", "PY")`), not the server's real-world date. Modeled as an `AppSetting`
+  row (`prior_year_end_date`), editable via a small control at the top of the
+  Reconciliation page - see `backend/app/routers/settings.py` and
+  `frontend/src/pages/Reconciliation/columns.ts` (`setPriorYearEndDate`).
+- **Stripe fund matching parity**: the legacy `Match_Stripe_2!AB` ("LKP_COA")
+  column is a hardcoded `IFS()`/`REGEXMATCH()` chain, one clause per fund
+  name, each mapping to a literal account code - architecturally the same
+  idea as our `CategoryRule` (`stripe_fund`) table, just editable instead of
+  hardcoded in a formula. Some fund names visible in that formula
+  (NavJeevan, Golf Tournament, Retreat, Sunday School, Cross Way Couples Date
+  Night, Valentines Day Dinner, Achen Farewell, Piano) aren't yet in our
+  seeded `DEFAULT_FUND_RULES` - add them via the Rules tab once the target
+  account for each is confirmed (see STATUS.md).
 
 ---
 

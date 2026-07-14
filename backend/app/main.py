@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
-from .routers import auth, bank_accounts, coa, reconcile, reconciliation, rules
+from .routers import auth, bank_accounts, coa, reconcile, reconciliation, rules, settings as settings_router
 from .seed import seed
 
 settings = get_settings()
@@ -35,6 +35,7 @@ app.include_router(rules.router)
 app.include_router(coa.router)
 app.include_router(bank_accounts.router)
 app.include_router(reconciliation.router)
+app.include_router(settings_router.router)
 
 
 @app.get("/api/health")

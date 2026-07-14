@@ -48,8 +48,36 @@ _Where we left off — read this first when resuming in a new session._
   the rows missing that column. Verified end-to-end against real
   April-September 2025 Chase + Stripe exports (639 output lines, 611
   imported / 28 genuine in-statement duplicates correctly deduped).
+- ✅ **Verified Reconciliation ledger logic against the live legacy sheet's
+  actual cell formulas** (not just values - used View > Show formulas /
+  Ctrl+` in both source spreadsheets):
+  - `Import-ChartOfAccounts` tab confirmed the exact column layout our
+    `ChartOfAccount` model already uses (AccountNo, Category, StatementCategory,
+    StatementItem, StatementDetail, StatementDescription, IsTaxDeductible,
+    IsMandatory, Grouping, IsYouthChaplainShare, IsMissions, **Type**).
+  - The Reconciliation sheet's Category/Statement/Item/ItemDetail columns are
+    `INDEX/MATCH` lookups keyed on Statement Description against that tab -
+    same shape as our live join on `account_no`, but ours is more robust
+    (joins on a guaranteed-unique code instead of matching by text).
+  - **Fixed**: `Type` isn't just an alias of Category - the source data has
+    every `Budget`-category row hardcoded to `Type=Income` regardless of what
+    it represents (a quirk, not a real distinction). Reproduced exactly in
+    `frontend/src/pages/Reconciliation/columns.ts`.
+  - **Fixed**: CY/PY isn't derived from today's real-world date - the sheet
+    compares each transaction date against a `Configurations` tab cell the
+    treasurer updates by hand once a year at rollover. Added an
+    `AppSetting` (`prior_year_end_date`, seeded to Dec 31 of last year) with
+    a small editable control at the top of the Reconciliation page, matching
+    that manual-rollover workflow.
+  - `TransactionLookup` column confirmed genuinely blank/unused in the source
+    (no formula) - correctly not modeled.
+  - Stripe fund → account matching (Match_Stripe_2!AB, `LKP_COA`) confirmed to
+    be a big hardcoded `REGEXMATCH`-per-fund-name `IFS()` chain - architecturally
+    the same idea as our `CategoryRule` (`stripe_fund`) table, just editable
+    instead of hardcoded. Spotted additional fund names in that formula not
+    yet covered by our seeded default rules - see Next steps.
 
-**Tests:** 15 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 16 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---
@@ -77,6 +105,15 @@ Tracked as issues on the repo. Suggested order:
   Statement Description picker instead of a plain `<select>` (376+ accounts);
   possibly surface `IsReimbursement` more meaningfully once there's a real
   reimbursement workflow to hang it off of.
+- **Add missing Stripe fund rules** — the legacy sheet's `LKP_COA` formula
+  (Match_Stripe_2!AB) matches on more fund names than our seeded
+  `DEFAULT_FUND_RULES` covers. Confirmed present in the formula but not yet
+  added as Rules (add via the Rules tab once you confirm the target account
+  for each): `NavJeevan`, `Golf Tournament`, `Retreat`, `Sunday School`,
+  `Cross Way Couples Date Night`, `Valentines Day Dinner`, `Achen Farewell`,
+  `Piano`. (Didn't guess account numbers for these - the formula was
+  truncated on-screen and guessing wrong codes would silently miscategorize
+  real donations.)
 
 ---
 

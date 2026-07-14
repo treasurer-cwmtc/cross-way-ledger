@@ -30,6 +30,18 @@ class User(Base):
     )
 
 
+class AppSetting(Base):
+    """Tiny key/value store for app-wide settings the treasurer adjusts by
+    hand (e.g. "prior_year_end_date", matching the legacy sheet's
+    Configurations tab, which they update once a year at rollover rather
+    than deriving from the server's real-world date)."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[str] = mapped_column(String(300))
+
+
 class StatementCategory(Base):
     """Top level of the Chart of Accounts hierarchy, scoped to a Type
     (Budget/Expense/Income). `no` auto-increments within that Type and is

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { accountsApi, ChartAccount } from "../../api/accounts";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 import { ledgerApi, ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
-import { COLUMNS } from "./columns";
+import { settingsApi } from "../../api/settings";
+import { COLUMNS, setPriorYearEndDate } from "./columns";
 import ColumnHeader from "./ColumnHeader";
 import EntryRow from "./EntryRow";
 
@@ -12,14 +13,18 @@ export default function Reconciliation() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
+  const [cutoffInput, setCutoffInput] = useState("");
 
   async function load() {
     try {
-      const [e, a, b] = await Promise.all([
+      const [e, a, b, cutoff] = await Promise.all([
         ledgerApi.list(),
         accountsApi.listAccounts(),
         bankAccountsApi.list(),
+        settingsApi.get("prior_year_end_date"),
       ]);
+      setPriorYearEndDate(cutoff.value); // affects columns.ts CY/PY derivation
+      setCutoffInput(cutoff.value);
       setEntries(e);
       setAccounts(a);
       setBankAccounts(b);
@@ -31,6 +36,17 @@ export default function Reconciliation() {
   useEffect(() => {
     load();
   }, []);
+
+  async function saveCutoff() {
+    try {
+      const updated = await settingsApi.update("prior_year_end_date", cutoffInput);
+      setPriorYearEndDate(updated.value);
+      setCutoffInput(updated.value);
+      setEntries((prev) => [...prev]); // re-trigger CY/PY re-render with new cutoff
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
 
   const completeness = useMemo(() => {
     const map = new Map<string, { complete: boolean; missingCount: number }>();
@@ -76,6 +92,23 @@ export default function Reconciliation() {
         whatever the linked Chart of Accounts account currently says. Click a
         column header to filter down to just the rows missing that column.
       </p>
+      <div className="toolbar">
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <span>Prior year ends:</span>
+          <input
+            type="date"
+            value={cutoffInput}
+            onChange={(e) => setCutoffInput(e.target.value)}
+          />
+        </label>
+        <button className="btn secondary" onClick={saveCutoff} disabled={!cutoffInput}>
+          Save
+        </button>
+        <span style={{ color: "var(--muted)", fontSize: 12 }}>
+          Drives the CY/PY columns — dates after this are "CY". Update once a year
+          at rollover (matches the old sheet's Configurations tab).
+        </span>
+      </div>
       {error && <div className="error">{error}</div>}
       {activeColumn && (
         <div className="toolbar">

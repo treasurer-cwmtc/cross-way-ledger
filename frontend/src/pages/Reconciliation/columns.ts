@@ -21,15 +21,24 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+// CY/PY is "is this date after the Prior Year End cutoff" - matching the
+// legacy sheet's Configurations!B2 ("Prior Year Date"), which the treasurer
+// updates by hand at year-end rather than deriving from today's real date.
+// Set via setPriorYearEndDate() once the /api/settings value loads.
+let priorYearEndDate = `${new Date().getUTCFullYear() - 1}-12-31`;
+
+export function setPriorYearEndDate(iso: string) {
+  priorYearEndDate = iso;
+}
+
 function dateParts(iso: string | null): { monthName: string; monthYear: string; year: string; cyPy: string } {
   if (!iso) return { monthName: "", monthYear: "", year: "", cyPy: "" };
   const [y, m] = iso.split("-").map(Number);
-  const thisYear = new Date().getFullYear();
   return {
     monthName: MONTH_NAMES[m - 1] || "",
     monthYear: `${String(m).padStart(2, "0")}-${y}`,
     year: String(y),
-    cyPy: y === thisYear ? "CY" : "PY",
+    cyPy: iso > priorYearEndDate ? "CY" : "PY",
   };
 }
 
@@ -118,7 +127,11 @@ export const COLUMNS: ColumnDef[] = [
     label: "Type",
     type: "readonly",
     isPopulated: (e) => nonEmpty(e.category),
-    getDisplay: (e) => e.category, // Type mirrors Category in this Chart of Accounts
+    // Matches the legacy sheet exactly: Type mirrors Category, except Budget
+    // rows are always "Income" regardless of what they actually represent -
+    // a quirk in the source data (confirmed in Import-ChartOfAccounts!L),
+    // not a real distinction, but reproduced here for fidelity.
+    getDisplay: (e) => (e.category === "Budget" ? "Income" : e.category),
   },
   {
     key: "statement_category",

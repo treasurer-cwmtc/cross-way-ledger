@@ -110,3 +110,16 @@ def test_delete_entry():
     assert client.delete(f"/api/reconciliation/{entry_id}", headers=h).status_code == 204
     remaining_ids = [e["id"] for e in client.get("/api/reconciliation", headers=h).json()]
     assert entry_id not in remaining_ids
+
+
+def test_prior_year_end_date_setting_is_seeded_and_editable():
+    h = auth_header()
+    r = client.get("/api/settings/prior_year_end_date", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["value"].endswith("-12-31")
+
+    upd = client.put(
+        "/api/settings/prior_year_end_date", headers=h, json={"value": "2025-12-31"}
+    )
+    assert upd.status_code == 200, upd.text
+    assert upd.json()["value"] == "2025-12-31"
