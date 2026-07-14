@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, ChartAccount, Rule } from "../api";
+import { accountsApi, ChartAccount } from "../api/accounts";
+import { rulesApi, Rule } from "../api/rules";
 
 export default function Rules() {
   const [rules, setRules] = useState<Rule[]>([]);
@@ -15,7 +16,7 @@ export default function Rules() {
 
   async function load() {
     try {
-      const [r, a] = await Promise.all([api.listRules(), api.listAccounts()]);
+      const [r, a] = await Promise.all([rulesApi.listRules(), accountsApi.listAccounts()]);
       setRules(r);
       setAccounts(a);
     } catch (e) {
@@ -30,7 +31,7 @@ export default function Rules() {
   async function addRule() {
     setError("");
     try {
-      await api.createRule({ rule_type: ruleType, pattern, account_no: accountNo, priority });
+      await rulesApi.createRule({ rule_type: ruleType, pattern, account_no: accountNo, priority });
       setPattern("");
       setAccountNo("");
       await load();
@@ -40,12 +41,12 @@ export default function Rules() {
   }
 
   async function toggle(rule: Rule) {
-    await api.updateRule(rule.id, { active: !rule.active });
+    await rulesApi.updateRule(rule.id, { active: !rule.active });
     await load();
   }
 
   async function remove(id: number) {
-    await api.deleteRule(id);
+    await rulesApi.deleteRule(id);
     await load();
   }
 

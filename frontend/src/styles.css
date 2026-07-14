@@ -230,3 +230,12 @@ th {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
+
+input.input-error {
+  border-color: var(--red);
+  background: #fef2f2;
+}
+
+input.input-error:focus {
+  outline-color: var(--red);
+}

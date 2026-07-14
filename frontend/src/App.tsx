@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, auth, AuthError, User } from "./api";
+import { auth, AuthError } from "./api/client";
+import { authApi, User } from "./api/auth";
 import Reconcile from "./pages/Reconcile";
 import Rules from "./pages/Rules";
 import Accounts from "./pages/Accounts";
@@ -20,7 +21,7 @@ export default function App() {
       return;
     }
     try {
-      setUser(await api.me());
+      setUser(await authApi.me());
     } catch (e) {
       if (e instanceof AuthError) auth.clear();
       setUser(null);
