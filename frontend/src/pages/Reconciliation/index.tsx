@@ -4,8 +4,9 @@ import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 import { ledgerApi, ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
 import { settingsApi } from "../../api/settings";
 import { COLUMNS, setPriorYearEndDate } from "./columns";
-import ColumnHeader from "./ColumnHeader";
-import EntryRow from "./EntryRow";
+import ColumnHealthStrip from "./ColumnHealthStrip";
+import RegisterRow from "./RegisterRow";
+import TransactionModal from "./TransactionModal";
 
 export default function Reconciliation() {
   const [entries, setEntries] = useState<ReconciliationEntry[]>([]);
@@ -14,6 +15,7 @@ export default function Reconciliation() {
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [cutoffInput, setCutoffInput] = useState("");
+  const [openEntryId, setOpenEntryId] = useState<number | null>(null);
 
   async function load() {
     try {
@@ -84,13 +86,15 @@ export default function Reconciliation() {
     }
   }
 
+  const openEntry = openEntryId ? entries.find((e) => e.id === openEntryId) || null : null;
+
   return (
     <div>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        The permanent, editable ledger — push rows here from the Upload tab. Every
-        cell is editable directly in the grid. Statement Description is always
-        whatever the linked Chart of Accounts account currently says. Click a
-        column header to filter down to just the rows missing that column.
+        The permanent, editable ledger — push rows here from the Upload tab.
+        Click a row to open every field for editing. Statement Description is
+        always whatever the linked Chart of Accounts account currently says.
+        Click a chip below to filter down to just the rows missing that column.
       </p>
       <div className="toolbar">
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
@@ -110,6 +114,13 @@ export default function Reconciliation() {
         </span>
       </div>
       {error && <div className="error">{error}</div>}
+
+      <ColumnHealthStrip
+        columns={COLUMNS}
+        completeness={completeness}
+        activeKey={filterColumn}
+        onToggle={(key) => setFilterColumn((prev) => (prev === key ? null : key))}
+      />
       {activeColumn && (
         <div className="toolbar">
           <span className="pill warn">
@@ -120,43 +131,34 @@ export default function Reconciliation() {
           </button>
         </div>
       )}
+
       <div className="card">
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                {COLUMNS.map((col) => {
-                  const c = completeness.get(col.key)!;
-                  return (
-                    <ColumnHeader
-                      key={col.key}
-                      label={col.label}
-                      complete={c.complete}
-                      missingCount={c.missingCount}
-                      active={filterColumn === col.key}
-                      onToggleFilter={() =>
-                        setFilterColumn((prev) => (prev === col.key ? null : col.key))
-                      }
-                    />
-                  );
-                })}
                 <th></th>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Statement Description</th>
+                <th>Bank Account</th>
+                <th>Method</th>
+                <th className="num">Amount</th>
               </tr>
             </thead>
             <tbody>
               {visibleEntries.map((e) => (
-                <EntryRow
+                <RegisterRow
                   key={e.id}
                   entry={e}
-                  accounts={accounts}
                   bankAccounts={bankAccounts}
                   onUpdate={onUpdate}
-                  onDelete={onDelete}
+                  onOpen={setOpenEntryId}
                 />
               ))}
               {visibleEntries.length === 0 && (
                 <tr>
-                  <td colSpan={COLUMNS.length + 1} style={{ color: "var(--muted)" }}>
+                  <td colSpan={7} style={{ color: "var(--muted)" }}>
                     {entries.length === 0
                       ? "No entries yet — push a completed run from the Upload tab."
                       : "No rows match this filter."}
@@ -167,6 +169,17 @@ export default function Reconciliation() {
           </table>
         </div>
       </div>
+
+      {openEntry && (
+        <TransactionModal
+          entry={openEntry}
+          accounts={accounts}
+          bankAccounts={bankAccounts}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onClose={() => setOpenEntryId(null)}
+        />
+      )}
     </div>
   );
 }
