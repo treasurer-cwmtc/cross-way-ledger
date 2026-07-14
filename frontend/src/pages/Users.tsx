@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, User } from "../api";
+import { authApi, User } from "../api/auth";
 
 export default function Users({ currentUserId }: { currentUserId: number }) {
   const [users, setUsers] = useState<User[]>([]);
@@ -11,7 +11,7 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
 
   async function load() {
     try {
-      setUsers(await api.listUsers());
+      setUsers(await authApi.listUsers());
     } catch (e) {
       setError((e as Error).message);
     }
@@ -25,7 +25,7 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
     setError("");
     setMsg("");
     try {
-      await api.createUser(username, password, isAdmin);
+      await authApi.createUser(username, password, isAdmin);
       setMsg(`Created user “${username}”.`);
       setUsername("");
       setPassword("");
@@ -41,7 +41,7 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
       return;
     setError("");
     try {
-      await api.deactivateUser(u.id);
+      await authApi.deactivateUser(u.id);
       await load();
     } catch (e) {
       setError((e as Error).message);

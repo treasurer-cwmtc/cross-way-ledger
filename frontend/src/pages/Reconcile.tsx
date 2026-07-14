@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { api, ReconRun } from "../api";
+import { reconcileApi, ReconRun } from "../api/reconcile";
 
 type Filter = "all" | "stripe" | "bank" | "unmatched";
 
@@ -16,7 +16,7 @@ export default function Reconcile() {
     setBusy(true);
     setError("");
     try {
-      setRun(await api.reconcile(bankFile, stripeFile));
+      setRun(await reconcileApi.reconcile(bankFile, stripeFile));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -109,10 +109,10 @@ export default function Reconcile() {
             </span>
             <a
               className="btn secondary"
-              href={api.exportUrl(run.id)}
+              href={reconcileApi.exportUrl(run.id)}
               onClick={(e) => {
                 e.preventDefault();
-                api.downloadExport(run.id).catch((err) =>
+                reconcileApi.downloadExport(run.id).catch((err) =>
                   setError((err as Error).message)
                 );
               }}

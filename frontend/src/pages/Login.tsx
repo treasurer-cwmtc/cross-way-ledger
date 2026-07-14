@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../api";
+import { authApi } from "../api/auth";
 
 export default function Login({ onSuccess }: { onSuccess: () => void }) {
   const [username, setUsername] = useState("");
@@ -12,7 +12,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
     setBusy(true);
     setError("");
     try {
-      await api.login(username, password);
+      await authApi.login(username, password);
       onSuccess();
     } catch (err) {
       setError((err as Error).message);
