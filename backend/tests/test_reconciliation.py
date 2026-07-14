@@ -112,6 +112,110 @@ def test_delete_entry():
     assert entry_id not in remaining_ids
 
 
+def test_split_and_unsplit_entry():
+    h = auth_header()
+    run_id = _run_upload()
+    bank_account_id = _bank_account_id()
+    client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    entries = client.get("/api/reconciliation", headers=h).json()
+    target = next(e for e in entries if e["amount"] != 0)
+    original_amount = target["amount"]
+    original_id = target["id"]
+
+    half = round(original_amount / 2, 2)
+    remainder = round(original_amount - half, 2)
+    split = client.post(
+        f"/api/reconciliation/{original_id}/split",
+        headers=h,
+        json={
+            "lines": [
+                {"description": "Check A", "amount": half},
+                {"description": "Check B", "amount": remainder},
+            ]
+        },
+    )
+    assert split.status_code == 200, split.text
+    children = split.json()
+    assert len(children) == 2
+    assert {c["split_parent_id"] for c in children} == {original_id}
+    assert round(sum(c["amount"] for c in children), 2) == round(original_amount, 2)
+
+    # Parent is hidden from the list; children are visible instead.
+    after_split = client.get("/api/reconciliation", headers=h).json()
+    ids_after_split = {e["id"] for e in after_split}
+    assert original_id not in ids_after_split
+    assert children[0]["id"] in ids_after_split
+    assert children[1]["id"] in ids_after_split
+
+    # Undo: children removed, original reappears untouched.
+    undo = client.post(f"/api/reconciliation/{original_id}/unsplit", headers=h)
+    assert undo.status_code == 200, undo.text
+    assert undo.json()["amount"] == original_amount
+
+    after_undo = client.get("/api/reconciliation", headers=h).json()
+    ids_after_undo = {e["id"] for e in after_undo}
+    assert original_id in ids_after_undo
+    assert children[0]["id"] not in ids_after_undo
+    assert children[1]["id"] not in ids_after_undo
+
+
+def test_split_rejects_mismatched_total():
+    h = auth_header()
+    run_id = _run_upload()
+    bank_account_id = _bank_account_id()
+    client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    entries = client.get("/api/reconciliation", headers=h).json()
+    target = next(e for e in entries if e["amount"] != 0 and e["split_parent_id"] is None)
+
+    bad = client.post(
+        f"/api/reconciliation/{target['id']}/split",
+        headers=h,
+        json={"lines": [{"description": "Only part", "amount": 0.01}]},
+    )
+    assert bad.status_code == 400
+
+
+def test_split_preserves_dedup_on_reimport():
+    h = auth_header()
+    run_id = _run_upload()
+    bank_account_id = _bank_account_id()
+    client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    entries = client.get("/api/reconciliation", headers=h).json()
+    target = next(e for e in entries if e["amount"] != 0 and e["split_parent_id"] is None)
+    original_id = target["id"]
+    original_amount = target["amount"]
+
+    half = round(original_amount / 2, 2)
+    remainder = round(original_amount - half, 2)
+    client.post(
+        f"/api/reconciliation/{original_id}/split",
+        headers=h,
+        json={"lines": [{"amount": half}, {"amount": remainder}]},
+    )
+
+    # Re-importing the same run must still skip the now-split line (its
+    # dedup_key lives on, so it must not resurrect as a new duplicate).
+    reimport = client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    assert reimport.status_code == 200, reimport.text
+    assert reimport.json()["imported"] == 0
+
+
 def test_prior_year_end_date_setting_is_seeded_and_editable():
     h = auth_header()
     r = client.get("/api/settings/prior_year_end_date", headers=h)

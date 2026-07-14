@@ -178,6 +178,7 @@ export default function Reconciliation() {
           onUpdate={onUpdate}
           onDelete={onDelete}
           onClose={() => setOpenEntryId(null)}
+          onReload={load}
         />
       )}
     </div>

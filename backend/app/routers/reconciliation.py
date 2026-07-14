@@ -10,6 +10,8 @@ from ..schemas import (
     ReconciliationEntryUpdate,
     ReconciliationImportRequest,
     ReconciliationImportResult,
+    SplitGroupOut,
+    SplitRequest,
 )
 from ..services.ledger import build_dedup_key, friendly_method, parse_date
 
@@ -41,6 +43,7 @@ def _to_out(
         bank_description=entry.bank_description,
         notes=entry.notes,
         source_run_id=entry.source_run_id,
+        split_parent_id=entry.split_parent_id,
         statement_description=coa.statement_description if coa else "",
         category=coa.category if coa else "",
         statement_category=coa.statement_category if coa else "",
@@ -62,7 +65,9 @@ def _lookups(db: Session) -> tuple[dict[str, ChartOfAccount], dict[int, BankAcco
 def list_entries(db: Session = Depends(get_db)) -> list[ReconciliationEntryOut]:
     coa_by_no, bank_accounts_by_id = _lookups(db)
     entries = db.scalars(
-        select(ReconciliationEntry).order_by(ReconciliationEntry.transaction_date.desc())
+        select(ReconciliationEntry)
+        .where(ReconciliationEntry.is_split == False)  # noqa: E712 - hidden once split
+        .order_by(ReconciliationEntry.transaction_date.desc())
     )
     return [_to_out(e, coa_by_no, bank_accounts_by_id) for e in entries]
 
@@ -89,6 +94,97 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db)) -> None:
         raise HTTPException(status_code=404, detail="Entry not found.")
     db.delete(entry)
     db.commit()
+
+
+@router.post("/{entry_id}/split", response_model=list[ReconciliationEntryOut])
+def split_entry(
+    entry_id: int, payload: SplitRequest, db: Session = Depends(get_db)
+) -> list[ReconciliationEntryOut]:
+    """Split one aggregated line (e.g. a lump bank deposit covering several
+    checks) into multiple entries. The original row is kept but hidden
+    (is_split=True) rather than deleted, so its dedup_key keeps blocking a
+    future re-import of the same statement from re-adding it."""
+    parent = db.get(ReconciliationEntry, entry_id)
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Entry not found.")
+    if parent.split_parent_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="This line is already part of a split; undo that split first.",
+        )
+    if parent.is_split:
+        raise HTTPException(status_code=400, detail="This line has already been split.")
+    if len(payload.lines) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least 2 lines to split into.")
+
+    total = round(sum(line.amount for line in payload.lines), 2)
+    if abs(total - round(parent.amount, 2)) >= 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Split lines total ${total:.2f}, but the original amount is ${parent.amount:.2f}.",
+        )
+
+    children = []
+    for i, line in enumerate(payload.lines):
+        child = ReconciliationEntry(
+            transaction_date=parent.transaction_date,
+            date_posted=parent.date_posted,
+            account_no=line.account_no,
+            description=line.description,
+            bank_account_id=parent.bank_account_id,
+            method=parent.method,
+            amount=line.amount,
+            check_invoice_name=line.check_invoice_name,
+            bank_description=parent.bank_description,
+            notes=line.notes,
+            dedup_key=f"{parent.dedup_key}#split{i}",
+            source_run_id=parent.source_run_id,
+            split_parent_id=parent.id,
+        )
+        db.add(child)
+        children.append(child)
+    parent.is_split = True
+    db.commit()
+    for c in children:
+        db.refresh(c)
+    coa_by_no, bank_accounts_by_id = _lookups(db)
+    return [_to_out(c, coa_by_no, bank_accounts_by_id) for c in children]
+
+
+@router.post("/{parent_id}/unsplit", response_model=ReconciliationEntryOut)
+def unsplit_entry(parent_id: int, db: Session = Depends(get_db)) -> ReconciliationEntryOut:
+    parent = db.get(ReconciliationEntry, parent_id)
+    if parent is None or not parent.is_split:
+        raise HTTPException(status_code=404, detail="Split not found.")
+    children = list(
+        db.scalars(
+            select(ReconciliationEntry).where(ReconciliationEntry.split_parent_id == parent_id)
+        )
+    )
+    for c in children:
+        db.delete(c)
+    parent.is_split = False
+    db.commit()
+    db.refresh(parent)
+    coa_by_no, bank_accounts_by_id = _lookups(db)
+    return _to_out(parent, coa_by_no, bank_accounts_by_id)
+
+
+@router.get("/split-group/{parent_id}", response_model=SplitGroupOut)
+def get_split_group(parent_id: int, db: Session = Depends(get_db)) -> SplitGroupOut:
+    parent = db.get(ReconciliationEntry, parent_id)
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Entry not found.")
+    children = list(
+        db.scalars(
+            select(ReconciliationEntry).where(ReconciliationEntry.split_parent_id == parent_id)
+        )
+    )
+    coa_by_no, bank_accounts_by_id = _lookups(db)
+    return SplitGroupOut(
+        parent=_to_out(parent, coa_by_no, bank_accounts_by_id),
+        children=[_to_out(c, coa_by_no, bank_accounts_by_id) for c in children],
+    )
 
 
 @router.post("/import-run/{run_id}", response_model=ReconciliationImportResult)

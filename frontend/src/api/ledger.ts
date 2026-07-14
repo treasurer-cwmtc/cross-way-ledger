@@ -19,6 +19,7 @@ export interface ReconciliationEntry {
   bank_description: string;
   notes: string;
   source_run_id: number | null;
+  split_parent_id: number | null;
   // Derived live from the linked Chart of Accounts row - read-only.
   statement_description: string;
   category: string;
@@ -50,6 +51,19 @@ export interface ImportResult {
   skipped_duplicates: number;
 }
 
+export interface SplitLine {
+  description?: string;
+  account_no?: string;
+  amount: number;
+  notes?: string;
+  check_invoice_name?: string;
+}
+
+export interface SplitGroup {
+  parent: ReconciliationEntry;
+  children: ReconciliationEntry[];
+}
+
 export const ledgerApi = {
   list: () =>
     fetch(`${BASE}/api/reconciliation`, { headers: authHeaders() }).then(
@@ -75,4 +89,22 @@ export const ledgerApi = {
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ bank_account_id: bankAccountId }),
     }).then(j<ImportResult>),
+
+  split: (id: number, lines: SplitLine[]) =>
+    fetch(`${BASE}/api/reconciliation/${id}/split`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ lines }),
+    }).then(j<ReconciliationEntry[]>),
+
+  unsplit: (parentId: number) =>
+    fetch(`${BASE}/api/reconciliation/${parentId}/unsplit`, {
+      method: "POST",
+      headers: authHeaders(),
+    }).then(j<ReconciliationEntry>),
+
+  splitGroup: (parentId: number) =>
+    fetch(`${BASE}/api/reconciliation/split-group/${parentId}`, {
+      headers: authHeaders(),
+    }).then(j<SplitGroup>),
 };

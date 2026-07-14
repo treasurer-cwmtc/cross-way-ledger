@@ -222,6 +222,23 @@ Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
   Night, Valentines Day Dinner, Achen Farewell, Piano) aren't yet in our
   seeded `DEFAULT_FUND_RULES` - add them via the Rules tab once the target
   account for each is confirmed (see STATUS.md).
+- **UI is a compact register + detail popup, not a wide table**: rendering
+  all 28 columns inline was the actual performance bottleneck (a ~370-option
+  Chart of Accounts `<select>` per row, times 600+ rows). `RegisterRow.tsx`
+  renders a handful of cheap, memoized columns; clicking a row opens
+  `TransactionModal.tsx` with every field, mounting the account picker once.
+  Column completeness lives in `ColumnHealthStrip.tsx` (a chip strip above
+  the register) rather than table headers.
+- **Splitting an aggregated line**: `SplitModal.tsx` (opened from
+  `TransactionModal`) turns one entry into several - e.g. a lump bank deposit
+  that's actually multiple checks. The split lines must balance to the
+  original amount (enforced client-side for immediate feedback and again
+  server-side). The original row is kept but hidden (`is_split=True`) rather
+  than deleted, specifically so its `dedup_key` keeps blocking a future
+  re-import of the same statement - the visible rows are its children
+  (`split_parent_id`). "Undo split" removes the children and restores the
+  original. See `backend/app/routers/reconciliation.py`
+  (`/{id}/split`, `/{id}/unsplit`, `/split-group/{id}`).
 
 ---
 

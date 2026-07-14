@@ -234,4 +234,15 @@ class ReconciliationEntry(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
+    # Splitting a single aggregated bank line (e.g. one lump "REMOTE ONLINE
+    # DEPOSIT" covering several checks) into multiple entries: the original
+    # row is kept (is_split=True) rather than deleted, so its dedup_key keeps
+    # blocking a future re-import of the same statement from re-adding it as
+    # a "new" duplicate. It's just hidden from the normal list; the visible,
+    # editable rows are its children (split_parent_id -> this row's id).
+    split_parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("reconciliation_entries.id"), nullable=True
+    )
+    is_split: Mapped[bool] = mapped_column(Boolean, default=False)
+
     bank_account: Mapped[BankAccount | None] = relationship()

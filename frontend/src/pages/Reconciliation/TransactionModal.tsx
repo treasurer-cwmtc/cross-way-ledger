@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
-import { ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
+import { ledgerApi, ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
 import { METHOD_OPTIONS } from "./columns";
 import {
   AccountCell,
@@ -12,6 +12,7 @@ import {
   SelectCell,
   TextCell,
 } from "./cells";
+import SplitModal from "./SplitModal";
 
 /** Full editor for one entry - every field, including the Chart of Accounts
  * picker (only mounted here, one at a time, so its ~370 options never touch
@@ -24,9 +25,13 @@ export default function TransactionModal(props: {
   onUpdate: (id: number, patch: ReconciliationEntryUpdate) => void;
   onDelete: (id: number) => void;
   onClose: () => void;
+  onReload: () => void;
 }) {
   const e = props.entry;
   const set = (patch: ReconciliationEntryUpdate) => props.onUpdate(e.id, patch);
+  const [showSplit, setShowSplit] = useState(false);
+  const [unsplitting, setUnsplitting] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     function onKey(ev: KeyboardEvent) {
@@ -36,6 +41,24 @@ export default function TransactionModal(props: {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function undoSplit() {
+    if (e.split_parent_id == null) return;
+    if (!confirm("Undo this split? The lines you created will be removed and the original line restored.")) {
+      return;
+    }
+    setUnsplitting(true);
+    setError("");
+    try {
+      await ledgerApi.unsplit(e.split_parent_id);
+      props.onReload();
+      props.onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUnsplitting(false);
+    }
+  }
 
   return (
     <div className="modal-backdrop" onClick={props.onClose}>
@@ -51,6 +74,25 @@ export default function TransactionModal(props: {
             Close
           </button>
         </div>
+
+        {e.split_parent_id != null ? (
+          <div className="toolbar">
+            <span className="pill warn">Part of a split transaction</span>
+            <button className="link" onClick={undoSplit} disabled={unsplitting}>
+              {unsplitting ? "Undoing…" : "Undo split (merge back into one line)"}
+            </button>
+          </div>
+        ) : (
+          <div className="toolbar">
+            <button className="btn secondary" onClick={() => setShowSplit(true)}>
+              Split into multiple lines
+            </button>
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>
+              For an aggregated bank line (e.g. a deposit slip covering several checks).
+            </span>
+          </div>
+        )}
+        {error && <div className="error">{error}</div>}
 
         <div className="row">
           <label className="field">
@@ -181,6 +223,19 @@ export default function TransactionModal(props: {
           </button>
         </div>
       </div>
+
+      {showSplit && (
+        <SplitModal
+          entry={e}
+          accounts={props.accounts}
+          onSplit={() => {
+            setShowSplit(false);
+            props.onReload();
+            props.onClose();
+          }}
+          onClose={() => setShowSplit(false)}
+        />
+      )}
     </div>
   );
 }

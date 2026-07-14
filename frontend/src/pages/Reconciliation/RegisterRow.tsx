@@ -29,6 +29,11 @@ function RegisterRow(props: {
       </td>
       <td style={{ whiteSpace: "nowrap" }}>{e.transaction_date || "—"}</td>
       <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {e.split_parent_id != null && (
+          <span title="Part of a split transaction" style={{ marginRight: 4 }}>
+            ⑃
+          </span>
+        )}
         {e.description || <span style={{ color: "var(--muted)" }}>(no description)</span>}
       </td>
       <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

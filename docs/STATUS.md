@@ -76,8 +76,28 @@ _Where we left off — read this first when resuming in a new session._
     the same idea as our `CategoryRule` (`stripe_fund`) table, just editable
     instead of hardcoded. Spotted additional fund names in that formula not
     yet covered by our seeded default rules - see Next steps.
+- ✅ **Reconciliation performance + UX redesign** — the full 28-column table
+  took several seconds to render with 600+ real rows because the Statement
+  Description column mounted a ~370-option `<select>` in every row. Redesigned
+  as a compact register (cheap, memoized rows) + click-to-open detail popup
+  (every field, including the account picker, mounted once at a time) - a
+  Quicken-style layout. Column completeness moved from table headers to a
+  chip strip above the register (still click-to-filter-to-bad-rows). Measured
+  ~243ms to render 611 real rows, down from several seconds.
+- ✅ **Split / undo-split** — a single aggregated bank line (e.g. one lump
+  "REMOTE ONLINE DEPOSIT" that's actually several checks bundled together)
+  can be split into multiple entries from the detail popup. The original row
+  isn't deleted - it's hidden (`is_split=True`), so its `dedup_key` keeps
+  blocking a future re-import of the same statement from resurrecting it as
+  a duplicate; the visible, editable rows are its children
+  (`split_parent_id`). Split lines must balance to the original amount
+  (enforced both client- and server-side). "Undo split" on any child removes
+  all siblings and restores the original line. Verified end-to-end: split a
+  real $30 deposit line into $18 + $12, confirmed re-import still skips it
+  (0 imported), then undid the split and confirmed the register returned to
+  its exact original state.
 
-**Tests:** 16 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 19 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---

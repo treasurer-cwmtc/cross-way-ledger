@@ -215,6 +215,7 @@ class ReconciliationEntryOut(BaseModel):
     bank_description: str
     notes: str
     source_run_id: int | None
+    split_parent_id: int | None
     # Derived live from the linked Chart of Accounts row (blank if account_no
     # doesn't match any account, e.g. not yet categorized).
     statement_description: str
@@ -240,6 +241,23 @@ class ReconciliationEntryUpdate(BaseModel):
     check_invoice_name: str | None = None
     bank_description: str | None = None
     notes: str | None = None
+
+
+class SplitLineIn(BaseModel):
+    description: str = ""
+    account_no: str = ""
+    amount: float
+    notes: str = ""
+    check_invoice_name: str = ""
+
+
+class SplitRequest(BaseModel):
+    lines: list[SplitLineIn]
+
+
+class SplitGroupOut(BaseModel):
+    parent: ReconciliationEntryOut
+    children: list[ReconciliationEntryOut]
 
 
 class ReconciliationImportRequest(BaseModel):
