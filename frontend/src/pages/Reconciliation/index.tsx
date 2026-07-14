@@ -14,7 +14,6 @@ export default function Reconciliation() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
-  const [cutoffInput, setCutoffInput] = useState("");
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
 
   async function load() {
@@ -26,7 +25,6 @@ export default function Reconciliation() {
         settingsApi.get("prior_year_end_date"),
       ]);
       setPriorYearEndDate(cutoff.value); // affects columns.ts CY/PY derivation
-      setCutoffInput(cutoff.value);
       setEntries(e);
       setAccounts(a);
       setBankAccounts(b);
@@ -38,17 +36,6 @@ export default function Reconciliation() {
   useEffect(() => {
     load();
   }, []);
-
-  async function saveCutoff() {
-    try {
-      const updated = await settingsApi.update("prior_year_end_date", cutoffInput);
-      setPriorYearEndDate(updated.value);
-      setCutoffInput(updated.value);
-      setEntries((prev) => [...prev]); // re-trigger CY/PY re-render with new cutoff
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
 
   const completeness = useMemo(() => {
     const map = new Map<string, { complete: boolean; missingCount: number }>();
@@ -95,25 +82,9 @@ export default function Reconciliation() {
         Click a row to open every field for editing. Statement Description is
         always whatever the linked Chart of Accounts account currently says.
         Click a chip below to filter down to just the rows missing that column.
+        The Txn/Posted CY/PY columns are driven by the fiscal year date set on
+        the Config tab (shared with Accrual).
       </p>
-      <div className="toolbar">
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-          <span>Prior year ends:</span>
-          <input
-            type="date"
-            value={cutoffInput}
-            onChange={(e) => setCutoffInput(e.target.value)}
-          />
-        </label>
-        <button className="btn secondary" onClick={saveCutoff} disabled={!cutoffInput}>
-          Save
-        </button>
-        <span style={{ color: "var(--muted)", fontSize: 12 }}>
-          Drives the CY/PY columns (shared with the Accrual tab) — dates after
-          this are "CY". Update once a year at rollover (matches the old
-          sheet's Configurations tab).
-        </span>
-      </div>
       {error && <div className="error">{error}</div>}
 
       <ColumnHealthStrip

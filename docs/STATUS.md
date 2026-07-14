@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-14 (Accrual tab)
+**Last updated:** 2026-07-14 (Config tab)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -115,6 +115,40 @@ _Where we left off — read this first when resuming in a new session._
   the shared data. Verified live: Quick Add (submit via button and via
   native Enter-in-form submission), Split (a lump entry into two balanced
   lines), and Undo split (children removed, original amount/line restored).
+- ✅ **Type-to-filter Chart of Accounts picker** — the account list is 362
+  rows; scanning a plain `<select>` for one by name was slow. Added
+  `AccountPicker` (`frontend/src/pages/ledger/AccountPicker.tsx`), a
+  from-scratch combobox (no new dependency) that filters by account number
+  or statement description as you type, with arrow-key/Enter navigation and
+  click-to-select. Replaces the old `AccountCell` `<select>` everywhere it
+  was used: the register detail popup, the split popup, and Accrual's Quick
+  Add.
+- ✅ **Config tab** — a new page mirroring the legacy sheet's Configurations
+  tab exactly, replacing the "Prior year ends" editor that used to live
+  inline on the Reconciliation page:
+  - **Fiscal year (CY/PY)**: editable **Current Year Date** (matches the
+    sheet's B1), with read-only derived Prior Year Date / Current Year /
+    Prior Year shown below it (matches B2/B3/B4). Saving still writes to
+    the same `prior_year_end_date` AppSetting Reconciliation/Accrual's
+    CY/PY columns already read - no backend/schema change, just a friendlier
+    editing surface (edit "start of the year" instead of "end of last
+    year").
+  - **Frequency**: editable Monthly/Yearly/Quarterly periods-per-year
+    (defaults 12/1/4, matching the sheet's Frequency lookup). Not
+    consumed by anything yet - added because the legacy sheet has it and
+    it'll be needed once budget-period math is built.
+  - **Audit validation**: editable From/To date range for spot-checking a
+    stretch of transactions (matches the sheet's Audit Validation cells).
+    Also not consumed yet - same reasoning.
+  - All five values are just rows in the existing generic `AppSetting`
+    key/value table (`frequency_monthly`, `frequency_yearly`,
+    `frequency_quarterly`, `audit_validation_from_date`,
+    `audit_validation_to_date`, plus the pre-existing
+    `prior_year_end_date`) - seeded with sensible defaults in
+    `backend/app/seed.py`, no new tables or endpoints needed.
+  - Verified live: all three cards load, edit, and save correctly; CY/PY
+    columns on Reconciliation still populate correctly after removing the
+    inline editor.
 
 **Tests:** 24 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
@@ -140,10 +174,16 @@ Tracked as issues on the repo. Suggested order:
   accounts at once turns out to be needed.
 - **Reconciliation ledger follow-ups** — bulk-categorize/auto-fill uncategorized
   rows from existing rules (right now the Rules engine only runs during
-  Upload, not retroactively against the ledger); a searchable/autocomplete
-  Statement Description picker instead of a plain `<select>` (376+ accounts);
-  possibly surface `IsReimbursement` more meaningfully once there's a real
-  reimbursement workflow to hang it off of.
+  Upload, not retroactively against the ledger); possibly surface
+  `IsReimbursement` more meaningfully once there's a real reimbursement
+  workflow to hang it off of.
+- **Wire up Frequency / Audit Validation** — both are now editable on the
+  Config tab (`frequency_monthly/yearly/quarterly`,
+  `audit_validation_from_date/to_date` AppSettings) but nothing reads them
+  yet. Frequency exists in the legacy sheet to annualize/de-annualize budget
+  amounts - relevant once a Budget page is built. Audit Validation is a
+  spot-check date range - relevant once there's an audit/reporting view to
+  filter by it.
 - **Add missing Stripe fund rules** — the legacy sheet's `LKP_COA` formula
   (Match_Stripe_2!AB) matches on more fund names than our seeded
   `DEFAULT_FUND_RULES` covers. Confirmed present in the formula but not yet
