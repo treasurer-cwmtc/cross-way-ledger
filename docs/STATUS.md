@@ -47,6 +47,9 @@ Tracked as issues on the repo. Suggested order:
 - **#5 Automated Stripe & Chase pulls** (replace manual CSV upload).
 - **#6 Confirm Net vs gross+fee** handling for exploded donations (bookkeeping
   decision — affects reconciler logic).
+- **#8 Google Drive receipt linking** — attach a Drive file to a transaction via
+  the Google Picker API. Blocked on the transaction entry screen (not yet built;
+  comes after Chart of Accounts work).
 
 ---
 

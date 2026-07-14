@@ -175,6 +175,12 @@ All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.
 - Not yet built (candidate next steps): saved run history UI, roster-based donor
   normalization, direct export to the accounting system, automated Stripe/Chase
   pulls instead of manual CSV upload, CI/CD auto-deploy to the VPS.
+- **Planned: transaction entry screen** — a manual transaction ledger (post-
+  reconciliation), to be built after the Chart of Accounts work. Each transaction
+  will support **Google Drive receipt linking**: an "Attach receipt" button opens
+  the Google Picker so a user can link an existing Drive file (stores `fileId` +
+  `webViewLink`, not a copy). Needs a Google Cloud OAuth client registered to the
+  church domain — no Google credentials exist in the repo yet. See issue #8.
 
 ### Authentication (built)
 
