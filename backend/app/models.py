@@ -1,6 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -26,6 +28,18 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class AppSetting(Base):
+    """Tiny key/value store for app-wide settings the treasurer adjusts by
+    hand (e.g. "prior_year_end_date", matching the legacy sheet's
+    Configurations tab, which they update once a year at rollover rather
+    than deriving from the server's real-world date)."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[str] = mapped_column(String(300))
 
 
 class StatementCategory(Base):
@@ -167,3 +181,68 @@ class ReconLine(Base):
     notes: Mapped[str] = mapped_column(String(300), default="")
 
     run: Mapped[ReconRun] = relationship(back_populates="lines")
+
+
+class BankAccount(Base):
+    """A named bank account (e.g. "Chase Operating"). Simple lookup list -
+    picked once per Upload run and carried onto every ReconciliationEntry
+    created from that run; editable per-row afterward."""
+
+    __tablename__ = "bank_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ReconciliationEntry(Base):
+    """One row of the persistent Reconciliation ledger (the "Reconciliation"
+    tab) - distinct from ReconLine, which is the ephemeral per-run output of
+    the Upload tab. Entries are created by importing a completed Upload run
+    (deduped via `dedup_key`) and are then freely hand-edited.
+
+    account_no is the only source of truth for the account this entry is
+    categorized to - Statement Description and the Chart-of-Accounts-derived
+    columns (Category, Statement, Item, Item Detail, Grouping,
+    IsYouthChaplainShare, IsMissions) are always looked up live from the
+    linked ChartOfAccount row, never stored here, so they can't drift out of
+    sync with the Chart of Accounts.
+    """
+
+    __tablename__ = "reconciliation_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    date_posted: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
+    account_no: Mapped[str] = mapped_column(String(20), default="")
+    description: Mapped[str] = mapped_column(String(300), default="")
+    bank_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bank_accounts.id"), nullable=True
+    )
+    method: Mapped[str] = mapped_column(String(40), default="")
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    check_invoice_name: Mapped[str] = mapped_column(String(200), default="")
+    bank_description: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(String(300), default="")
+    dedup_key: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    source_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recon_runs.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # Splitting a single aggregated bank line (e.g. one lump "REMOTE ONLINE
+    # DEPOSIT" covering several checks) into multiple entries: the original
+    # row is kept (is_split=True) rather than deleted, so its dedup_key keeps
+    # blocking a future re-import of the same statement from re-adding it as
+    # a "new" duplicate. It's just hidden from the normal list; the visible,
+    # editable rows are its children (split_parent_id -> this row's id).
+    split_parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("reconciliation_entries.id"), nullable=True
+    )
+    is_split: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    bank_account: Mapped[BankAccount | None] = relationship()

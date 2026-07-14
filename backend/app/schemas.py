@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -170,3 +170,100 @@ class UserCreate(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
+
+
+class AppSettingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    value: str
+
+
+class AppSettingUpdate(BaseModel):
+    value: str
+
+
+class BankAccountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    active: bool
+
+
+class BankAccountCreate(BaseModel):
+    name: str
+
+
+class ReconciliationEntryOut(BaseModel):
+    """Built by the router as a plain dict, not straight from the ORM row -
+    the Chart-of-Accounts-derived fields (statement_description through
+    is_missions) come from a live join on account_no, never stored."""
+
+    id: int
+    transaction_date: date | None
+    date_posted: date | None
+    reconciled: bool
+    is_reimbursement: bool
+    account_no: str
+    description: str
+    bank_account_id: int | None
+    bank_account_name: str
+    method: str
+    amount: float
+    check_invoice_name: str
+    bank_description: str
+    notes: str
+    source_run_id: int | None
+    split_parent_id: int | None
+    # Derived live from the linked Chart of Accounts row (blank if account_no
+    # doesn't match any account, e.g. not yet categorized).
+    statement_description: str
+    category: str
+    statement_category: str
+    statement_item: str
+    statement_detail: str
+    grouping: str
+    is_youth_chaplain_share: str
+    is_missions: str
+
+
+class ReconciliationEntryUpdate(BaseModel):
+    transaction_date: date | None = None
+    date_posted: date | None = None
+    reconciled: bool | None = None
+    is_reimbursement: bool | None = None
+    account_no: str | None = None
+    description: str | None = None
+    bank_account_id: int | None = None
+    method: str | None = None
+    amount: float | None = None
+    check_invoice_name: str | None = None
+    bank_description: str | None = None
+    notes: str | None = None
+
+
+class SplitLineIn(BaseModel):
+    description: str = ""
+    account_no: str = ""
+    amount: float
+    notes: str = ""
+    check_invoice_name: str = ""
+
+
+class SplitRequest(BaseModel):
+    lines: list[SplitLineIn]
+
+
+class SplitGroupOut(BaseModel):
+    parent: ReconciliationEntryOut
+    children: list[ReconciliationEntryOut]
+
+
+class ReconciliationImportRequest(BaseModel):
+    bank_account_id: int
+
+
+class ReconciliationImportResult(BaseModel):
+    imported: int
+    skipped_duplicates: int

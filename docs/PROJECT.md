@@ -161,6 +161,85 @@ spreadsheet's blank rollup/header rows (`I000000` etc.) and a handful of
 true duplicate (item, detail-name) pairs are skipped during seeding (376
 source rows -> 362 accounts). Further changes happen through the app.
 
+### The Reconciliation ledger (persistent, editable)
+
+The **Upload** tab (formerly "Reconcile") is unchanged mechanically - upload a
+Chase + Stripe CSV pair, get back an ephemeral `ReconRun`/`ReconLine` preview,
+same as before. What's new is a **Reconciliation** tab: a persistent, hand-
+editable ledger that Upload results get pushed into, matching the target
+Google Sheet's shape (`Transaction Date, Date Posted, Reconciled, Statement
+Description, Description, Bank Account, Method, Amount, Check/Invoice Name,
+Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
+
+- **Bank Account** (`bank_accounts` table) - a simple named lookup (seeded
+  with "Chase Operating" to match the church's real data). Picked once on the
+  Upload tab before running Reconcile; every resulting row gets tagged with
+  it when pushed to Reconciliation via the "Add to Reconciliation" button.
+- **ReconciliationEntry** (`reconciliation_entries` table) is the ledger row.
+  Every field is directly editable in the grid except the Chart-of-Accounts-
+  derived columns (Category, Statement, Item, Item Detail, Grouping,
+  IsYouthChaplainShare, IsMissions, Type) and the date-part breakdown columns
+  (month name/month-year/year/CY-PY for both dates) - those are always
+  computed live from `account_no` / the date fields, never stored, so
+  Statement Description etc. can never drift out of sync with the Chart of
+  Accounts. See `backend/app/routers/reconciliation.py` and
+  `frontend/src/pages/Reconciliation/`.
+- **Dedup on import**: pushing an Upload run to Reconciliation computes a
+  `dedup_key` per line (`transaction_date + amount + Check/Invoice Name (or
+  Bank Description as fallback)`) and skips any row whose key already exists
+  in the ledger - re-uploading an overlapping statement never creates
+  duplicate rows. See `backend/app/services/ledger.py`.
+- **Method auto-mapping**: Chase's raw `Type` codes (`CHECK_DEPOSIT`,
+  `DEBIT_CARD`, `QUICKPAY_DEBIT`, `WIRE_INCOMING`, ...) are mapped to the
+  small set of values the ledger actually uses (`Stripe`/`Check`/`Debit`/
+  `Zelle`/`Wire`/`Deposit`/`Other`) at import time - the Method cell stays a
+  fully editable dropdown for correcting any mismatch (`METHOD_MAP` in
+  `services/ledger.py`).
+- **Column health indicators**: each column header shows a green bar if
+  every row has a value, red if any are missing; clicking a header filters
+  the grid down to just the rows missing that column. This applies literally
+  to every column, including ones that are commonly blank by nature (Notes,
+  Grouping, etc.) - a permanently-red header there is expected, not a bug.
+- **`Type` quirk (verified against the live source formulas)**: `Type` is
+  not simply `= Category`. The legacy sheet hardcodes every `Budget`-category
+  row to `Type=Income` regardless of what it actually represents - confirmed
+  by inspecting `Import-ChartOfAccounts!L` directly (View > Show Formulas).
+  Reproduced exactly rather than "cleaned up", since the goal is fidelity to
+  the existing reporting.
+- **CY/PY is a manual annual toggle, not derived from today's date**: the
+  source sheet compares each transaction date to a `Configurations` tab cell
+  the treasurer updates once a year at rollover (`IF(date > Configurations!B2,
+  "CY", "PY")`), not the server's real-world date. Modeled as an `AppSetting`
+  row (`prior_year_end_date`), editable via a small control at the top of the
+  Reconciliation page - see `backend/app/routers/settings.py` and
+  `frontend/src/pages/Reconciliation/columns.ts` (`setPriorYearEndDate`).
+- **Stripe fund matching parity**: the legacy `Match_Stripe_2!AB` ("LKP_COA")
+  column is a hardcoded `IFS()`/`REGEXMATCH()` chain, one clause per fund
+  name, each mapping to a literal account code - architecturally the same
+  idea as our `CategoryRule` (`stripe_fund`) table, just editable instead of
+  hardcoded in a formula. Some fund names visible in that formula
+  (NavJeevan, Golf Tournament, Retreat, Sunday School, Cross Way Couples Date
+  Night, Valentines Day Dinner, Achen Farewell, Piano) aren't yet in our
+  seeded `DEFAULT_FUND_RULES` - add them via the Rules tab once the target
+  account for each is confirmed (see STATUS.md).
+- **UI is a compact register + detail popup, not a wide table**: rendering
+  all 28 columns inline was the actual performance bottleneck (a ~370-option
+  Chart of Accounts `<select>` per row, times 600+ rows). `RegisterRow.tsx`
+  renders a handful of cheap, memoized columns; clicking a row opens
+  `TransactionModal.tsx` with every field, mounting the account picker once.
+  Column completeness lives in `ColumnHealthStrip.tsx` (a chip strip above
+  the register) rather than table headers.
+- **Splitting an aggregated line**: `SplitModal.tsx` (opened from
+  `TransactionModal`) turns one entry into several - e.g. a lump bank deposit
+  that's actually multiple checks. The split lines must balance to the
+  original amount (enforced client-side for immediate feedback and again
+  server-side). The original row is kept but hidden (`is_split=True`) rather
+  than deleted, specifically so its `dedup_key` keeps blocking a future
+  re-import of the same statement - the visible rows are its children
+  (`split_parent_id`). "Undo split" removes the children and restores the
+  original. See `backend/app/routers/reconciliation.py`
+  (`/{id}/split`, `/{id}/unsplit`, `/split-group/{id}`).
+
 ---
 
 ## 5. Architecture / tech stack
@@ -180,19 +259,30 @@ source rows -> 362 accounts). Further changes happen through the app.
 ### Data model (tables)
 
 - `users` — login accounts (username, PBKDF2 password hash, is_admin, active).
-- `chart_of_accounts` — the category master.
+- `statement_categories` / `statement_items` / `chart_of_accounts` — the
+  3-level Chart of Accounts hierarchy (see above).
 - `category_rules` — editable rules (`stripe_fund` | `bank_keyword`).
-- `recon_runs` — one row per reconciliation run (counts, filenames).
-- `recon_lines` — the output lines (exploded donations + categorized bank lines).
+- `recon_runs` / `recon_lines` — one Upload run and its ephemeral output
+  lines (preview only, not persisted long-term as the source of truth).
+- `bank_accounts` — named bank account lookup (e.g. "Chase Operating").
+- `reconciliation_entries` — the persistent, editable Reconciliation ledger;
+  `dedup_key` prevents re-importing the same transaction twice.
 
 ### API surface
 
 - `POST /api/auth/login` (form) → JWT; `GET /api/auth/me`;
   `POST /api/auth/change-password`; admin-only `GET/POST/DELETE /api/auth/users`
 - `POST /api/reconcile` (multipart: `bank_file`, `stripe_file`) → run + lines
+  (the Upload tab)
 - `GET  /api/runs`, `GET /api/runs/{id}`, `GET /api/runs/{id}/export.csv`
 - `GET/POST/PUT/DELETE /api/rules`
-- `GET  /api/accounts`, `POST /api/accounts/upload`
+- `GET/POST/PUT/DELETE /api/accounts` (Chart of Accounts leaf/Detail level)
+- `GET/POST/DELETE /api/accounts/statement-categories`,
+  `GET/POST/DELETE /api/accounts/statement-items`,
+  `POST /api/accounts/preview-number`
+- `GET/POST/DELETE /api/bank-accounts`
+- `GET/PUT/DELETE /api/reconciliation`, `POST /api/reconciliation/import-run/{run_id}`
+  (the Reconciliation tab)
 - `GET  /api/health` (public)
 
 All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.
