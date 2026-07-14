@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-13
+**Last updated:** 2026-07-14
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -35,8 +35,21 @@ _Where we left off — read this first when resuming in a new session._
   Accounts tab (3 top-down creation forms + accounts table). CSV import was
   removed (flagged as a future request); seed data replaced with the full
   376-account church chart (was a partial 68-row guess before).
+- ✅ **Reconciliation ledger** — the old "Reconcile" tab is now **Upload**
+  (unchanged mechanically); a new **Reconciliation** tab is a persistent,
+  fully hand-editable ledger matching the target Google Sheet's shape. Push
+  a completed Upload run into it via "Add to Reconciliation" (pick a Bank
+  Account first); re-pushing an overlapping statement is deduped
+  automatically (date + amount + Check/Invoice Name or Bank Description).
+  Statement Description and the Chart-of-Accounts-derived reporting columns
+  (Category/Statement/Item/Item Detail/Grouping/etc.) are always looked up
+  live from the linked account, never independently editable. Every column
+  header shows a green/red completeness bar; click one to filter to just
+  the rows missing that column. Verified end-to-end against real
+  April-September 2025 Chase + Stripe exports (639 output lines, 611
+  imported / 28 genuine in-statement duplicates correctly deduped).
 
-**Tests:** 12 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 15 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---
@@ -58,6 +71,12 @@ Tracked as issues on the repo. Suggested order:
 - **Chart of Accounts CSV bulk import** — removed when CRUD was added; add back
   (as an upsert, not the old destructive replace) if bulk onboarding of many
   accounts at once turns out to be needed.
+- **Reconciliation ledger follow-ups** — bulk-categorize/auto-fill uncategorized
+  rows from existing rules (right now the Rules engine only runs during
+  Upload, not retroactively against the ledger); a searchable/autocomplete
+  Statement Description picker instead of a plain `<select>` (376+ accounts);
+  possibly surface `IsReimbursement` more meaningfully once there's a real
+  reimbursement workflow to hang it off of.
 
 ---
 

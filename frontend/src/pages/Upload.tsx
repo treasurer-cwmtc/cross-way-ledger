@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { reconcileApi, ReconRun } from "../api/reconcile";
+import { bankAccountsApi, BankAccount } from "../api/bankAccounts";
+import { ledgerApi } from "../api/ledger";
 
 type Filter = "all" | "stripe" | "bank" | "unmatched";
 
-export default function Reconcile() {
+export default function Upload() {
   const [bankFile, setBankFile] = useState<File | null>(null);
   const [stripeFile, setStripeFile] = useState<File | null>(null);
   const [run, setRun] = useState<ReconRun | null>(null);
@@ -11,16 +13,73 @@ export default function Reconcile() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [bankAccountId, setBankAccountId] = useState<number | "">("");
+  const [newBankAccountName, setNewBankAccountName] = useState("");
+
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const [importError, setImportError] = useState("");
+
+  async function loadBankAccounts() {
+    try {
+      const list = await bankAccountsApi.list();
+      setBankAccounts(list);
+      if (list.length && !bankAccountId) setBankAccountId(list[0].id);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  useEffect(() => {
+    loadBankAccounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function addBankAccount() {
+    if (!newBankAccountName.trim()) return;
+    try {
+      const created = await bankAccountsApi.create(newBankAccountName);
+      setNewBankAccountName("");
+      await loadBankAccounts();
+      setBankAccountId(created.id);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function onRun() {
     if (!bankFile || !stripeFile) return;
     setBusy(true);
     setError("");
+    setImportMsg("");
+    setImportError("");
     try {
       setRun(await reconcileApi.reconcile(bankFile, stripeFile));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function addToReconciliation() {
+    if (!run || !bankAccountId) return;
+    setImporting(true);
+    setImportMsg("");
+    setImportError("");
+    try {
+      const result = await ledgerApi.importRun(run.id, bankAccountId);
+      setImportMsg(
+        `Added ${result.imported} row${result.imported === 1 ? "" : "s"} to Reconciliation` +
+          (result.skipped_duplicates
+            ? ` (${result.skipped_duplicates} already there, skipped).`
+            : ".")
+      );
+    } catch (e) {
+      setImportError((e as Error).message);
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -33,13 +92,49 @@ export default function Reconcile() {
     });
   }, [run, filter]);
 
-  const total = useMemo(
-    () => lines.reduce((s, l) => s + l.amount, 0),
-    [lines]
-  );
+  const total = useMemo(() => lines.reduce((s, l) => s + l.amount, 0), [lines]);
 
   return (
     <div>
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Bank account</h3>
+        <p className="subtitle">
+          Which account is this statement for? Every row from this run will be
+          tagged with it when you push the results to Reconciliation.
+        </p>
+        <div className="row">
+          <label className="field">
+            <span>Bank Account</span>
+            <select
+              value={bankAccountId}
+              onChange={(e) => setBankAccountId(Number(e.target.value) || "")}
+            >
+              <option value="">Select…</option>
+              {bankAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Add a new bank account</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type="text"
+                value={newBankAccountName}
+                placeholder="e.g. Chase Savings"
+                onChange={(e) => setNewBankAccountName(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button className="btn secondary" onClick={addBankAccount}>
+                Add
+              </button>
+            </div>
+          </label>
+        </div>
+      </div>
+
       <div className="card">
         <div className="row">
           <label className="field">
@@ -104,8 +199,7 @@ export default function Reconcile() {
               <option value="unmatched">Needs attention</option>
             </select>
             <span style={{ color: "var(--muted)", fontSize: 13 }}>
-              {lines.length} lines · subtotal{" "}
-              <b>${total.toFixed(2)}</b>
+              {lines.length} lines · subtotal <b>${total.toFixed(2)}</b>
             </span>
             <a
               className="btn secondary"
@@ -119,7 +213,17 @@ export default function Reconcile() {
             >
               Download CSV
             </a>
+            <button
+              className="btn"
+              onClick={addToReconciliation}
+              disabled={importing || !bankAccountId}
+              title={!bankAccountId ? "Pick a bank account above first" : ""}
+            >
+              {importing ? "Adding…" : "Add to Reconciliation"}
+            </button>
           </div>
+          {importMsg && <div className="ok">{importMsg}</div>}
+          {importError && <div className="error">{importError}</div>}
 
           <div className="table-wrap">
             <table>
@@ -147,9 +251,7 @@ export default function Reconcile() {
                     <td>{l.statement_description || l.category}</td>
                     <td>{l.account_no}</td>
                     <td className="num">{l.amount.toFixed(2)}</td>
-                    <td>
-                      {l.notes && <span className="pill warn">{l.notes}</span>}
-                    </td>
+                    <td>{l.notes && <span className="pill warn">{l.notes}</span>}</td>
                   </tr>
                 ))}
               </tbody>

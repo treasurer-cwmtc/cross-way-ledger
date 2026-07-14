@@ -11,7 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import CategoryRule, ChartOfAccount, StatementCategory, StatementItem, User
+from .models import (
+    BankAccount,
+    CategoryRule,
+    ChartOfAccount,
+    StatementCategory,
+    StatementItem,
+    User,
+)
 from .security import hash_password
 from .services.coa_numbering import (
     compute_account_no,
@@ -149,4 +156,8 @@ def seed(db: Session) -> None:
                     priority=10 + i,
                 )
             )
+        db.commit()
+
+    if db.scalar(select(BankAccount).limit(1)) is None:
+        db.add(BankAccount(name="Chase Operating"))
         db.commit()

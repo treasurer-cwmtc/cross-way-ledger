@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { auth, AuthError } from "./api/client";
 import { authApi, User } from "./api/auth";
-import Reconcile from "./pages/Reconcile";
+import Upload from "./pages/Upload";
+import Reconciliation from "./pages/Reconciliation";
 import Rules from "./pages/Rules";
 import Accounts from "./pages/Accounts";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
 
-type Tab = "reconcile" | "rules" | "accounts" | "users";
+type Tab = "upload" | "reconciliation" | "rules" | "accounts" | "users";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("reconcile");
+  const [tab, setTab] = useState<Tab>("upload");
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,7 +38,7 @@ export default function App() {
   function logout() {
     auth.clear();
     setUser(null);
-    setTab("reconcile");
+    setTab("upload");
   }
 
   if (loading) return <div className="app">Loading…</div>;
@@ -76,10 +77,16 @@ export default function App() {
 
       <nav className="tabs">
         <button
-          className={tab === "reconcile" ? "active" : ""}
-          onClick={() => setTab("reconcile")}
+          className={tab === "upload" ? "active" : ""}
+          onClick={() => setTab("upload")}
         >
-          Reconcile
+          Upload
+        </button>
+        <button
+          className={tab === "reconciliation" ? "active" : ""}
+          onClick={() => setTab("reconciliation")}
+        >
+          Reconciliation
         </button>
         <button
           className={tab === "rules" ? "active" : ""}
@@ -103,7 +110,8 @@ export default function App() {
         )}
       </nav>
 
-      {tab === "reconcile" && <Reconcile />}
+      {tab === "upload" && <Upload />}
+      {tab === "reconciliation" && <Reconciliation />}
       {tab === "rules" && <Rules />}
       {tab === "accounts" && <Accounts />}
       {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
