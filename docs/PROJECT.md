@@ -184,9 +184,9 @@ All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.
 - **Planned: Google Sign-In** — login via the `crosswaymtc.org` Google Workspace
   (nonprofit account), consent screen restricted to that domain so only church
   accounts can sign in. Can reuse the same OAuth client as the Drive Picker work
-  above. Open question: replaces or supplements the existing username/password +
-  JWT auth (`backend/app/security.py`) — needs a decision before implementation.
-  See issue #9.
+  above. **Decided: replaces** the existing username/password + JWT auth
+  (`backend/app/security.py`) — the password login path is to be retired, not
+  kept alongside. See issue #9.
 
 ### Authentication (built)
 

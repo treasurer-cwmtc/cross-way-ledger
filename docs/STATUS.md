@@ -51,8 +51,8 @@ Tracked as issues on the repo. Suggested order:
   the Google Picker API. Blocked on the transaction entry screen (not yet built;
   comes after Chart of Accounts work).
 - **#9 Google Sign-In** — login via `crosswaymtc.org` Google Workspace (nonprofit),
-  domain-restricted. Can share an OAuth client with #8. Open question: replaces
-  or supplements the existing username/password auth — needs a decision first.
+  domain-restricted. Can share an OAuth client with #8. **Decided: replaces** the
+  existing username/password auth (not an add-on).
 
 ---
 
