@@ -334,14 +334,10 @@ class AccrualSplitGroupOut(BaseModel):
 
 
 class BudgetEntryOut(BaseModel):
-    """One row of the Budget page - always returned for every Budget-category
-    Chart of Accounts account for the requested year, even if no amount has
-    been entered yet (id=0, amount=0), so the page can render a full
-    editable table rather than needing a separate create step."""
-
     id: int
-    year: int
+    transaction_date: date | None
     account_no: str
+    description: str
     amount: float
     notes: str
     statement_description: str
@@ -351,9 +347,30 @@ class BudgetEntryOut(BaseModel):
     statement_detail: str
 
 
-class BudgetEntryUpsert(BaseModel):
-    amount: float
+class BudgetEntryCreate(BaseModel):
+    transaction_date: date | None = None
+    account_no: str = ""
+    description: str = ""
+    amount: float = 0.0
     notes: str = ""
+
+
+class BudgetEntryUpdate(BaseModel):
+    transaction_date: date | None = None
+    account_no: str | None = None
+    description: str | None = None
+    amount: float | None = None
+    notes: str | None = None
+
+
+class BudgetCopyYearRequest(BaseModel):
+    from_year: int
+    to_year: int
+    overwrite: bool = False
+
+
+class BudgetCopyYearResult(BaseModel):
+    copied: int
 
 
 class GeneralLedgerLineOut(BaseModel):

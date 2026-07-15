@@ -28,13 +28,17 @@ def test_union_includes_accrual_and_budget_rows():
     )
     assert accrual.status_code == 201, accrual.text
 
-    budget = client.put(
-        "/api/budget/B101310",
+    budget = client.post(
+        "/api/budget",
         headers=h,
-        params={"year": 2027},
-        json={"amount": 5000.0, "notes": "GL union test budget"},
+        json={
+            "transaction_date": "2027-01-01",
+            "account_no": "B101310",
+            "description": "GL union test budget",
+            "amount": 5000.0,
+        },
     )
-    assert budget.status_code == 200, budget.text
+    assert budget.status_code == 201, budget.text
 
     r = client.get("/api/general-ledger", headers=h, params={"year": 2027})
     assert r.status_code == 200, r.text
@@ -45,11 +49,10 @@ def test_union_includes_accrual_and_budget_rows():
     assert accrual_lines[0]["amount"] == 42.0
     assert accrual_lines[0]["statement_item"] == "Sunday Offertory"
 
-    budget_lines = [l for l in lines if l["source"] == "budget" and l["account_no"] == "B101310"]
+    budget_lines = [l for l in lines if l["source"] == "budget" and l["description"] == "GL union test budget"]
     assert len(budget_lines) == 1
     assert budget_lines[0]["amount"] == 5000.0
     assert budget_lines[0]["transaction_date"] == "2027-01-01"
-    assert budget_lines[0]["description"] == "Budget"
 
 
 def test_year_filter_excludes_other_years():

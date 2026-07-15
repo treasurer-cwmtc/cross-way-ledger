@@ -46,11 +46,10 @@ def _find_row(groups, statement_category, label):
 def test_income_section_favors_actual_above_plan():
     _set_cy_cutoff("2025-12-31")
     h = auth_header()
-    client.put(
-        "/api/budget/B101110",
+    client.post(
+        "/api/budget",
         headers=h,
-        params={"year": 2026},
-        json={"amount": 1000.0},
+        json={"transaction_date": "2026-01-01", "account_no": "B101110", "amount": 1000.0},
     )
     _add_accrual("I101610", 300.0, "2026-02-01")  # CY: after 2025-12-31
     _add_accrual("I101610", 50.0, "2025-06-01")  # PY: before cutoff, excluded
@@ -69,11 +68,10 @@ def test_income_section_favors_actual_above_plan():
 def test_expense_section_favors_actual_below_plan():
     _set_cy_cutoff("2025-12-31")
     h = auth_header()
-    client.put(
-        "/api/budget/B111110",
+    client.post(
+        "/api/budget",
         headers=h,
-        params={"year": 2026},
-        json={"amount": 500.0},
+        json={"transaction_date": "2026-01-01", "account_no": "B111110", "amount": 500.0},
     )
     # Expense amounts are stored as debits (negative).
     _add_accrual("E101110", -200.0, "2026-02-01")

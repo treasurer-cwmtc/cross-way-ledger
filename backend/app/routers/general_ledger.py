@@ -50,13 +50,12 @@ def _entry_to_line(
 
 def _budget_to_line(entry: BudgetEntry, coa_by_no: dict[str, ChartOfAccount]) -> GeneralLedgerLineOut:
     coa = coa_by_no.get(entry.account_no)
-    virtual_date = date(entry.year, 1, 1)
     return GeneralLedgerLineOut(
         source="budget",
         id=entry.id,
-        transaction_date=virtual_date,
-        date_posted=virtual_date,
-        description="Budget",
+        transaction_date=entry.transaction_date,
+        date_posted=entry.transaction_date,
+        description=entry.description or "Budget",
         account_no=entry.account_no,
         statement_description=coa.statement_description if coa else "",
         category=coa.category if coa else "",
@@ -95,10 +94,9 @@ def list_general_ledger(
             continue
         lines.append(_entry_to_line(e, "accrual", coa_by_no, bank_accounts_by_id))
 
-    budget_query = select(BudgetEntry).where(BudgetEntry.amount != 0)
-    if year is not None:
-        budget_query = budget_query.where(BudgetEntry.year == year)
-    for e in db.scalars(budget_query):
+    for e in db.scalars(select(BudgetEntry).where(BudgetEntry.amount != 0)):
+        if year is not None and (e.transaction_date is None or e.transaction_date.year != year):
+            continue
         lines.append(_budget_to_line(e, coa_by_no))
 
     lines.sort(key=lambda line: line.transaction_date or date.min, reverse=True)

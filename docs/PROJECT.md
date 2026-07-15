@@ -316,12 +316,34 @@ Chart of Accounts already seeds these B-prefixed Budget accounts
 (`category="Budget"`) - no COA changes were needed for this feature.
 
 - **Budget** (`backend/app/models.py` `BudgetEntry`,
-  `backend/app/routers/budget.py`, `frontend/src/pages/Budget/`): one row
-  per Budget-category account per year - `GET /api/budget?year=` always
-  returns every Budget account (amount 0 if unset, so the page doubles as a
-  checklist), `PUT /api/budget/{account_no}?year=` upserts. Amounts are
-  entered as plain positive numbers (no debit/credit sign) - unlike
-  Reconciliation/Accrual amounts, which are signed (expenses negative).
+  `backend/app/routers/budget.py`, `frontend/src/pages/Budget/`): a real
+  ledger, not "one row per account" - a single Budget account can carry
+  *multiple* lines in a year (confirmed from the sheet: "Salaries and
+  Benefits" has separate Salary/Health Insurance/Retirement Plan/Social
+  Security lines that sum together for reporting). Shaped like
+  `AccrualEntry` minus the fields that don't apply to a planning figure
+  (bank account, method, reconciled, split) - `transaction_date`,
+  `account_no`, `description`, `amount`, `notes`. `year` is filtered on
+  `transaction_date`'s year like every other ledger, not a separate stored
+  column. Amounts are entered as plain positive numbers (no debit/credit
+  sign) - unlike Reconciliation/Accrual amounts, which are signed (expenses
+  negative). `GET/POST /api/budget`, `PUT/DELETE /api/budget/{id}`. UI
+  mirrors Accrual's pattern (register + click-to-open detail popup + Quick
+  Add with a sticky Account field, since budget lines are usually entered
+  in a batch against the same account) but deliberately skips the shared
+  `ledger/` components and their column-health chip strip - Budget only has
+  fields it always populates, so there's nothing to flag as "missing".
+  `POST /api/budget/copy-year` (`{from_year, to_year, overwrite}`) copies
+  every line from one year into another (refusing to clobber an already
+  non-empty target year unless `overwrite: true`) as a starting point for
+  next year's budget.
+  - **Real 2026 data**: imported from the legacy sheet's Reconciliation tab
+    (rows where Statement Description starts with "Budget") via a one-time
+    script - 74 lines, $1,163,348.03, cross-validated against the sheet's
+    own computed Income Statement Plan figures before import (see
+    STATUS.md for the full note, including why "Restricted Net Assets"
+    lines correctly contribute to both Income and Expenditures Plan
+    totals - it's not a bug, the legacy sheet's own formula does the same).
 - **General Ledger** (`backend/app/routers/general_ledger.py`,
   `frontend/src/pages/GeneralLedger/`): `GET /api/general-ledger?year=`
   unions non-split Reconciliation + Accrual entries with Budget entries
@@ -400,8 +422,9 @@ quick overview - `GET /api/dashboard`
   hand-entered, never imported).
 - `app_settings` — generic key/value store (Config tab: `prior_year_end_date`,
   `frequency_*`, `audit_validation_*`).
-- `budget_entries` — annual Plan amount per Budget-category account per year
-  (`year` + `account_no` unique together).
+- `budget_entries` — the Budget ledger; a Budget-category account can carry
+  multiple lines per year (no uniqueness constraint), `year` derived from
+  `transaction_date` like every other ledger.
 
 ### API surface
 
@@ -423,7 +446,8 @@ quick overview - `GET /api/dashboard`
   `POST /api/accrual/{id}/unsplit`, `GET /api/accrual/split-group/{id}`
   (the Accrual tab)
 - `GET/PUT /api/settings/{key}`, `GET /api/settings` (the Config tab)
-- `GET /api/budget?year=`, `PUT /api/budget/{account_no}?year=` (the Budget tab)
+- `GET/POST /api/budget`, `PUT/DELETE /api/budget/{id}`,
+  `POST /api/budget/copy-year` (the Budget tab)
 - `GET /api/general-ledger?year=` (the General Ledger tab, read-only)
 - `GET /api/income-statement` (the Income Statement tab, read-only)
 - `GET /api/dashboard` (the Home tab, read-only)

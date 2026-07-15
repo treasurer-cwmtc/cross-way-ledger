@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-14 (Home dashboard)
+**Last updated:** 2026-07-14 (Budget redesign + real 2026 data import)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -202,8 +202,57 @@ _Where we left off — read this first when resuming in a new session._
   - Verified live: balances/YTD figures matched real data (including the
     Diocese Fees budget entry from the Income Statement work above showing
     up correctly in the Expenses vs Budget tile).
+- ✅ **Budget redesigned to a real multi-entry ledger + real 2026 data
+  imported.** Turned out the original "one row per account per year" model
+  was wrong: inspecting the legacy sheet's Reconciliation tab (rows tagged
+  `Statement Description` starting with "Budget") showed a single account
+  can carry *multiple* budget lines in one year - e.g. "Salaries and
+  Benefits" has four separate lines (Salary $19,096.20, Health Insurance
+  $17,640.00, Retirement Plan $2,546.16, Social Security $1,432.22 - sum
+  $40,714.58, which matches the sheet's own computed "Salaries and
+  Benefits" Plan total exactly). `BudgetEntry` was reshaped to match
+  (`transaction_date` instead of a separate `year` column, added
+  `description`, dropped the `year`+`account_no` uniqueness constraint) -
+  same fields as `AccrualEntry` minus bank account/method/reconciled/split,
+  which don't apply to a planning figure.
+  - **UI rebuilt to match Accrual's pattern** (`frontend/src/pages/Budget/`):
+    a plain register (no column-health chip strip - Budget only has fields
+    it always populates, so there was nothing to show a "some rows missing
+    this" pill for), click-to-open detail popup, and a Quick Add popup with
+    a sticky Account field (batches of budget lines are usually entered
+    against the same account, like the four Salaries and Benefits lines
+    above).
+  - **Copy-year**: `POST /api/budget/copy-year` copies every line from one
+    year into another (dates shifted) as a starting point for next year's
+    budget - refuses to clobber a year that already has entries unless
+    `overwrite: true`. Exposed on the Budget page as "Copy budget from year
+    ___ → Copy as starting point for {year}".
+  - **Real 2026 data imported**: read every "Budget"-tagged row in the
+    legacy sheet's Reconciliation tab (86 rows, 74 with a non-zero amount)
+    via the browser - amounts, descriptions ("Salary", "Health Insurance",
+    fund names like "Navjeevan"/"Oklahoma Mission"/"Texas Flood Relief"),
+    and notes ("Assumed 3% increase", "First communion bibles" etc.) - and
+    resolved each to the correct seeded `account_no` by matching Statement
+    Category/Item/Detail names (account numbers in the sheet are cosmetic;
+    ours are derived independently - see Chart of Accounts numbering notes
+    below). Cross-validated against the sheet's own computed Income
+    Statement Plan figures (Pledges $215,850, Sunday Offertory $10,000,
+    Salaries and Benefits $40,715 - all matched) before importing via a
+    one-time script against the local API. Total: 74 lines, $1,163,348.03.
+  - **Note on "Restricted Net Assets" appearing to double-count**: the
+    Income Statement's Plan aggregation joins Budget lines to real
+    Income/Expense accounts by `(Statement Category, Statement Item)` name
+    only, not by which section (Income vs Expenditures) is asking - and
+    "Restricted Net Assets" genuinely has matching item names on *both*
+    sides of the Chart of Accounts (e.g. `I111110`/`E261110` "Building
+    Improvement" - money raised for a restricted purpose vs. money spent
+    from it). A Restricted Net Assets budget line therefore contributes to
+    both the Income and Expenditures Plan totals. Confirmed this matches
+    the legacy sheet's own formula (`Reconciliation!O:O=A4` with no
+    Income/Expense-side filter on the Plan side) - not a bug, faithful
+    reproduction of the source.
 
-**Tests:** 36 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 39 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---
@@ -211,6 +260,11 @@ _Where we left off — read this first when resuming in a new session._
 ## Next steps (GitHub issues)
 
 Tracked as issues on the repo. Suggested order:
+
+- **Rename "Reconciliation" to "Actual"** throughout the UI (tab label,
+  page copy) - requested, not yet done. Purely a rename (nav button text,
+  headings, subtitle copy) - the underlying `ReconciliationEntry`
+  model/API/routes don't need to change.
 
 - **Visual redesign pass** (phase 3 of the finance-UI push) — restyle existing
   pages toward a more Quicken-like, accounting-app feel. Deliberately done

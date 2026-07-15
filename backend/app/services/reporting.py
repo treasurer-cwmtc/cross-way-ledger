@@ -80,7 +80,9 @@ def compute_income_statement(db: Session) -> IncomeStatementOut:
     coa_by_no = {a.account_no: a for a in db.scalars(select(ChartOfAccount))}
 
     plan_by_key: dict[tuple[str, str], float] = {}
-    for e in db.scalars(select(BudgetEntry).where(BudgetEntry.year == year)):
+    for e in db.scalars(select(BudgetEntry)):
+        if e.transaction_date is None or e.transaction_date.year != year:
+            continue
         coa = coa_by_no.get(e.account_no)
         if coa is None or not coa.statement_category or not coa.statement_item:
             continue
