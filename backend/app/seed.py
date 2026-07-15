@@ -41,7 +41,29 @@ DEFAULT_FUND_RULES: list[tuple[str, str]] = [
     ("General", "I101725"),
     ("VBS", "I101416"),
     ("VBS 2026", "I101416"),
+    ("VBS 2024", "I101416"),
+    ("VBS 2025", "I101416"),
     ("Missions", "I101110"),
+    # Extracted from the `planning_center_context (metadata)` JSON column's
+    # `name` field across real Stripe exports - one rule per distinct fund
+    # name observed, matched exactly so they always win over the looser
+    # substring rules above (see Categorizer.categorize_fund).
+    ("2024 Cross Way Golf Tournament", "I101412"),
+    ("2025 Annual Cross Way Golf Tournament", "I101412"),
+    ("Golf Tournament", "I101412"),
+    ("2025 Church Family Retreat", "I101410"),
+    ("Church Family Retreat", "I101410"),
+    ("Retreat donation", "I101410"),
+    ("Better Together", "I101422"),
+    ("Marriage conference", "I101422"),
+    ("Cross Way Couples Date Night", "I101418"),
+    ("General Missions", "I101110"),
+    ("Missions NavJeevan", "I101111"),
+    ("NavJeevan 2024", "I101111"),
+    ("Missions-Light to Life", "I101114"),
+    ("Missions-Oklahoma", "I101112"),
+    ("Sunday School", "I101719"),
+    ("Texas Flood Relief Fund", "I101116"),
 ]
 
 DEFAULT_KEYWORD_RULES: list[tuple[str, str]] = [
