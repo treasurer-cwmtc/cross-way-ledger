@@ -168,7 +168,11 @@ def reconcile(
                     source="bank",
                     transaction_date=bank.posting_date,
                     date_posted=bank.posting_date,
-                    description=bank.description,
+                    # Description is a human-entered name (who/what), not the
+                    # raw bank statement text - leave it blank when we don't
+                    # know it rather than dumping the full ACH/CO NAME string.
+                    # The raw text is still preserved in bank_description.
+                    description="",
                     statement_description=cat.statement_description,
                     account_no=cat.account_no,
                     category=cat.category

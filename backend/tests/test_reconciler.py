@@ -76,7 +76,7 @@ def test_bank_keyword_categorization():
     by_desc = {}
     for l in bank_lines:
         for key in ("DIRECT ENERGY", "CitiTurf", "SAMS CLUB", "Diocese of North America", "TAQUERIA"):
-            if key.lower() in l.description.lower():
+            if key.lower() in l.bank_description.lower():
                 by_desc[key] = l
     assert by_desc["DIRECT ENERGY"].account_no == "E141712"
     assert by_desc["CitiTurf"].account_no == "E221310"
@@ -85,3 +85,6 @@ def test_bank_keyword_categorization():
     # Unmatched line has no account and is flagged.
     assert by_desc["TAQUERIA"].account_no == ""
     assert by_desc["TAQUERIA"].matched is False
+    # Description is left for the treasurer to fill in by hand - never the
+    # raw ACH/CO NAME statement text (that lives in bank_description).
+    assert all(l.description == "" for l in bank_lines)
