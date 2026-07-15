@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { authApi } from "../api/auth";
+import logo from "../assets/cross-way-logo-white.png";
 
 export default function Login({ onSuccess }: { onSuccess: () => void }) {
   const [username, setUsername] = useState("");
@@ -22,10 +23,24 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <div className="app" style={{ maxWidth: 380 }}>
-      <h1>Bank / Stripe Reconciliation</h1>
-      <p className="subtitle">Sign in to continue.</p>
-      <form className="card" onSubmit={submit}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 24,
+        background: "var(--sidebar-bg)",
+        padding: 24,
+      }}
+    >
+      <img src={logo} alt="Cross Way Mar Thoma Church" style={{ width: 220, maxWidth: "80vw" }} />
+      <div style={{ width: "100%", maxWidth: 360 }}>
+        <p className="subtitle" style={{ textAlign: "center", color: "var(--sidebar-text)" }}>
+          Treasurer sign in
+        </p>
+        <form className="card" onSubmit={submit}>
         <label className="field">
           <span>Username</span>
           <input
@@ -43,11 +58,12 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
             onChange={(e) => setPassword(e.target.value)}
           />
         </label>
-        <button className="btn" type="submit" disabled={!username || !password || busy}>
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-        {error && <div className="error">{error}</div>}
-      </form>
+          <button className="btn" type="submit" disabled={!username || !password || busy}>
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+          {error && <div className="error">{error}</div>}
+        </form>
+      </div>
     </div>
   );
 }

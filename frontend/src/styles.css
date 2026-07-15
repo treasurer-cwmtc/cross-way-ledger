@@ -1,22 +1,23 @@
 :root {
-  --bg: #f3f5f6;
+  /* Cross Way MTC brand: deep navy + cyan accent (from the church logo/brand assets). */
+  --bg: #f3f5f7;
   --card: #ffffff;
-  --border: #e2e6e8;
-  --text: #16211f;
-  --muted: #667075;
-  --primary: #0f766e;
-  --primary-dark: #0b5c56;
-  --primary-light: #e6f7f4;
+  --border: #e1e6ea;
+  --text: #131a24;
+  --muted: #64707d;
+  --primary: #22b8d1;
+  --primary-dark: #1a94a8;
+  --primary-light: #e5f8fb;
   --green: #059669;
   --red: #dc2626;
   --amber: #b45309;
-  --sidebar-bg: #0b201c;
-  --sidebar-bg-alt: #0f2b25;
-  --sidebar-text: #9fb8b2;
-  --sidebar-text-dim: #6f8781;
-  --sidebar-active: #14413a;
-  --shadow-sm: 0 1px 2px rgba(15, 23, 22, 0.06);
-  --shadow-md: 0 4px 16px rgba(15, 23, 22, 0.08);
+  --sidebar-bg: #0a0f1c;
+  --sidebar-bg-alt: #101a2e;
+  --sidebar-text: #9fb0c4;
+  --sidebar-text-dim: #5b6c82;
+  --sidebar-active: #142236;
+  --shadow-sm: 0 1px 2px rgba(10, 15, 28, 0.06);
+  --shadow-md: 0 4px 16px rgba(10, 15, 28, 0.08);
 }
 
 * {
@@ -52,6 +53,14 @@ body {
 .sidebar-brand {
   padding: 22px 20px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-brand img {
+  display: block;
+  width: 100%;
+  max-width: 168px;
+  height: auto;
+  margin: 0 0 8px;
 }
 
 .sidebar-brand h1 {
@@ -99,7 +108,7 @@ nav.sidebar-nav button:hover {
 
 nav.sidebar-nav button.active {
   background: var(--sidebar-active);
-  border-left-color: #2dd4bf;
+  border-left-color: var(--primary);
   color: #fff;
   font-weight: 600;
 }

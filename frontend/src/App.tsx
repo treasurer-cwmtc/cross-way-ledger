@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { auth, AuthError } from "./api/client";
 import { authApi, User } from "./api/auth";
+import logo from "./assets/cross-way-logo-white.png";
 import Home from "./pages/Home";
 import Upload from "./pages/Upload";
 import Reconciliation from "./pages/Reconciliation";
@@ -105,8 +106,8 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <h1>Cross Way Treasurer</h1>
-          <p>Bank / Stripe reconciliation and church finance tracking.</p>
+          <img src={logo} alt="Cross Way Mar Thoma Church" />
+          <p>Treasurer — bank/Stripe reconciliation and church finance tracking.</p>
         </div>
 
         <nav className="sidebar-nav">
