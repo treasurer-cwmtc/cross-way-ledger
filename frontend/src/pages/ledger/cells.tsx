@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { BankAccount } from "../../api/bankAccounts";
 
-const CELL_STYLE = { width: "100%", border: "none", background: "transparent", font: "inherit" };
+// These cells are only used inside the detail popups (TransactionModal,
+// Budget's DetailModal) - never in the compact register rows, which render
+// plain text, not inputs - so they should look like normal form fields
+// (the global bordered input/select styling), not stripped-down table cells.
 
 export function CheckboxCell(props: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -17,7 +20,6 @@ export function DateCell(props: { value: string | null; onChange: (v: string | n
   return (
     <input
       type="date"
-      style={CELL_STYLE}
       value={props.value || ""}
       onChange={(e) => props.onChange(e.target.value || null)}
     />
@@ -39,7 +41,6 @@ export function TextCell(props: { value: string; onCommit: (v: string) => void }
   return (
     <input
       type="text"
-      style={CELL_STYLE}
       value={value}
       onChange={(e) => setValue(e.target.value)}
     />
@@ -61,7 +62,6 @@ export function CurrencyCell(props: { value: number; onCommit: (v: number) => vo
       <input
         type="number"
         step="0.01"
-        style={CELL_STYLE}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={commit}
@@ -80,7 +80,7 @@ export function SelectCell(props: {
     ? props.options
     : [props.value, ...props.options];
   return (
-    <select style={CELL_STYLE} value={props.value} onChange={(e) => props.onChange(e.target.value)}>
+    <select value={props.value} onChange={(e) => props.onChange(e.target.value)}>
       <option value="">{props.placeholder || "Select…"}</option>
       {options.map((o) => (
         <option key={o} value={o}>
@@ -98,7 +98,6 @@ export function BankAccountCell(props: {
 }) {
   return (
     <select
-      style={CELL_STYLE}
       value={props.value ?? ""}
       onChange={(e) => props.onChange(e.target.value ? Number(e.target.value) : null)}
     >
