@@ -6,10 +6,11 @@ import Reconciliation from "./pages/Reconciliation";
 import Accrual from "./pages/Accrual";
 import Rules from "./pages/Rules";
 import Accounts from "./pages/Accounts";
+import Config from "./pages/Config";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
 
-type Tab = "upload" | "reconciliation" | "accrual" | "rules" | "accounts" | "users";
+type Tab = "upload" | "reconciliation" | "accrual" | "rules" | "accounts" | "config" | "users";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("upload");
@@ -107,6 +108,12 @@ export default function App() {
         >
           Chart of Accounts
         </button>
+        <button
+          className={tab === "config" ? "active" : ""}
+          onClick={() => setTab("config")}
+        >
+          Config
+        </button>
         {user.is_admin && (
           <button
             className={tab === "users" ? "active" : ""}
@@ -122,6 +129,7 @@ export default function App() {
       {tab === "accrual" && <Accrual />}
       {tab === "rules" && <Rules />}
       {tab === "accounts" && <Accounts />}
+      {tab === "config" && <Config />}
       {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
     </div>
   );

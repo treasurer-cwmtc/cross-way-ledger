@@ -175,3 +175,18 @@ def seed(db: Session) -> None:
             )
         )
         db.commit()
+
+    # Matches the legacy sheet's Configurations tab "Frequency" lookup
+    # (Monthly/Yearly/Quarterly -> periods per year) and "Audit Validation"
+    # date range - both editable from the Config page, neither derived from
+    # anything else.
+    for key, default_value in [
+        ("frequency_monthly", "12"),
+        ("frequency_yearly", "1"),
+        ("frequency_quarterly", "4"),
+        ("audit_validation_from_date", ""),
+        ("audit_validation_to_date", ""),
+    ]:
+        if db.get(AppSetting, key) is None:
+            db.add(AppSetting(key=key, value=default_value))
+    db.commit()

@@ -212,11 +212,10 @@ Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
   source sheet compares each transaction date to a `Configurations` tab cell
   the treasurer updates once a year at rollover (`IF(date > Configurations!B2,
   "CY", "PY")`), not the server's real-world date. Modeled as an `AppSetting`
-  row (`prior_year_end_date`), editable via a small control at the top of the
-  Reconciliation page - see `backend/app/routers/settings.py` and
-  `frontend/src/pages/ledger/columns.ts` (`setPriorYearEndDate`) - the
-  setting is shared with the Accrual tab (below), which reads it but only
-  Reconciliation exposes the editor.
+  row (`prior_year_end_date`), editable from the **Config** tab (below) - see
+  `backend/app/routers/settings.py` and `frontend/src/pages/ledger/columns.ts`
+  (`setPriorYearEndDate`). Both Reconciliation and Accrual fetch and apply it
+  for their CY/PY columns, but only the Config tab edits it.
 - **Stripe fund matching parity**: the legacy `Match_Stripe_2!AB` ("LKP_COA")
   column is a hardcoded `IFS()`/`REGEXMATCH()` chain, one clause per fund
   name, each mapping to a literal account code - architecturally the same
@@ -275,6 +274,32 @@ step - `AccrualEntry` (`accrual_entries` table), `backend/app/routers/accrual.py
 - **No dedup**: unlike Reconciliation, every Accrual row is a deliberate
   manual entry, so there's no import-collision scenario to guard against -
   no `dedup_key` on the model at all.
+
+### The Config tab
+
+Mirrors the legacy sheet's **Configurations** tab. Every value on it is a row
+in the existing generic `app_settings` key/value table (`AppSetting`) - no
+new tables or endpoints, just more keys through the same
+`GET/PUT /api/settings/{key}` used by `prior_year_end_date` since the CY/PY
+work. See `frontend/src/pages/Config/index.tsx`,
+`backend/app/routers/settings.py`, and the seed defaults in
+`backend/app/seed.py`.
+
+- **Fiscal year (CY/PY)**: the editable field is **Current Year Date**
+  (matches the sheet's `Configurations!B1`) instead of the underlying stored
+  `prior_year_end_date` (`B2`) - Prior Year Date, Current Year, and Prior
+  Year are all derived client-side (`addDays`/`yearOf` in
+  `pages/Config/index.tsx`) exactly the way the sheet's `B2:B4` formulas
+  derive them from `B1`. Saving computes `prior_year_end_date = Current Year
+  Date - 1 day` and PUTs that - the stored key and the CY/PY column logic in
+  `columns.ts` are unchanged from before this tab existed.
+- **Frequency** (`frequency_monthly`/`frequency_yearly`/`frequency_quarterly`,
+  seeded 12/1/4) and **Audit validation**
+  (`audit_validation_from_date`/`audit_validation_to_date`, seeded blank):
+  straight ports of the sheet's Frequency lookup and Audit Validation
+  From/To cells. Neither is read by anything else in the app yet - added
+  because the sheet has them and they'll have consumers once budget-period
+  math / an audit view exist (see STATUS.md).
 
 ---
 
