@@ -170,7 +170,7 @@ export default function TransactionModal(props: {
 
         <label className="field">
           <span>Bank Description</span>
-          <TextCell value={e.bank_description} onCommit={(v) => set({ bank_description: v })} />
+          <input type="text" value={e.bank_description} readOnly title="The raw bank statement text - not editable." />
         </label>
 
         <label className="field">

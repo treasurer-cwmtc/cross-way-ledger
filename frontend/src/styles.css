@@ -265,6 +265,21 @@ select:focus {
   background: #fff;
 }
 
+input[readonly],
+input:disabled,
+select:disabled {
+  background: var(--bg);
+  color: var(--muted);
+  cursor: default;
+  box-shadow: none;
+}
+
+input[readonly]:hover,
+input[readonly]:focus {
+  border-color: #c4ccd0;
+  outline: none;
+}
+
 select {
   appearance: none;
   -webkit-appearance: none;
