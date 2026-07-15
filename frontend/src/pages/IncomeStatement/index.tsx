@@ -57,6 +57,7 @@ export default function IncomeStatement() {
 
   return (
     <div>
+      <h2 className="page-title">Income Statement</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         Plan vs Actuals for {data ? data.year : "…"} (current year, per the
         Config tab). Plan comes from the Budget tab; Actuals from

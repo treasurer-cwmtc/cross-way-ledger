@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-14 (Renamed Reconciliation tab to Actual)
+**Last updated:** 2026-07-14 (Finance UI visual redesign)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -262,6 +262,32 @@ _Where we left off — read this first when resuming in a new session._
   visible benefit. The app's own title ("Bank / Stripe Reconciliation")
   and the Chart-of-Accounts numbering docs weren't touched either - they
   describe the app's overall purpose, not the tab.
+- ✅ **Finance UI visual redesign** (phase 3 of the finance-UI push) - moved
+  from a generic top-tab admin-panel look toward a Quicken/YNAB-style
+  layout:
+  - **Left sidebar navigation** (`.sidebar` in `styles.css`, restructured
+    `frontend/src/App.tsx`) replaces the horizontal top tab bar - dark
+    teal-black background, tabs grouped into Overview / Ledgers / Reporting
+    / Setup sections, active tab marked with a left accent bar. The
+    app-wide title/description moved into the sidebar header; each page now
+    has its own `.page-title` heading in the content area (previously only
+    the app had a heading, individual pages jumped straight into a
+    subtitle).
+  - **Refined palette**: swapped the generic indigo SaaS accent for a deep
+    teal (`--primary: #0f766e`) that reads more "accounting software" than
+    "startup dashboard," plus a proper shadow/spacing system
+    (`--shadow-sm`, `--shadow-md`).
+  - **Polish**: stat tiles (Home dashboard) now sit in their own tinted
+    boxes instead of bare text; table headers are uppercase/letter-spaced;
+    register-row hover uses the new primary-tint color instead of plain
+    gray; inputs get a visible teal focus ring; all hardcoded indigo
+    accents (chip/pill/autocomplete highlight backgrounds) replaced with
+    the `--primary-light` token.
+  - No component logic changed - this was CSS + layout structure only, so
+    behavior (forms, modals, filters, editable cells) is identical to
+    before. Verified live across Home, Actual, Budget, Config, and Income
+    Statement - all render correctly, detail popups/modals still layer
+    correctly over the new shell.
 
 **Tests:** 39 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
@@ -272,14 +298,10 @@ _Where we left off — read this first when resuming in a new session._
 
 Tracked as issues on the repo. Suggested order:
 
-- **Visual redesign pass** (phase 3 of the finance-UI push) — restyle existing
-  pages toward a more Quicken-like, accounting-app feel. Deliberately done
-  after the reporting foundation (Budget/General Ledger/Income
-  Statement/Home dashboard) so new pages aren't built twice. _Recommended
-  next._
-- **Auditor-specific screens** (phase 4, later/separate ask) — a
-  read-only, audit-focused view; likely wants the Config tab's Audit
-  Validation date range once it exists.
+- **Auditor-specific screens** (phase 4 of the finance-UI push,
+  later/separate ask) — a read-only, audit-focused view; likely wants the
+  Config tab's Audit Validation date range once it exists. _Recommended
+  next, whenever it comes up._
 - **#7 CI/CD auto-deploy to VPS** — the "check in → build → deploy automatically"
   goal. Publish images to GHCR on push to `main`, then SSH + `docker compose pull
   && up` on the VPS (secrets as GitHub Actions secrets).

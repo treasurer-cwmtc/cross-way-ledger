@@ -34,6 +34,7 @@ export default function Home() {
 
   return (
     <div>
+      <h2 className="page-title">Home</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         Quick overview for {data.year}. Details live on the Actual,
         Accrual, Budget, General Ledger, and Income Statement tabs.

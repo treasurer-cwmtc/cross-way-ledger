@@ -78,6 +78,7 @@ export default function Accrual() {
 
   return (
     <div>
+      <h2 className="page-title">Accrual</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         Manually-entered ledger for recording an expense or reimbursement as
         incurred, before the actual payment clears the bank and shows up in

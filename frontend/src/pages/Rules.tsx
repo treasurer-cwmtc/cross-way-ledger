@@ -59,6 +59,7 @@ export default function Rules() {
 
   return (
     <div>
+      <h2 className="page-title">Rules</h2>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Add a rule</h3>
         <div className="row">

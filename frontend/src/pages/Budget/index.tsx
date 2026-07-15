@@ -101,6 +101,7 @@ export default function Budget() {
 
   return (
     <div>
+      <h2 className="page-title">Budget</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         The annual Plan for every Budget-category account, matching the
         legacy sheet's Budget entries. Feeds the Income Statement's Plan

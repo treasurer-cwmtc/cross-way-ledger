@@ -49,6 +49,7 @@ export default function Accounts() {
 
   return (
     <div>
+      <h2 className="page-title">Chart of Accounts</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         The Chart of Accounts is a 3-level hierarchy — Statement Category → Statement
         Item → Statement Detail (the account itself). Each level's number

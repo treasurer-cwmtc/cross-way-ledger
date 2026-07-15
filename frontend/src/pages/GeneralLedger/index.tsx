@@ -37,6 +37,7 @@ export default function GeneralLedger() {
 
   return (
     <div>
+      <h2 className="page-title">General Ledger</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         Every Actual, Accrual, and Budget line in one place - the
         base every financial report is built from. Read-only: click into the

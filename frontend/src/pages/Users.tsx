@@ -50,6 +50,7 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
 
   return (
     <div>
+      <h2 className="page-title">Users</h2>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Add a user</h3>
         <div className="row">

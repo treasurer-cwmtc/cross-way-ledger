@@ -77,6 +77,7 @@ export default function Reconciliation() {
 
   return (
     <div>
+      <h2 className="page-title">Actual</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         The permanent, editable ledger — push rows here from the Upload tab.
         Click a row to open every field for editing. Statement Description is

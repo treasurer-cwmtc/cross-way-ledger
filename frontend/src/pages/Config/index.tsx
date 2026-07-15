@@ -17,6 +17,7 @@ function yearOf(iso: string): string {
 export default function Config() {
   return (
     <div>
+      <h2 className="page-title">Config</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         App-wide settings the treasurer adjusts by hand, matching the legacy
         sheet's Configurations tab. Nothing here is derived from today's real

@@ -96,6 +96,11 @@ export default function Upload() {
 
   return (
     <div>
+      <h2 className="page-title">Upload</h2>
+      <p className="subtitle" style={{ marginTop: 0 }}>
+        Upload your Chase and Stripe CSV exports to break Stripe payouts into
+        per-donation lines and auto-categorize bank transactions.
+      </p>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Bank account</h3>
         <p className="subtitle">

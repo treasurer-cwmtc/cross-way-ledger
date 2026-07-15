@@ -27,6 +27,46 @@ type Tab =
   | "config"
   | "users";
 
+interface NavItem {
+  tab: Tab;
+  label: string;
+  adminOnly?: boolean;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  { label: "Overview", items: [{ tab: "home", label: "Home" }] },
+  {
+    label: "Ledgers",
+    items: [
+      { tab: "upload", label: "Upload" },
+      { tab: "reconciliation", label: "Actual" },
+      { tab: "accrual", label: "Accrual" },
+      { tab: "budget", label: "Budget" },
+    ],
+  },
+  {
+    label: "Reporting",
+    items: [
+      { tab: "general-ledger", label: "General Ledger" },
+      { tab: "income-statement", label: "Income Statement" },
+    ],
+  },
+  {
+    label: "Setup",
+    items: [
+      { tab: "rules", label: "Rules" },
+      { tab: "accounts", label: "Chart of Accounts" },
+      { tab: "config", label: "Config" },
+      { tab: "users", label: "Users", adminOnly: true },
+    ],
+  },
+];
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [user, setUser] = useState<User | null>(null);
@@ -58,122 +98,74 @@ export default function App() {
     setTab("home");
   }
 
-  if (loading) return <div className="app">Loading…</div>;
+  if (loading) return <div className="app-shell">Loading…</div>;
   if (!user) return <Login onSuccess={loadMe} />;
 
   return (
-    <div className="app">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
-        <div>
-          <h1>Bank / Stripe Reconciliation</h1>
-          <p className="subtitle">
-            Upload your Chase and Stripe CSV exports to break Stripe payouts into
-            per-donation lines and auto-categorize bank transactions.
-          </p>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <h1>Cross Way Treasurer</h1>
+          <p>Bank / Stripe reconciliation and church finance tracking.</p>
         </div>
-        <div style={{ textAlign: "right", fontSize: 13, color: "var(--muted)" }}>
+
+        <nav className="sidebar-nav">
+          {NAV_GROUPS.map((group) => {
+            const items = group.items.filter((item) => !item.adminOnly || user.is_admin);
+            if (items.length === 0) return null;
+            return (
+              <div key={group.label} style={{ marginBottom: 14 }}>
+                <div
+                  style={{
+                    fontSize: 10.5,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    color: "var(--sidebar-text-dim)",
+                    padding: "6px 13px 4px",
+                  }}
+                >
+                  {group.label}
+                </div>
+                {items.map((item) => (
+                  <button
+                    key={item.tab}
+                    className={tab === item.tab ? "active" : ""}
+                    onClick={() => setTab(item.tab)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-footer">
           <div>
             Signed in as <b>{user.username}</b>
             {user.is_admin ? " (admin)" : ""}
           </div>
-          <button
-            className="link"
-            style={{ color: "var(--primary)" }}
-            onClick={logout}
-          >
+          <button className="link" onClick={logout}>
             Log out
           </button>
         </div>
-      </div>
+      </aside>
 
-      <nav className="tabs">
-        <button
-          className={tab === "home" ? "active" : ""}
-          onClick={() => setTab("home")}
-        >
-          Home
-        </button>
-        <button
-          className={tab === "upload" ? "active" : ""}
-          onClick={() => setTab("upload")}
-        >
-          Upload
-        </button>
-        <button
-          className={tab === "reconciliation" ? "active" : ""}
-          onClick={() => setTab("reconciliation")}
-        >
-          Actual
-        </button>
-        <button
-          className={tab === "accrual" ? "active" : ""}
-          onClick={() => setTab("accrual")}
-        >
-          Accrual
-        </button>
-        <button
-          className={tab === "budget" ? "active" : ""}
-          onClick={() => setTab("budget")}
-        >
-          Budget
-        </button>
-        <button
-          className={tab === "general-ledger" ? "active" : ""}
-          onClick={() => setTab("general-ledger")}
-        >
-          General Ledger
-        </button>
-        <button
-          className={tab === "income-statement" ? "active" : ""}
-          onClick={() => setTab("income-statement")}
-        >
-          Income Statement
-        </button>
-        <button
-          className={tab === "rules" ? "active" : ""}
-          onClick={() => setTab("rules")}
-        >
-          Rules
-        </button>
-        <button
-          className={tab === "accounts" ? "active" : ""}
-          onClick={() => setTab("accounts")}
-        >
-          Chart of Accounts
-        </button>
-        <button
-          className={tab === "config" ? "active" : ""}
-          onClick={() => setTab("config")}
-        >
-          Config
-        </button>
-        {user.is_admin && (
-          <button
-            className={tab === "users" ? "active" : ""}
-            onClick={() => setTab("users")}
-          >
-            Users
-          </button>
-        )}
-      </nav>
-
-      {tab === "home" && <Home />}
-      {tab === "upload" && <Upload />}
-      {tab === "reconciliation" && <Reconciliation />}
-      {tab === "accrual" && <Accrual />}
-      {tab === "budget" && <Budget />}
-      {tab === "general-ledger" && <GeneralLedger />}
-      {tab === "income-statement" && <IncomeStatement />}
-      {tab === "rules" && <Rules />}
-      {tab === "accounts" && <Accounts />}
-      {tab === "config" && <Config />}
-      {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
+      <main className="app-main">
+        <div className="app-content">
+          {tab === "home" && <Home />}
+          {tab === "upload" && <Upload />}
+          {tab === "reconciliation" && <Reconciliation />}
+          {tab === "accrual" && <Accrual />}
+          {tab === "budget" && <Budget />}
+          {tab === "general-ledger" && <GeneralLedger />}
+          {tab === "income-statement" && <IncomeStatement />}
+          {tab === "rules" && <Rules />}
+          {tab === "accounts" && <Accounts />}
+          {tab === "config" && <Config />}
+          {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
+        </div>
+      </main>
     </div>
   );
 }
