@@ -71,7 +71,7 @@ export default function Upload() {
     try {
       const result = await ledgerApi.importRun(run.id, bankAccountId);
       setImportMsg(
-        `Added ${result.imported} row${result.imported === 1 ? "" : "s"} to Reconciliation` +
+        `Added ${result.imported} row${result.imported === 1 ? "" : "s"} to Actual` +
           (result.skipped_duplicates
             ? ` (${result.skipped_duplicates} already there, skipped).`
             : ".")
@@ -100,7 +100,7 @@ export default function Upload() {
         <h3 style={{ marginTop: 0 }}>Bank account</h3>
         <p className="subtitle">
           Which account is this statement for? Every row from this run will be
-          tagged with it when you push the results to Reconciliation.
+          tagged with it when you push the results to Actual.
         </p>
         <div className="row">
           <label className="field">
@@ -219,7 +219,7 @@ export default function Upload() {
               disabled={importing || !bankAccountId}
               title={!bankAccountId ? "Pick a bank account above first" : ""}
             >
-              {importing ? "Adding…" : "Add to Reconciliation"}
+              {importing ? "Adding…" : "Add to Actual"}
             </button>
           </div>
           {importMsg && <div className="ok">{importMsg}</div>}

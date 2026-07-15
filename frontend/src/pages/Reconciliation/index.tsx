@@ -64,7 +64,7 @@ export default function Reconciliation() {
   }
 
   async function onDelete(id: number) {
-    if (!confirm("Delete this reconciliation entry?")) return;
+    if (!confirm("Delete this actual entry?")) return;
     try {
       await ledgerApi.delete(id);
       setEntries((prev) => prev.filter((e) => e.id !== id));

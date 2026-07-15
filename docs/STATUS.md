@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-14 (Budget redesign + real 2026 data import)
+**Last updated:** 2026-07-14 (Renamed Reconciliation tab to Actual)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -251,6 +251,17 @@ _Where we left off — read this first when resuming in a new session._
     the legacy sheet's own formula (`Reconciliation!O:O=A4` with no
     Income/Expense-side filter on the Plan side) - not a bug, faithful
     reproduction of the source.
+- ✅ **Renamed "Reconciliation" to "Actual"** throughout the UI - nav tab
+  label, Home/GeneralLedger/IncomeStatement/Config/Accrual/Upload subtitle
+  and message copy, the "Add to Actual" button, the delete-entry confirm
+  prompt, and the General Ledger source badge/filter. Deliberately a
+  UI-only rename: the underlying `ReconciliationEntry` model, API routes
+  (`/api/reconciliation/...`), the `frontend/src/pages/Reconciliation/`
+  folder/component name, and the `ledgerApi` module are all unchanged -
+  renaming those would be a much larger, riskier refactor for no user-
+  visible benefit. The app's own title ("Bank / Stripe Reconciliation")
+  and the Chart-of-Accounts numbering docs weren't touched either - they
+  describe the app's overall purpose, not the tab.
 
 **Tests:** 39 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
@@ -260,11 +271,6 @@ _Where we left off — read this first when resuming in a new session._
 ## Next steps (GitHub issues)
 
 Tracked as issues on the repo. Suggested order:
-
-- **Rename "Reconciliation" to "Actual"** throughout the UI (tab label,
-  page copy) - requested, not yet done. Purely a rename (nav button text,
-  headings, subtitle copy) - the underlying `ReconciliationEntry`
-  model/API/routes don't need to change.
 
 - **Visual redesign pass** (phase 3 of the finance-UI push) — restyle existing
   pages toward a more Quicken-like, accounting-app feel. Deliberately done

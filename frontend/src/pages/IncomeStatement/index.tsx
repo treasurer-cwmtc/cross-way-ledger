@@ -60,7 +60,7 @@ export default function IncomeStatement() {
       <p className="subtitle" style={{ marginTop: 0 }}>
         Plan vs Actuals for {data ? data.year : "…"} (current year, per the
         Config tab). Plan comes from the Budget tab; Actuals from
-        Reconciliation and Accrual. Variance is shown favorable-positive:
+        Actual and Accrual. Variance is shown favorable-positive:
         for Income, actual above plan is positive; for Expenditures, actual
         below plan is positive.
       </p>

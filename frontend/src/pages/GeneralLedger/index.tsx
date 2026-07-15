@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { generalLedgerApi, GeneralLedgerLine } from "../../api/generalLedger";
 
 const SOURCE_LABEL: Record<GeneralLedgerLine["source"], string> = {
-  reconciliation: "Reconciliation",
+  reconciliation: "Actual",
   accrual: "Accrual",
   budget: "Budget",
 };
@@ -38,9 +38,9 @@ export default function GeneralLedger() {
   return (
     <div>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        Every Reconciliation, Accrual, and Budget line in one place - the
+        Every Actual, Accrual, and Budget line in one place - the
         base every financial report is built from. Read-only: click into the
-        Reconciliation, Accrual, or Budget tab to edit a line.
+        Actual, Accrual, or Budget tab to edit a line.
       </p>
       <div className="toolbar">
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
@@ -57,7 +57,7 @@ export default function GeneralLedger() {
           <span>Source:</span>
           <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
             <option value="">All</option>
-            <option value="reconciliation">Reconciliation</option>
+            <option value="reconciliation">Actual</option>
             <option value="accrual">Accrual</option>
             <option value="budget">Budget</option>
           </select>

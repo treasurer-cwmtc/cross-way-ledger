@@ -35,7 +35,7 @@ export default function Home() {
   return (
     <div>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        Quick overview for {data.year}. Details live on the Reconciliation,
+        Quick overview for {data.year}. Details live on the Actual,
         Accrual, Budget, General Ledger, and Income Statement tabs.
       </p>
 
@@ -99,7 +99,7 @@ export default function Home() {
         <p className="subtitle" style={{ margin: 0 }}>
           {data.last_entry_at
             ? `${fmtRelative(data.last_entry_at)} (${new Date(data.last_entry_at).toLocaleString()})`
-            : "No Reconciliation or Accrual entries yet."}
+            : "No Actual or Accrual entries yet."}
         </p>
       </div>
     </div>

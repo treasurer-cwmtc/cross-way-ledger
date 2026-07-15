@@ -61,7 +61,7 @@ function FiscalYearCard() {
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Fiscal year (CY / PY)</h3>
       <p className="subtitle">
-        Drives the Txn CY/PY and Posted CY/PY columns on Reconciliation and
+        Drives the Txn CY/PY and Posted CY/PY columns on Actual and
         Accrual: any date after Current Year Date counts as "CY", everything
         before is "PY". Update this once a year at rollover (matches the
         sheet's Current Year Date, Prior Year Date, Current Year, and Prior

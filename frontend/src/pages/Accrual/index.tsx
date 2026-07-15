@@ -81,8 +81,8 @@ export default function Accrual() {
       <p className="subtitle" style={{ marginTop: 0 }}>
         Manually-entered ledger for recording an expense or reimbursement as
         incurred, before the actual payment clears the bank and shows up in
-        Reconciliation. Same fields, same Chart of Accounts lookup, same
-        split/undo-split as Reconciliation.
+        Actual. Same fields, same Chart of Accounts lookup, same
+        split/undo-split as Actual.
       </p>
       <div className="toolbar">
         <button className="btn" onClick={() => setShowQuickAdd(true)}>

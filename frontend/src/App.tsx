@@ -109,7 +109,7 @@ export default function App() {
           className={tab === "reconciliation" ? "active" : ""}
           onClick={() => setTab("reconciliation")}
         >
-          Reconciliation
+          Actual
         </button>
         <button
           className={tab === "accrual" ? "active" : ""}
