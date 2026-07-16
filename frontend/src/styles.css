@@ -604,33 +604,28 @@ tr.register-row td {
 
 /* Upload wizard step indicator */
 .wizard-steps {
+  position: relative;
   display: flex;
   align-items: flex-start;
   margin-bottom: 28px;
 }
 
-.wizard-step-wrap {
-  display: flex;
-  align-items: flex-start;
-  flex: 1;
-}
-
-.wizard-step-wrap:last-child {
-  flex: none;
-}
-
-.wizard-step-connector {
-  flex: 1;
+.wizard-steps-line {
+  position: absolute;
+  top: 17px;
   height: 2px;
   background: var(--border);
-  margin: 17px 8px 0;
+  transform-origin: left;
 }
 
-.wizard-step-connector.done {
+.wizard-steps-line.done {
   background: var(--primary);
 }
 
 .wizard-step {
+  position: relative;
+  z-index: 1;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -639,8 +634,6 @@ tr.register-row td {
   border: none;
   padding: 0;
   cursor: default;
-  flex: none;
-  width: 96px;
 }
 
 .wizard-step:disabled {
