@@ -298,6 +298,25 @@ _Where we left off — read this first when resuming in a new session._
 
 Tracked as issues on the repo. Suggested order:
 
+- **Google Drive integration** (new ask) — attach a receipt to a ledger entry
+  (Actual/Accrual/Budget's `TransactionModal`) by either uploading a new file to
+  Drive or picking an existing one via the **Google Picker API**; store only
+  `{file_id, web_view_link, name}` on the entry (no file copy in our own
+  storage), and clicking it opens `web_view_link` in a new tab. Needs a Google
+  Cloud OAuth client + Picker-restricted API key (`drive.file` scope only,
+  least-privilege) — one-time manual setup in Google Cloud Console, not
+  something automatable from here. Sets up the same OAuth client for the
+  **Google Sign-In** work below, so provision both scopes
+  (`openid`/`email`/`profile` + `drive.file`) together even though Sign-In
+  comes later.
+- **Google Sign-In** (replaces password auth, decided) — login via the
+  `crosswaymtc.org` Google Workspace domain, ideally with the OAuth consent
+  screen set to **Internal** (Workspace-only, no Google app review needed) so
+  only church accounts can ever sign in; if Internal isn't available, the
+  backend must independently verify the ID token's `hd` claim rather than
+  relying on the consent screen alone. Shares the OAuth client with the Drive
+  work above. Retires `backend/app/security.py`'s username/password + JWT path
+  rather than running alongside it.
 - **Auditor-specific screens** (phase 4 of the finance-UI push,
   later/separate ask) — a read-only, audit-focused view; likely wants the
   Config tab's Audit Validation date range once it exists. _Recommended
