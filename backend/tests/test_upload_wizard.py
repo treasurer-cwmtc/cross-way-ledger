@@ -97,6 +97,13 @@ def test_update_line_edit_survives_merge_stripe():
     stripe_lines = [l for l in merged["lines"] if l["source"] == "stripe"]
     assert len(stripe_lines) == 5
 
+    # bank_totals_by_day captures the original bank amount per day,
+    # independent of the exploded lines - both should agree here since
+    # nothing's been edited post-merge.
+    stripe_total_by_day = sum(l["amount"] for l in stripe_lines)
+    day = stripe_lines[0]["date_posted"]
+    assert merged["bank_totals_by_day"][day] == round(stripe_total_by_day, 2)
+
 
 def test_recategorize_picks_up_new_rule_without_touching_edited_lines():
     h = auth_header()

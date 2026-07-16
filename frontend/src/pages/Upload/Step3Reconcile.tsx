@@ -1,6 +1,10 @@
 import { Fragment, useMemo, useState } from "react";
 import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export default function Step3Reconcile(props: {
   run: ReconRun;
   stripeFile: File | null;
@@ -31,13 +35,18 @@ export default function Step3Reconcile(props: {
   const byDay = useMemo(() => {
     const map = new Map<
       string,
-      { total: number; count: number; hasIssue: boolean; issueLines: ReconLine[] }
+      { stripeTotal: number; count: number; hasIssue: boolean; issueLines: ReconLine[] }
     >();
     for (const l of run.lines) {
       if (l.source !== "stripe") continue;
       const day = l.date_posted || "unknown";
-      const row = map.get(day) || { total: 0, count: 0, hasIssue: false, issueLines: [] };
-      row.total += l.amount;
+      const row = map.get(day) || {
+        stripeTotal: 0,
+        count: 0,
+        hasIssue: false,
+        issueLines: [],
+      };
+      row.stripeTotal += l.amount;
       row.count += 1;
       if (!l.matched) {
         row.hasIssue = true;
@@ -45,8 +54,24 @@ export default function Step3Reconcile(props: {
       }
       map.set(day, row);
     }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [run.lines]);
+    return [...map.entries()]
+      .map(([day, row]) => {
+        // bank_totals_by_day is captured once at merge time - the *original*
+        // bank amount for that day, independent of the exploded Stripe
+        // lines above. They should always agree by construction, unless a
+        // line got edited afterward - that's exactly what this catches.
+        const bankTotal = round2(run.bank_totals_by_day?.[day] ?? row.stripeTotal);
+        const variance = round2(row.stripeTotal - bankTotal);
+        return {
+          day,
+          ...row,
+          bankTotal,
+          variance,
+          hasIssue: row.hasIssue || Math.abs(variance) >= 0.01,
+        };
+      })
+      .sort((a, b) => a.day.localeCompare(b.day));
+  }, [run.lines, run.bank_totals_by_day]);
 
   const totalUnmatched = run.unmatched_stripe_bank_count;
   const totalBankStripeLines = run.matched_payout_count + totalUnmatched;
@@ -92,54 +117,71 @@ export default function Step3Reconcile(props: {
               <thead>
                 <tr>
                   <th>Date posted</th>
-                  <th className="num">Reconciled total</th>
+                  <th className="num">Bank total</th>
+                  <th className="num">Stripe total</th>
+                  <th className="num">Variance</th>
                   <th className="num">Lines</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {byDay.map(([day, row]) => (
-                  <Fragment key={day}>
+                {byDay.map((row) => (
+                  <Fragment key={row.day}>
                     <tr
                       className={row.hasIssue ? "register-row" : undefined}
                       onClick={() =>
-                        row.hasIssue && setExpandedDay(expandedDay === day ? null : day)
+                        row.hasIssue && setExpandedDay(expandedDay === row.day ? null : row.day)
                       }
                     >
-                      <td>{day}</td>
-                      <td className="num">{row.total.toFixed(2)}</td>
+                      <td>{row.day}</td>
+                      <td className="num">{row.bankTotal.toFixed(2)}</td>
+                      <td className="num">{row.stripeTotal.toFixed(2)}</td>
+                      <td
+                        className="num"
+                        style={{ color: row.variance ? "var(--red)" : undefined }}
+                      >
+                        {row.variance.toFixed(2)}
+                      </td>
                       <td className="num">{row.count}</td>
                       <td>
                         {row.hasIssue ? (
                           <span className="pill warn">
-                            Needs attention {expandedDay === day ? "▲" : "▼"}
+                            Needs attention {expandedDay === row.day ? "▲" : "▼"}
                           </span>
                         ) : (
                           <span className="pill bank">✓ Matched</span>
                         )}
                       </td>
                     </tr>
-                    {expandedDay === day && (
+                    {expandedDay === row.day && (
                       <tr>
-                        <td colSpan={4} style={{ background: "var(--bg)" }}>
-                          <table style={{ margin: "4px 0" }}>
-                            <thead>
-                              <tr>
-                                <th>Description</th>
-                                <th className="num">Amount</th>
-                                <th>What's wrong</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {row.issueLines.map((l) => (
-                                <tr key={l.id}>
-                                  <td>{l.description || l.bank_description}</td>
-                                  <td className="num">{l.amount.toFixed(2)}</td>
-                                  <td>{l.notes}</td>
+                        <td colSpan={6} style={{ background: "var(--bg)" }}>
+                          {row.issueLines.length > 0 ? (
+                            <table style={{ margin: "4px 0" }}>
+                              <thead>
+                                <tr>
+                                  <th>Description</th>
+                                  <th className="num">Amount</th>
+                                  <th>What's wrong</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {row.issueLines.map((l) => (
+                                  <tr key={l.id}>
+                                    <td>{l.description || l.bank_description}</td>
+                                    <td className="num">{l.amount.toFixed(2)}</td>
+                                    <td>{l.notes}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <p className="subtitle" style={{ margin: "8px 0" }}>
+                              The Stripe total (${row.stripeTotal.toFixed(2)}) no longer matches
+                              the bank's original amount for this day (${row.bankTotal.toFixed(2)})
+                              - likely because a line's amount was edited after reconciling.
+                            </p>
+                          )}
                         </td>
                       </tr>
                     )}

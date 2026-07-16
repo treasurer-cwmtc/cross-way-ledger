@@ -154,6 +154,7 @@ class ReconRunOut(BaseModel):
     notes: str
     raw_bank_income_total: float
     raw_bank_expense_total: float
+    bank_totals_by_day: dict[str, float] = {}
 
 
 class ReconRunDetail(ReconRunOut):

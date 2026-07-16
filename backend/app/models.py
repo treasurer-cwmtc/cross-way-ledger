@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -156,6 +157,13 @@ class ReconRun(Base):
     # doesn't need the original file re-uploaded or re-parsed later.
     raw_bank_income_total: Mapped[float] = mapped_column(Float, default=0.0)
     raw_bank_expense_total: Mapped[float] = mapped_column(Float, default=0.0)
+    # Sum of the ORIGINAL bank-payout-placeholder amounts per date_posted,
+    # captured once at merge-stripe time (keyed by date_posted string) - an
+    # independent reference so the wizard's by-day check compares against
+    # the bank's own number, not just re-summing the same lines it's
+    # displaying. Diverges from the live Stripe total only if a line gets
+    # edited afterward.
+    bank_totals_by_day: Mapped[dict] = mapped_column(JSON, default=dict)
 
     lines: Mapped[list["ReconLine"]] = relationship(
         back_populates="run", cascade="all, delete-orphan"

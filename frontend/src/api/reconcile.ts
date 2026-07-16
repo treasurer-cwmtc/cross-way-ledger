@@ -40,6 +40,7 @@ export interface ReconRun {
   notes: string;
   raw_bank_income_total: number;
   raw_bank_expense_total: number;
+  bank_totals_by_day: Record<string, number>;
   lines: ReconLine[];
 }
 

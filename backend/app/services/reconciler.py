@@ -45,6 +45,7 @@ class ReconResult:
     unmatched_stripe_bank_count: int = 0
     raw_income_total: float = 0.0
     raw_expense_total: float = 0.0
+    bank_totals_by_day: dict = field(default_factory=dict)
 
 
 def _to_date(value: str) -> date | None:
@@ -266,6 +267,7 @@ def merge_stripe(
             donations_by_payout.setdefault(r.transfer, []).append(r)
 
     consumed_payouts: set[str] = set()
+    bank_totals_by_day: dict[str, float] = {}
     for bank in placeholder_bank_rows:
         lines, matched = _categorize_stripe_payout_row(
             bank, payouts, donations_by_payout, consumed_payouts,
@@ -276,7 +278,11 @@ def merge_stripe(
             result.matched_payout_count += 1
         else:
             result.unmatched_stripe_bank_count += 1
+        bank_totals_by_day[bank.posting_date] = round(
+            bank_totals_by_day.get(bank.posting_date, 0.0) + bank.amount, 2
+        )
 
+    result.bank_totals_by_day = bank_totals_by_day
     return result
 
 

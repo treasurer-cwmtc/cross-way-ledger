@@ -174,6 +174,9 @@ async def merge_stripe_endpoint(
     run.stripe_line_count = result.stripe_line_count
     run.matched_payout_count = result.matched_payout_count
     run.unmatched_stripe_bank_count = result.unmatched_stripe_bank_count
+    merged_totals = dict(run.bank_totals_by_day or {})
+    merged_totals.update(result.bank_totals_by_day)
+    run.bank_totals_by_day = merged_totals
     db.commit()
     db.refresh(run)
     return run
