@@ -126,6 +126,18 @@ class ReconLineOut(BaseModel):
     bank_description: str
     matched: bool
     notes: str
+    is_stripe_payout: bool
+
+
+class ReconLineUpdate(BaseModel):
+    # category/statement_description are NOT user-editable directly - they're
+    # re-derived from the Chart of Accounts whenever account_no changes (see
+    # routers/reconcile.py::update_line).
+    account_no: str | None = None
+    description: str | None = None
+    method: str | None = None
+    amount: float | None = None
+    notes: str | None = None
 
 
 class ReconRunOut(BaseModel):
@@ -140,10 +152,28 @@ class ReconRunOut(BaseModel):
     matched_payout_count: int
     unmatched_stripe_bank_count: int
     notes: str
+    raw_bank_income_total: float
+    raw_bank_expense_total: float
 
 
 class ReconRunDetail(ReconRunOut):
     lines: list[ReconLineOut] = []
+
+
+class StripeFundCheckItem(BaseModel):
+    fund: str
+    has_rule: bool
+    account_no: str
+
+
+class StripeFundCheckOut(BaseModel):
+    funds: list[StripeFundCheckItem]
+    all_covered: bool
+
+
+class DuplicateCheckOut(BaseModel):
+    duplicate_line_ids: list[int]
+    count: int
 
 
 class Token(BaseModel):
