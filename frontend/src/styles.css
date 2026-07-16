@@ -568,11 +568,10 @@ tr.register-row td {
 }
 
 .autocomplete-list {
-  position: absolute;
+  /* position/top/left/width are set inline (see AccountPicker.tsx) - it's
+     portaled to <body> and fixed-positioned so a scrollable ancestor (e.g.
+     the Upload wizard's table-wrap) can't clip it. */
   z-index: 200;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
   max-height: 260px;
   overflow-y: auto;
   background: var(--card);
