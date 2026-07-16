@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { settingsApi } from "../../api/settings";
+import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 
 function addDays(iso: string, days: number): string {
   const d = new Date(iso + "T00:00:00Z");
@@ -27,6 +28,102 @@ export default function Config() {
       <FiscalYearCard />
       <FrequencyCard />
       <AuditValidationCard />
+      <BankAccountsCard />
+    </div>
+  );
+}
+
+function BankAccountsCard() {
+  const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+
+  async function load() {
+    try {
+      setAccounts(await bankAccountsApi.list());
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function add() {
+    if (!name.trim()) return;
+    setError("");
+    try {
+      await bankAccountsApi.create(name.trim());
+      setName("");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function remove(id: number) {
+    setError("");
+    try {
+      await bankAccountsApi.delete(id);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Bank accounts</h3>
+      <p className="subtitle">
+        The accounts available to tag when uploading a bank statement on the
+        Upload tab.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {accounts.map((a) => (
+            <tr key={a.id}>
+              <td>{a.name}</td>
+              <td>
+                <button className="link" onClick={() => remove(a.id)}>
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+          {accounts.length === 0 && (
+            <tr>
+              <td colSpan={2} style={{ color: "var(--muted)" }}>
+                No bank accounts yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="row" style={{ marginTop: 14 }}>
+        <label className="field">
+          <span>Add a new bank account</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              type="text"
+              value={name}
+              placeholder="e.g. Chase Savings"
+              onChange={(e) => setName(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <button className="btn secondary" onClick={add}>
+              Add
+            </button>
+          </div>
+        </label>
+      </div>
+      {error && <div className="error">{error}</div>}
     </div>
   );
 }

@@ -15,7 +15,6 @@ export default function Upload() {
 
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [bankAccountId, setBankAccountId] = useState<number | "">("");
-  const [newBankAccountName, setNewBankAccountName] = useState("");
 
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
@@ -35,18 +34,6 @@ export default function Upload() {
     loadBankAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function addBankAccount() {
-    if (!newBankAccountName.trim()) return;
-    try {
-      const created = await bankAccountsApi.create(newBankAccountName);
-      setNewBankAccountName("");
-      await loadBankAccounts();
-      setBankAccountId(created.id);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
 
   async function onRun() {
     if (!bankFile || !stripeFile) return;
@@ -122,22 +109,10 @@ export default function Upload() {
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>Add a new bank account</span>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input
-                type="text"
-                value={newBankAccountName}
-                placeholder="e.g. Chase Savings"
-                onChange={(e) => setNewBankAccountName(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <button className="btn secondary" onClick={addBankAccount}>
-                Add
-              </button>
-            </div>
-          </label>
         </div>
+        <p className="subtitle" style={{ marginBottom: 0 }}>
+          Don't see the right account? Add it on the Config tab.
+        </p>
       </div>
 
       <div className="card">
