@@ -277,6 +277,31 @@ select:disabled {
   box-shadow: none;
 }
 
+input[type="file"] {
+  width: 100%;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-right: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+input[type="file"]::file-selector-button:hover,
+input[type="file"]::-webkit-file-upload-button:hover {
+  background: var(--primary-dark);
+}
+
 input[readonly]:hover,
 input[readonly]:focus {
   border-color: #c4ccd0;
