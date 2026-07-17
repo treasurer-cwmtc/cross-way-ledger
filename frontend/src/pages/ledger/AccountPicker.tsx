@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChartAccount } from "../../api/accounts";
 
 function labelFor(a: ChartAccount) {
@@ -21,11 +22,19 @@ export default function AccountPicker(props: {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onDocMouseDown(ev: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(ev.target as Node)) {
+      const target = ev.target as Node;
+      // The dropdown itself lives in a portal (outside boxRef), so it needs
+      // its own exclusion or every click inside it would look "outside".
+      if (
+        boxRef.current &&
+        !boxRef.current.contains(target) &&
+        !(target instanceof Element && target.closest(".autocomplete-list"))
+      ) {
         setOpen(false);
         setQuery("");
       }
@@ -33,6 +42,34 @@ export default function AccountPicker(props: {
     document.addEventListener("mousedown", onDocMouseDown);
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
+
+  // The dropdown is portaled to <body> (position: fixed) specifically so it
+  // isn't clipped by a scrollable ancestor - e.g. the Upload wizard's table
+  // rows sit inside a `.table-wrap` with overflow:auto, which would
+  // otherwise cut the list off mid-way. Closing on scroll (rather than
+  // continuously repositioning) keeps this simple.
+  useLayoutEffect(() => {
+    if (!open || !boxRef.current) return;
+    const rect = boxRef.current.getBoundingClientRect();
+    // At least as wide as the input, but never narrower than a readable
+    // minimum - a table-cell input can be much narrower than the account
+    // names it needs to display. Options also wrap (see .autocomplete-option
+    // in styles.css) so nothing gets cut off even at this width.
+    const width = Math.max(rect.width, 380);
+    const left = Math.min(rect.left, window.innerWidth - width - 12);
+    setCoords({ top: rect.bottom + 4, left: Math.max(left, 8), width });
+
+    function onScroll() {
+      setOpen(false);
+      setQuery("");
+    }
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -87,6 +124,7 @@ export default function AccountPicker(props: {
         type="text"
         placeholder={props.placeholder || "— uncategorized —"}
         value={open ? query : selected ? labelFor(selected) : ""}
+        title={!open && selected ? labelFor(selected) : undefined}
         onFocus={() => {
           setOpen(true);
           setQuery("");
@@ -99,34 +137,44 @@ export default function AccountPicker(props: {
         }}
         onKeyDown={onKeyDown}
       />
-      {open && (
-        <div className="autocomplete-list">
+      {open &&
+        createPortal(
           <div
-            className={"autocomplete-option" + (highlight === 0 ? " active" : "")}
-            onMouseDown={(ev) => {
-              ev.preventDefault();
-              choose("");
+            className="autocomplete-list"
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              width: coords.width,
             }}
-            onMouseEnter={() => setHighlight(0)}
           >
-            — uncategorized —
-          </div>
-          {matches.map((a, i) => (
             <div
-              key={a.account_no}
-              className={"autocomplete-option" + (highlight === i + 1 ? " active" : "")}
+              className={"autocomplete-option" + (highlight === 0 ? " active" : "")}
               onMouseDown={(ev) => {
                 ev.preventDefault();
-                choose(a.account_no);
+                choose("");
               }}
-              onMouseEnter={() => setHighlight(i + 1)}
+              onMouseEnter={() => setHighlight(0)}
             >
-              {labelFor(a)}
+              — uncategorized —
             </div>
-          ))}
-          {matches.length === 0 && <div className="autocomplete-empty">No matches</div>}
-        </div>
-      )}
+            {matches.map((a, i) => (
+              <div
+                key={a.account_no}
+                className={"autocomplete-option" + (highlight === i + 1 ? " active" : "")}
+                onMouseDown={(ev) => {
+                  ev.preventDefault();
+                  choose(a.account_no);
+                }}
+                onMouseEnter={() => setHighlight(i + 1)}
+              >
+                {labelFor(a)}
+              </div>
+            ))}
+            {matches.length === 0 && <div className="autocomplete-empty">No matches</div>}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

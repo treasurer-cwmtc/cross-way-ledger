@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -151,6 +152,18 @@ class ReconRun(Base):
     matched_payout_count: Mapped[int] = mapped_column(Integer, default=0)
     unmatched_stripe_bank_count: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
+    # Sum of positive/negative amounts from the raw bank CSV at upload time -
+    # a fixed reference point for the wizard's step-4 totals check, so it
+    # doesn't need the original file re-uploaded or re-parsed later.
+    raw_bank_income_total: Mapped[float] = mapped_column(Float, default=0.0)
+    raw_bank_expense_total: Mapped[float] = mapped_column(Float, default=0.0)
+    # Sum of the ORIGINAL bank-payout-placeholder amounts per date_posted,
+    # captured once at merge-stripe time (keyed by date_posted string) - an
+    # independent reference so the wizard's by-day check compares against
+    # the bank's own number, not just re-summing the same lines it's
+    # displaying. Diverges from the live Stripe total only if a line gets
+    # edited afterward.
+    bank_totals_by_day: Mapped[dict] = mapped_column(JSON, default=dict)
 
     lines: Mapped[list["ReconLine"]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
@@ -179,6 +192,10 @@ class ReconLine(Base):
     bank_description: Mapped[str] = mapped_column(Text, default="")  # original bank line
     matched: Mapped[bool] = mapped_column(default=True)
     notes: Mapped[str] = mapped_column(String(300), default="")
+    # True for a bank-payout-looking line still awaiting the Stripe file
+    # (wizard step 1, before merge-stripe runs) - a placeholder, not a real
+    # categorized line yet.
+    is_stripe_payout: Mapped[bool] = mapped_column(default=False)
 
     run: Mapped[ReconRun] = relationship(back_populates="lines")
 
