@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import require_permission
 from ..schemas import IncomeStatementOut
 from ..services.reporting import compute_income_statement
 
 router = APIRouter(
-    prefix="/api/income-statement", tags=["income-statement"], dependencies=[Depends(get_current_user)]
+    prefix="/api/income-statement",
+    tags=["income-statement"],
+    dependencies=[Depends(require_permission("income-statement"))],
 )
 
 

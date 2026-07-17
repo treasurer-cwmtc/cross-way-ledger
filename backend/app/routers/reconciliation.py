@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import require_permission
 from ..models import BankAccount, ChartOfAccount, ReconciliationEntry, ReconRun
 from ..schemas import (
     ReconciliationEntryOut,
@@ -16,7 +16,9 @@ from ..schemas import (
 from ..services.ledger import build_dedup_key, friendly_method, parse_date
 
 router = APIRouter(
-    prefix="/api/reconciliation", tags=["reconciliation"], dependencies=[Depends(get_current_user)]
+    prefix="/api/reconciliation",
+    tags=["reconciliation"],
+    dependencies=[Depends(require_permission("reconciliation"))],
 )
 
 

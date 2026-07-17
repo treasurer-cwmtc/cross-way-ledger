@@ -187,20 +187,36 @@ class UserOut(BaseModel):
 
     id: int
     username: str
+    email: str | None
     is_admin: bool
     active: bool
+    permissions: list[str]
     created_at: datetime
 
 
 class UserCreate(BaseModel):
     username: str
-    password: str
-    is_admin: bool = False
+    # At least one of password/email must be given - password for the
+    # existing username/password flow, email for a Google-only account.
+    # Both can be set on the same account. Admin status isn't set here - it's
+    # granted afterward via the permissions endpoint, same as page access.
+    password: str | None = None
+    email: str | None = None
+    permissions: list[str] = []
+
+
+class UserPermissionsUpdate(BaseModel):
+    permissions: list[str]
+    is_admin: bool
 
 
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
 
 
 class AppSettingOut(BaseModel):

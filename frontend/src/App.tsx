@@ -114,7 +114,11 @@ export default function App() {
 
         <nav className="sidebar-nav">
           {NAV_GROUPS.map((group) => {
-            const items = group.items.filter((item) => !item.adminOnly || user.is_admin);
+            const items = group.items.filter((item) => {
+              if (item.adminOnly) return user.is_admin;
+              if (item.tab === "home") return true;
+              return user.is_admin || user.permissions.includes(item.tab);
+            });
             if (items.length === 0) return null;
             return (
               <div key={group.label} style={{ marginBottom: 14 }}>

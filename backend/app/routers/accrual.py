@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import require_permission
 from ..models import AccrualEntry, BankAccount, ChartOfAccount
 from ..schemas import (
     AccrualEntryCreate,
@@ -14,7 +14,7 @@ from ..schemas import (
 )
 
 router = APIRouter(
-    prefix="/api/accrual", tags=["accrual"], dependencies=[Depends(get_current_user)]
+    prefix="/api/accrual", tags=["accrual"], dependencies=[Depends(require_permission("accrual"))]
 )
 
 

@@ -3,8 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
-from ..models import CategoryRule, ChartOfAccount, StatementCategory, StatementItem
+from ..deps import get_current_user, require_permission
+from ..models import CategoryRule, ChartOfAccount, StatementCategory, StatementItem, User
 from ..schemas import (
     AccountNoPreview,
     ChartOfAccountCreate,
@@ -42,7 +42,9 @@ def list_statement_categories(
 
 @router.post("/statement-categories", response_model=StatementCategoryOut, status_code=201)
 def add_statement_category(
-    payload: StatementCategoryCreate, db: Session = Depends(get_db)
+    payload: StatementCategoryCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("accounts")),
 ) -> StatementCategory:
     try:
         row = create_statement_category(db, payload.category, payload.name)
@@ -54,7 +56,11 @@ def add_statement_category(
 
 
 @router.delete("/statement-categories/{statement_category_id}", status_code=204)
-def delete_statement_category(statement_category_id: int, db: Session = Depends(get_db)) -> None:
+def delete_statement_category(
+    statement_category_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("accounts")),
+) -> None:
     row = db.get(StatementCategory, statement_category_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Statement Category not found.")
@@ -81,7 +87,11 @@ def list_statement_items(
 
 
 @router.post("/statement-items", response_model=StatementItemOut, status_code=201)
-def add_statement_item(payload: StatementItemCreate, db: Session = Depends(get_db)) -> StatementItem:
+def add_statement_item(
+    payload: StatementItemCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("accounts")),
+) -> StatementItem:
     try:
         row = create_statement_item(db, payload.statement_category_id, payload.name)
     except ValueError as e:
@@ -92,7 +102,11 @@ def add_statement_item(payload: StatementItemCreate, db: Session = Depends(get_d
 
 
 @router.delete("/statement-items/{statement_item_id}", status_code=204)
-def delete_statement_item(statement_item_id: int, db: Session = Depends(get_db)) -> None:
+def delete_statement_item(
+    statement_item_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("accounts")),
+) -> None:
     row = db.get(StatementItem, statement_item_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Statement Item not found.")
@@ -120,7 +134,9 @@ def list_accounts(
 
 @router.post("/preview-number", response_model=AccountNoPreview)
 def preview_account_no(
-    payload: ChartOfAccountCreate, db: Session = Depends(get_db)
+    payload: ChartOfAccountCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("accounts")),
 ) -> AccountNoPreview:
     try:
         account_no, item, detail_no = compute_account_no(
@@ -138,7 +154,9 @@ def preview_account_no(
 
 @router.post("", response_model=ChartOfAccountOut, status_code=201)
 def create_account(
-    payload: ChartOfAccountCreate, db: Session = Depends(get_db)
+    payload: ChartOfAccountCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("accounts")),
 ) -> ChartOfAccount:
     try:
         account_no, item, detail_no = compute_account_no(
@@ -177,7 +195,10 @@ def create_account(
 
 @router.put("/{account_no}", response_model=ChartOfAccountOut)
 def update_account(
-    account_no: str, payload: ChartOfAccountUpdate, db: Session = Depends(get_db)
+    account_no: str,
+    payload: ChartOfAccountUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("accounts")),
 ) -> ChartOfAccount:
     account = db.get(ChartOfAccount, account_no)
     if account is None:
@@ -190,7 +211,11 @@ def update_account(
 
 
 @router.delete("/{account_no}", status_code=204)
-def delete_account(account_no: str, db: Session = Depends(get_db)) -> None:
+def delete_account(
+    account_no: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("accounts")),
+) -> None:
     account = db.get(ChartOfAccount, account_no)
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found.")

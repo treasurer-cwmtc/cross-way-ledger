@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import require_permission
 from ..models import (
     AccrualEntry,
     BankAccount,
@@ -16,7 +16,9 @@ from ..models import (
 from ..schemas import GeneralLedgerLineOut
 
 router = APIRouter(
-    prefix="/api/general-ledger", tags=["general-ledger"], dependencies=[Depends(get_current_user)]
+    prefix="/api/general-ledger",
+    tags=["general-ledger"],
+    dependencies=[Depends(require_permission("general-ledger"))],
 )
 
 

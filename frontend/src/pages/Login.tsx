@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authApi } from "../api/auth";
+import { renderGoogleSignInButton } from "../lib/googleIdentity";
 import logo from "../assets/cross-way-logo-white.png";
 
 export default function Login({ onSuccess }: { onSuccess: () => void }) {
@@ -7,6 +8,24 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!googleButtonRef.current) return;
+    renderGoogleSignInButton(googleButtonRef.current, async (idToken) => {
+      setError("");
+      setBusy(true);
+      try {
+        await authApi.googleLogin(idToken);
+        onSuccess();
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,6 +79,23 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
           </button>
           {error && <div className="error">{error}</div>}
         </form>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            margin: "16px 0",
+            color: "var(--sidebar-text-dim)",
+            fontSize: 12,
+          }}
+        >
+          <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.12)" }} />
+          or
+          <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.12)" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div ref={googleButtonRef} />
+        </div>
       </div>
     </div>
   );

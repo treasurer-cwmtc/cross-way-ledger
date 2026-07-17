@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Seed admin (created on first startup if no users exist).
     admin_username: str = "admin"
     admin_password: str = "changeme"
+    # Same OAuth client the frontend uses for Drive (VITE_GOOGLE_CLIENT_ID) -
+    # verifies the Google Sign-In ID token was issued for this app.
+    google_client_id: str = ""
+    google_workspace_domain: str = "crosswaymtc.org"
 
     @property
     def cors_origin_list(self) -> list[str]:

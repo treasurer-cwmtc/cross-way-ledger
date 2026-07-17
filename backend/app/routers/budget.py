@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import require_permission
 from ..models import BudgetEntry, ChartOfAccount
 from ..schemas import (
     BudgetCopyYearRequest,
@@ -13,7 +13,7 @@ from ..schemas import (
     BudgetEntryUpdate,
 )
 
-router = APIRouter(prefix="/api/budget", tags=["budget"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/budget", tags=["budget"], dependencies=[Depends(require_permission("budget"))])
 
 
 def _to_out(entry: BudgetEntry, coa_by_no: dict[str, ChartOfAccount]) -> BudgetEntryOut:

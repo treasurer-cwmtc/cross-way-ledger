@@ -25,8 +25,13 @@ export function authHeaders(extra: Record<string, string> = {}): Record<string, 
 
 export class AuthError extends Error {}
 
-export async function j<T>(res: Response): Promise<T> {
-  if (res.status === 401) {
+export async function j<T>(res: Response, opts?: { rawAuthErrors?: boolean }): Promise<T> {
+  // A 401 almost always means "your session token is stale/invalid" - except
+  // on the login endpoints themselves, where a 401 just means "wrong
+  // password" (or "unknown Google account") on a fresh attempt, not an
+  // expired session. Callers on those endpoints pass rawAuthErrors so the
+  // backend's actual message surfaces instead.
+  if (res.status === 401 && !opts?.rawAuthErrors) {
     auth.clear();
     throw new AuthError("Session expired. Please log in again.");
   }

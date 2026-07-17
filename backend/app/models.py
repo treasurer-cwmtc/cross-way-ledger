@@ -24,8 +24,17 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    # Set for accounts that can sign in with Google (crosswaymtc.org only,
+    # verified server-side against the ID token's hd claim) - matched
+    # against the token's email at login. None for password-only accounts.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_admin: Mapped[bool] = mapped_column(default=False)
     active: Mapped[bool] = mapped_column(default=True)
+    # Page keys the user is allowed to see/use (matches the frontend Tab
+    # values, e.g. "accrual", "budget") - ignored entirely for admins, who
+    # always have full access. "home" and "users" are never in this list:
+    # Home is always visible, Users/Permissions management is admin-only.
+    permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
