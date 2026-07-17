@@ -1,6 +1,6 @@
 # Project Overview & Knowledge Base
 
-_Bank ↔ Stripe Reconciliation app for Cross Way Mar Thoma Church (CWMTC)._
+_Cross Way Ledger - bank/Stripe reconciliation and bookkeeping app for Cross Way Mar Thoma Church (CWMTC)._
 
 This document captures everything gathered during requirements discovery and the
 initial build, so the context isn't lost between sessions.

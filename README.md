@@ -1,4 +1,4 @@
-# Bank ↔ Stripe Reconciliation
+# Cross Way Ledger
 
 Replaces the manual Excel/VLOOKUP workflow for reconciling church donations that
 flow **Planning Center → Stripe → Chase bank**. Upload the two CSV exports and the

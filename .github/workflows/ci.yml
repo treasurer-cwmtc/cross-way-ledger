@@ -45,6 +45,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
-        run: docker build -t recon-backend ./backend
+        run: docker build -t cross-way-ledger-backend ./backend
       - name: Build frontend image
-        run: docker build -t recon-frontend ./frontend
+        run: docker build -t cross-way-ledger-frontend ./frontend

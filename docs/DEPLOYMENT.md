@@ -31,8 +31,8 @@ docker compose version
 ## 2. Get the code
 
 ```bash
-git clone https://github.com/treasurer-cwmtc/Tracker.git
-cd Tracker
+git clone https://github.com/treasurer-cwmtc/cross-way-ledger.git
+cd cross-way-ledger
 ```
 
 ---
@@ -104,18 +104,18 @@ Docker Compose services use `restart` behaviour from Docker. Add a restart polic
 so containers come back after a reboot — either add `restart: unless-stopped` to
 each service in `docker-compose.yml`, **or** use a systemd unit that runs compose:
 
-`/etc/systemd/system/tracker.service`:
+`/etc/systemd/system/cross-way-ledger.service`:
 
 ```ini
 [Unit]
-Description=Bank/Stripe Reconciliation (Tracker)
+Description=Cross Way Ledger
 Requires=docker.service
 After=docker.service network-online.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/home/YOURUSER/Tracker
+WorkingDirectory=/home/YOURUSER/cross-way-ledger
 ExecStart=/usr/bin/docker compose up -d --build
 ExecStop=/usr/bin/docker compose down
 TimeoutStartSec=0
@@ -126,7 +126,7 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now tracker.service
+sudo systemctl enable --now cross-way-ledger.service
 ```
 
 ---
@@ -139,7 +139,7 @@ domain. Easiest is **Caddy** (automatic Let's Encrypt certificates).
 Install Caddy, then `/etc/caddy/Caddyfile`:
 
 ```caddyfile
-tracker.example.org {
+ledger.crosswaymtc.org {
     reverse_proxy localhost:8080
 }
 ```
@@ -148,7 +148,7 @@ tracker.example.org {
 sudo systemctl reload caddy
 ```
 
-Then update `.env` `CORS_ORIGINS=https://tracker.example.org` and
+Then update `.env` `CORS_ORIGINS=https://ledger.crosswaymtc.org` and
 `docker compose up -d`.
 
 > Once behind HTTPS, consider firewalling ports 8000/8080/5432 so only 80/443 are
@@ -171,7 +171,7 @@ cat backup_2026-07-13.sql | docker compose exec -T db psql -U recon -d recon
 Automate with a cron entry, e.g. nightly:
 
 ```cron
-0 2 * * * cd /home/YOURUSER/Tracker && docker compose exec -T db pg_dump -U recon recon > /home/YOURUSER/backups/tracker_$(date +\%F).sql
+0 2 * * * cd /home/YOURUSER/cross-way-ledger && docker compose exec -T db pg_dump -U recon recon > /home/YOURUSER/backups/cross-way-ledger_$(date +\%F).sql
 ```
 
 ---

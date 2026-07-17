@@ -2,8 +2,8 @@
 
 _Where we left off — read this first when resuming in a new session._
 
-**Repo:** https://github.com/treasurer-cwmtc/Tracker
-**Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
+**Repo:** https://github.com/treasurer-cwmtc/cross-way-ledger
+**Local path (Windows):** `C:\Users\nivin\repo`
 **Last updated:** 2026-07-14 (Finance UI visual redesign)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
@@ -362,10 +362,10 @@ Tracked as issues on the repo. Suggested order:
 
 ```powershell
 # Backend (local POC, SQLite)
-cd C:\Users\nmathew\source\repos\bank-stripe-recon\backend
+cd C:\Users\nivin\repo\backend
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 # Frontend (separate terminal)
-cd C:\Users\nmathew\source\repos\bank-stripe-recon\frontend
+cd C:\Users\nivin\repo\frontend
 npm run dev        # http://localhost:5173
 ```
 
