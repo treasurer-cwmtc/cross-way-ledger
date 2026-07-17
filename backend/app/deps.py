@@ -42,3 +42,33 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return user
+
+
+# Every grantable page permission - matches the frontend Tab values exactly.
+# "home" isn't here (always visible) and "users" isn't here (admin-only,
+# never grantable - see require_admin).
+GRANTABLE_PERMISSIONS = {
+    "upload",
+    "reconciliation",
+    "accrual",
+    "budget",
+    "general-ledger",
+    "income-statement",
+    "rules",
+    "accounts",
+    "link-receipts",
+    "config",
+}
+
+
+def require_permission(key: str):
+    """Gate a route behind a page-permission key (e.g. "accrual"). Admins
+    bypass this entirely - the grantable permission list only applies to
+    everyone else."""
+
+    def _check(user: User = Depends(get_current_user)) -> User:
+        if user.is_admin or key in (user.permissions or []):
+            return user
+        raise HTTPException(status_code=403, detail="You don't have access to this page.")
+
+    return _check

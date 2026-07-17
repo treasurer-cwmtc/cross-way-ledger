@@ -3,8 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
-from ..models import BankAccount, ReconciliationEntry
+from ..deps import get_current_user, require_permission
+from ..models import BankAccount, ReconciliationEntry, User
 from ..schemas import BankAccountCreate, BankAccountOut
 
 router = APIRouter(
@@ -18,7 +18,11 @@ def list_bank_accounts(db: Session = Depends(get_db)) -> list[BankAccount]:
 
 
 @router.post("", response_model=BankAccountOut, status_code=201)
-def create_bank_account(payload: BankAccountCreate, db: Session = Depends(get_db)) -> BankAccount:
+def create_bank_account(
+    payload: BankAccountCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("config")),
+) -> BankAccount:
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Name is required.")
@@ -33,7 +37,11 @@ def create_bank_account(payload: BankAccountCreate, db: Session = Depends(get_db
 
 
 @router.delete("/{account_id}", status_code=204)
-def delete_bank_account(account_id: int, db: Session = Depends(get_db)) -> None:
+def delete_bank_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("config")),
+) -> None:
     account = db.get(BankAccount, account_id)
     if account is None:
         raise HTTPException(status_code=404, detail="Bank account not found.")

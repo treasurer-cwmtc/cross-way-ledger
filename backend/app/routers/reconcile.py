@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import require_permission
 from ..models import CategoryRule, ChartOfAccount, ReconciliationEntry, ReconLine, ReconRun
 from ..schemas import (
     DuplicateCheckOut,
@@ -24,7 +24,7 @@ from ..services.parsers import BankRow, parse_bank_csv, parse_stripe_csv
 from ..services.reconciler import categorize_bank_only, merge_stripe, reconcile
 
 router = APIRouter(
-    prefix="/api", tags=["reconcile"], dependencies=[Depends(get_current_user)]
+    prefix="/api", tags=["reconcile"], dependencies=[Depends(require_permission("upload"))]
 )
 
 EXPORT_COLUMNS = [
