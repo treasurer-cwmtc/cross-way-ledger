@@ -262,6 +262,13 @@ class ReconciliationEntry(Base):
     )
     is_split: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # A receipt attached via the Google Drive Picker. Only the file's
+    # identity/link is stored - the actual file stays in the user's Drive
+    # (picked with the drive.file scope, never copied into our own storage).
+    receipt_file_id: Mapped[str] = mapped_column(String(200), default="")
+    receipt_file_name: Mapped[str] = mapped_column(String(300), default="")
+    receipt_web_view_link: Mapped[str] = mapped_column(Text, default="")
+
     bank_account: Mapped[BankAccount | None] = relationship()
 
 
@@ -302,6 +309,11 @@ class AccrualEntry(Base):
         ForeignKey("accrual_entries.id"), nullable=True
     )
     is_split: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Same Google Drive receipt attachment as ReconciliationEntry.
+    receipt_file_id: Mapped[str] = mapped_column(String(200), default="")
+    receipt_file_name: Mapped[str] = mapped_column(String(300), default="")
+    receipt_web_view_link: Mapped[str] = mapped_column(Text, default="")
 
     bank_account: Mapped[BankAccount | None] = relationship()
 

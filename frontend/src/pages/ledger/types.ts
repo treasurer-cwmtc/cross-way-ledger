@@ -21,6 +21,9 @@ export interface LedgerEntry {
   bank_description: string;
   notes: string;
   split_parent_id: number | null;
+  receipt_file_id: string;
+  receipt_file_name: string;
+  receipt_web_view_link: string;
   // Derived live from the linked Chart of Accounts row - read-only.
   statement_description: string;
   category: string;
@@ -45,6 +48,9 @@ export interface LedgerEntryUpdate {
   check_invoice_name?: string;
   bank_description?: string;
   notes?: string;
+  receipt_file_id?: string;
+  receipt_file_name?: string;
+  receipt_web_view_link?: string;
 }
 
 export interface SplitLine {

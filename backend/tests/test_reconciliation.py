@@ -96,6 +96,46 @@ def test_imported_entry_has_derived_statement_description_and_is_editable():
     assert upd.json()["reconciled"] is True
 
 
+def test_receipt_fields_round_trip_and_default_blank():
+    h = auth_header()
+    run_id = _run_upload()
+    bank_account_id = _bank_account_id()
+    client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    entries = client.get("/api/reconciliation", headers=h).json()
+    entry = entries[0]
+    assert entry["receipt_file_id"] == ""
+    assert entry["receipt_file_name"] == ""
+    assert entry["receipt_web_view_link"] == ""
+
+    upd = client.put(
+        f"/api/reconciliation/{entry['id']}",
+        headers=h,
+        json={
+            "receipt_file_id": "file123",
+            "receipt_file_name": "receipt.pdf",
+            "receipt_web_view_link": "https://drive.google.com/file/d/file123/view",
+        },
+    )
+    assert upd.status_code == 200, upd.text
+    body = upd.json()
+    assert body["receipt_file_id"] == "file123"
+    assert body["receipt_file_name"] == "receipt.pdf"
+    assert body["receipt_web_view_link"] == "https://drive.google.com/file/d/file123/view"
+
+    # Clearing it back out (removing the attached receipt) must also work.
+    cleared = client.put(
+        f"/api/reconciliation/{entry['id']}",
+        headers=h,
+        json={"receipt_file_id": "", "receipt_file_name": "", "receipt_web_view_link": ""},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["receipt_file_id"] == ""
+
+
 def test_delete_entry():
     h = auth_header()
     run_id = _run_upload()

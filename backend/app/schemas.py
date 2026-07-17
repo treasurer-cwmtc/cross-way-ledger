@@ -247,6 +247,9 @@ class ReconciliationEntryOut(BaseModel):
     notes: str
     source_run_id: int | None
     split_parent_id: int | None
+    receipt_file_id: str
+    receipt_file_name: str
+    receipt_web_view_link: str
     # Derived live from the linked Chart of Accounts row (blank if account_no
     # doesn't match any account, e.g. not yet categorized).
     statement_description: str
@@ -272,6 +275,9 @@ class ReconciliationEntryUpdate(BaseModel):
     check_invoice_name: str | None = None
     bank_description: str | None = None
     notes: str | None = None
+    receipt_file_id: str | None = None
+    receipt_file_name: str | None = None
+    receipt_web_view_link: str | None = None
 
 
 class SplitLineIn(BaseModel):
@@ -319,6 +325,9 @@ class AccrualEntryOut(BaseModel):
     bank_description: str
     notes: str
     split_parent_id: int | None
+    receipt_file_id: str
+    receipt_file_name: str
+    receipt_web_view_link: str
     statement_description: str
     category: str
     statement_category: str
@@ -357,6 +366,9 @@ class AccrualEntryUpdate(BaseModel):
     check_invoice_name: str | None = None
     bank_description: str | None = None
     notes: str | None = None
+    receipt_file_id: str | None = None
+    receipt_file_name: str | None = None
+    receipt_web_view_link: str | None = None
 
 
 class AccrualSplitGroupOut(BaseModel):

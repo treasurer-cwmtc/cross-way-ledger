@@ -9,6 +9,7 @@ import Accrual from "./pages/Accrual";
 import Budget from "./pages/Budget";
 import GeneralLedger from "./pages/GeneralLedger";
 import IncomeStatement from "./pages/IncomeStatement";
+import LinkReceipts from "./pages/LinkReceipts";
 import Rules from "./pages/Rules";
 import Accounts from "./pages/Accounts";
 import Config from "./pages/Config";
@@ -25,6 +26,7 @@ type Tab =
   | "income-statement"
   | "rules"
   | "accounts"
+  | "link-receipts"
   | "config"
   | "users";
 
@@ -62,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { tab: "rules", label: "Rules" },
       { tab: "accounts", label: "Chart of Accounts" },
+      { tab: "link-receipts", label: "Link Receipts" },
       { tab: "config", label: "Config" },
       { tab: "users", label: "Users", adminOnly: true },
     ],
@@ -162,6 +165,7 @@ export default function App() {
           {tab === "income-statement" && <IncomeStatement />}
           {tab === "rules" && <Rules />}
           {tab === "accounts" && <Accounts />}
+          {tab === "link-receipts" && <LinkReceipts />}
           {tab === "config" && <Config />}
           {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
         </div>

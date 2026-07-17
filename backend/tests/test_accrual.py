@@ -56,6 +56,29 @@ def test_update_entry():
     assert upd.json()["reconciled"] is True
 
 
+def test_receipt_fields_round_trip_and_default_blank():
+    entry = _create_entry()
+    assert entry["receipt_file_id"] == ""
+    assert entry["receipt_file_name"] == ""
+    assert entry["receipt_web_view_link"] == ""
+
+    h = auth_header()
+    upd = client.put(
+        f"/api/accrual/{entry['id']}",
+        headers=h,
+        json={
+            "receipt_file_id": "file456",
+            "receipt_file_name": "reimbursement.jpg",
+            "receipt_web_view_link": "https://drive.google.com/file/d/file456/view",
+        },
+    )
+    assert upd.status_code == 200, upd.text
+    body = upd.json()
+    assert body["receipt_file_id"] == "file456"
+    assert body["receipt_file_name"] == "reimbursement.jpg"
+    assert body["receipt_web_view_link"] == "https://drive.google.com/file/d/file456/view"
+
+
 def test_delete_entry():
     entry = _create_entry()
     h = auth_header()

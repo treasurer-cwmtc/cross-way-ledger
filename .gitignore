@@ -14,6 +14,9 @@ frontend/package-lock.json
 # Env
 .env
 
+# Claude Code local-only settings (permissions personal to this machine)
+.claude/settings.local.json
+
 # Editors / OS
 .vscode/
 .idea/

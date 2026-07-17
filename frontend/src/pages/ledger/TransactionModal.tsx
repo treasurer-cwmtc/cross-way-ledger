@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
+import { pickReceiptFile } from "../../lib/googleDrive";
 import { METHOD_OPTIONS } from "./columns";
 import AccountPicker from "./AccountPicker";
 import {
@@ -37,6 +38,7 @@ export default function TransactionModal(props: {
   const [showSplit, setShowSplit] = useState(false);
   const [unsplitting, setUnsplitting] = useState(false);
   const [error, setError] = useState("");
+  const [attachingReceipt, setAttachingReceipt] = useState(false);
 
   useEffect(() => {
     function onKey(ev: KeyboardEvent) {
@@ -46,6 +48,32 @@ export default function TransactionModal(props: {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function attachReceipt() {
+    setError("");
+    setAttachingReceipt(true);
+    try {
+      const dateForYear = e.date_posted || e.transaction_date;
+      const year = dateForYear ? Number(dateForYear.slice(0, 4)) : new Date().getFullYear();
+      const file = await pickReceiptFile({ year });
+      if (file) {
+        set({
+          receipt_file_id: file.id,
+          receipt_file_name: file.name,
+          receipt_web_view_link: file.url,
+          check_invoice_name: file.name,
+        });
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAttachingReceipt(false);
+    }
+  }
+
+  function removeReceipt() {
+    set({ receipt_file_id: "", receipt_file_name: "", receipt_web_view_link: "" });
+  }
 
   async function undoSplit() {
     if (e.split_parent_id == null) return;
@@ -176,6 +204,24 @@ export default function TransactionModal(props: {
         <label className="field">
           <span>Notes</span>
           <TextCell value={e.notes} onCommit={(v) => set({ notes: v })} />
+        </label>
+
+        <label className="field">
+          <span>Receipt</span>
+          {e.receipt_file_id ? (
+            <div className="row" style={{ alignItems: "center", gap: 10 }}>
+              <a href={e.receipt_web_view_link} target="_blank" rel="noreferrer">
+                {e.receipt_file_name || "View receipt"}
+              </a>
+              <button className="link" onClick={removeReceipt}>
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button className="btn secondary" onClick={attachReceipt} disabled={attachingReceipt}>
+              {attachingReceipt ? "Opening Google Drive…" : "Attach receipt"}
+            </button>
+          )}
         </label>
 
         <div className="modal-section-title">From Chart of Accounts (read-only)</div>
