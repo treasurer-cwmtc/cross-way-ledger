@@ -35,7 +35,12 @@ export default function Step3Reconcile(props: {
   const byDay = useMemo(() => {
     const map = new Map<
       string,
-      { stripeTotal: number; count: number; hasIssue: boolean; issueLines: ReconLine[] }
+      {
+        stripeTotal: number;
+        count: number;
+        issueLines: ReconLine[];
+        adjustmentLines: ReconLine[];
+      }
     >();
     for (const l of run.lines) {
       if (l.source !== "stripe") continue;
@@ -43,14 +48,22 @@ export default function Step3Reconcile(props: {
       const row = map.get(day) || {
         stripeTotal: 0,
         count: 0,
-        hasIssue: false,
         issueLines: [],
+        adjustmentLines: [],
       };
       row.stripeTotal += l.amount;
       row.count += 1;
       if (!l.matched) {
-        row.hasIssue = true;
-        row.issueLines.push(l);
+        // A "STRIPE PAYOUT ADJUSTMENT" line is expected, harmless fee/timing
+        // rounding - its whole purpose is to make the day's total balance
+        // exactly, so it shouldn't itself trigger "needs attention". Only
+        // genuine failures (couldn't match a payout, or matched one with no
+        // donation detail) are real issues.
+        if (l.description === "STRIPE PAYOUT ADJUSTMENT") {
+          row.adjustmentLines.push(l);
+        } else {
+          row.issueLines.push(l);
+        }
       }
       map.set(day, row);
     }
@@ -67,7 +80,7 @@ export default function Step3Reconcile(props: {
           ...row,
           bankTotal,
           variance,
-          hasIssue: row.hasIssue || Math.abs(variance) >= 0.01,
+          hasIssue: row.issueLines.length > 0 || Math.abs(variance) >= 0.01,
         };
       })
       .sort((a, b) => a.day.localeCompare(b.day));
@@ -150,6 +163,12 @@ export default function Step3Reconcile(props: {
                           </span>
                         ) : (
                           <span className="pill bank">✓ Matched</span>
+                        )}
+                        {row.adjustmentLines.length > 0 && (
+                          <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>
+                            includes ${row.adjustmentLines[0].amount.toFixed(2)} fee/timing
+                            adjustment
+                          </div>
                         )}
                       </td>
                     </tr>
