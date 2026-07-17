@@ -109,7 +109,18 @@ export default function Step1BankUpload(props: {
       {run && (
         <>
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>Preview ({run.lines.length} lines)</h3>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>Preview ({run.lines.length} lines)</h3>
+              <button className="btn" onClick={props.onNext}>
+                Next: Stripe upload
+              </button>
+            </div>
             <p className="subtitle">
               Click a row for the full editor, or pick a category directly in the table.
               Lines with no data yet (like remote deposits) are fine to leave as-is.
