@@ -121,6 +121,7 @@ export default function Accrual() {
                 <th>Date</th>
                 <th>Description</th>
                 <th>Statement Description</th>
+                <th>Bank Description</th>
                 <th>Bank Account</th>
                 <th>Method</th>
                 <th className="num">Amount</th>
@@ -134,11 +135,12 @@ export default function Accrual() {
                   bankAccounts={bankAccounts}
                   onUpdate={onUpdate}
                   onOpen={setOpenEntryId}
+                  showBankDescription
                 />
               ))}
               {visibleEntries.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ color: "var(--muted)" }}>
+                  <td colSpan={8} style={{ color: "var(--muted)" }}>
                     {entries.length === 0
                       ? "No entries yet — click Quick Add to enter one."
                       : "No rows match this filter."}

@@ -13,6 +13,7 @@ function RegisterRow(props: {
   bankAccounts: BankAccount[];
   onUpdate: (id: number, patch: LedgerEntryUpdate) => void;
   onOpen: (id: number) => void;
+  showBankDescription?: boolean;
 }) {
   const e = props.entry;
   const bankAccountName =
@@ -41,6 +42,13 @@ function RegisterRow(props: {
           <span style={{ color: "var(--red)" }}>— uncategorized —</span>
         )}
       </td>
+      {props.showBankDescription && (
+        <td
+          style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {e.bank_description || <span style={{ color: "var(--muted)" }}>—</span>}
+        </td>
+      )}
       <td style={{ whiteSpace: "nowrap" }}>{bankAccountName || "—"}</td>
       <td>{e.method || "—"}</td>
       <td className="num" style={{ whiteSpace: "nowrap" }}>
