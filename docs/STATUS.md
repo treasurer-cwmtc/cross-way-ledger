@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/cross-way-ledger
 **Local path (Windows):** `C:\Users\nivin\repo`
-**Last updated:** 2026-07-14 (Finance UI visual redesign)
+**Last updated:** 2026-07-17 (Google Sign-In + per-page permissions)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -288,8 +288,42 @@ _Where we left off — read this first when resuming in a new session._
     before. Verified live across Home, Actual, Budget, Config, and Income
     Statement - all render correctly, detail popups/modals still layer
     correctly over the new shell.
+- ✅ **Upload Wizard live-feedback fixes** - readable dropdowns (portaled
+  `AccountPicker`, fixes clipping inside scrollable tables), category column
+  width, bank/keyword rule fields editable, sortable columns, Step 3
+  expandable rows, evenly-spaced stepper, file input styling, "Next"
+  buttons at top of tables, and a real bug fix: fee/timing adjustment lines
+  no longer incorrectly flagged "needs attention" (tracked separately from
+  genuine unmatched lines).
+- ✅ **Accrual Bank Description column** - added after Statement Description
+  on the Accrual register only, via an opt-in `showBankDescription` prop on
+  the shared `RegisterRow` component (Actual/Reconciliation unaffected).
+- ✅ **Renamed the app to "Cross Way Ledger"** - page title, FastAPI title,
+  `package.json`, README, docs, deployment guide, CI image tags, and the
+  GitHub repo itself (`treasurer-cwmtc/Tracker` → `treasurer-cwmtc/cross-way-ledger`,
+  old URL still redirects).
+- ✅ **Google Drive receipt attachment** - attach a receipt to any Actual or
+  Accrual entry via the Google Picker (upload new or pick existing,
+  `drive.file` scope only). New uploads are filed under a dated
+  `Cross Way Ledger Receipts/<year>` folder based on the entry's posted
+  date; attaching also fills in Check/Invoice Name with the file's name.
+  New **Link Receipts** tool (Setup nav) bulk-attaches a batch of
+  pre-existing invoice files to their matching entries across both
+  ledgers, auto-matched by exact Check/Invoice Name, with manual
+  override for anything that doesn't match exactly.
+- ✅ **Google Sign-In (additive) + per-page permissions** - sign in with a
+  `crosswaymtc.org` Google account alongside the existing admin
+  username/password login (kept intentionally, for testing); accounts must
+  be pre-added by an admin (by email) before that email can sign in.
+  New Permissions section on the Users page grants each user specific
+  pages, or full admin, enforced on the backend (`require_permission`
+  dependency per router) not just hidden in the nav - shared read-only
+  lookups (Chart of Accounts, Bank Accounts) stay open to any authenticated
+  user so pickers on other pages keep working. Add User form redesigned
+  with a Local/Google account-type dropdown; admin status is granted only
+  via Permissions, not at creation time.
 
-**Tests:** 39 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 58 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---
@@ -298,25 +332,10 @@ _Where we left off — read this first when resuming in a new session._
 
 Tracked as issues on the repo. Suggested order:
 
-- **Google Drive integration** (new ask) — attach a receipt to a ledger entry
-  (Actual/Accrual/Budget's `TransactionModal`) by either uploading a new file to
-  Drive or picking an existing one via the **Google Picker API**; store only
-  `{file_id, web_view_link, name}` on the entry (no file copy in our own
-  storage), and clicking it opens `web_view_link` in a new tab. Needs a Google
-  Cloud OAuth client + Picker-restricted API key (`drive.file` scope only,
-  least-privilege) — one-time manual setup in Google Cloud Console, not
-  something automatable from here. Sets up the same OAuth client for the
-  **Google Sign-In** work below, so provision both scopes
-  (`openid`/`email`/`profile` + `drive.file`) together even though Sign-In
-  comes later.
-- **Google Sign-In** (replaces password auth, decided) — login via the
-  `crosswaymtc.org` Google Workspace domain, ideally with the OAuth consent
-  screen set to **Internal** (Workspace-only, no Google app review needed) so
-  only church accounts can ever sign in; if Internal isn't available, the
-  backend must independently verify the ID token's `hd` claim rather than
-  relying on the consent screen alone. Shares the OAuth client with the Drive
-  work above. Retires `backend/app/security.py`'s username/password + JWT path
-  rather than running alongside it.
+- **Database normalization + move to a robust production database** (new
+  ask, in progress) — audit the schema for normalization issues and get off
+  ad hoc SQLite `ALTER TABLE` migrations onto something durable (Postgres +
+  real migrations) for actual production use, not just local-POC SQLite.
 - **Auditor-specific screens** (phase 4 of the finance-UI push,
   later/separate ask) — a read-only, audit-focused view; likely wants the
   Config tab's Audit Validation date range once it exists. _Recommended

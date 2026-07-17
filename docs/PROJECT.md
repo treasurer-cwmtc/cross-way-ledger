@@ -408,7 +408,9 @@ quick overview - `GET /api/dashboard`
 
 ### Data model (tables)
 
-- `users` — login accounts (username, PBKDF2 password hash, is_admin, active).
+- `users` — login accounts (username, PBKDF2 password hash, optional email for
+  Google Sign-In, is_admin, active, `permissions` JSON list of granted page
+  keys - ignored for admins, who always have full access).
 - `statement_categories` / `statement_items` / `chart_of_accounts` — the
   3-level Chart of Accounts hierarchy (see above).
 - `category_rules` — editable rules (`stripe_fund` | `bank_keyword`).
@@ -428,8 +430,10 @@ quick overview - `GET /api/dashboard`
 
 ### API surface
 
-- `POST /api/auth/login` (form) → JWT; `GET /api/auth/me`;
-  `POST /api/auth/change-password`; admin-only `GET/POST/DELETE /api/auth/users`
+- `POST /api/auth/login` (form) → JWT; `POST /api/auth/google` (Google
+  Sign-In, ID token → JWT); `GET /api/auth/me`; `POST /api/auth/change-password`;
+  admin-only `GET/POST/DELETE /api/auth/users`,
+  `PUT /api/auth/users/{id}/permissions`
 - `POST /api/reconcile` (multipart: `bank_file`, `stripe_file`) → run + lines
   (the Upload tab)
 - `GET  /api/runs`, `GET /api/runs/{id}`, `GET /api/runs/{id}/export.csv`
