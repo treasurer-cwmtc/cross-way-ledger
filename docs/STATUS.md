@@ -322,6 +322,13 @@ _Where we left off — read this first when resuming in a new session._
   user so pickers on other pages keep working. Add User form redesigned
   with a Local/Google account-type dropdown; admin status is granted only
   via Permissions, not at creation time.
+- ✅ **Fixed Google Sign-In failing with "Invalid Google sign-in token"** -
+  the token verification library defaulted to zero tolerance for clock
+  drift between this machine and Google's servers, so even a 1-second
+  difference caused a hard rejection. Added a 10-second `clock_skew`
+  tolerance (standard practice for this) and server-side logging of the
+  real verification failure reason, so a future auth issue is faster to
+  diagnose than this one was.
 
 **Tests:** 58 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
@@ -332,10 +339,16 @@ _Where we left off — read this first when resuming in a new session._
 
 Tracked as issues on the repo. Suggested order:
 
-- **Database normalization + move to a robust production database** (new
-  ask, in progress) — audit the schema for normalization issues and get off
-  ad hoc SQLite `ALTER TABLE` migrations onto something durable (Postgres +
-  real migrations) for actual production use, not just local-POC SQLite.
+- **Database normalization + move to a robust production database**
+  ([#23](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/23),
+  **on hold pending Docker Desktop install**) — full plan already written
+  (see issue for the complete breakdown): real foreign keys on every
+  `account_no` column (currently unenforced), fix a delete-account gap that
+  can silently orphan ledger entries, remove `ChartOfAccount`'s denormalized
+  name/number copies in favor of deriving them live, set up Alembic for
+  real versioned migrations (replacing the ad hoc `ALTER TABLE` scripts used
+  all session), and actually stand up + verify against Postgres (provisioned
+  in `docker-compose.yml` but never actually run against).
 - **Auditor-specific screens** (phase 4 of the finance-UI push,
   later/separate ask) — a read-only, audit-focused view; likely wants the
   Config tab's Audit Validation date range once it exists. _Recommended
