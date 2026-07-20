@@ -355,3 +355,149 @@ class BudgetEntry(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class PledgeCampaign(Base):
+    """A fundraising pledge campaign (e.g. "Phase 2 Building Project").
+    Reusable for future campaigns - nothing here is hardcoded to Phase 2.
+    """
+
+    __tablename__ = "pledge_campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), unique=True)
+    # Matches the `fund` column in imported donation files - how a
+    # campaign's donations get isolated from general giving.
+    fund_name: Mapped[str] = mapped_column(String(120))
+    goal_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    # What was already raised toward this fund before formal pledge
+    # tracking began - entered once on the import wizard, not derived.
+    starting_balance: Mapped[float] = mapped_column(Float, default=0.0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    pledges: Mapped[list["Pledge"]] = relationship(
+        back_populates="campaign", cascade="all, delete-orphan"
+    )
+    donations: Mapped[list["PledgeCampaignDonation"]] = relationship(
+        back_populates="campaign", cascade="all, delete-orphan"
+    )
+
+
+class Donor(Base):
+    """The persistent donor list from the Giving App (Planning Center),
+    reusable for any reporting - not scoped to a single campaign. Imported/
+    refreshed via the pledge campaign wizard, upserted by donor_id.
+    """
+
+    __tablename__ = "donors"
+
+    donor_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    donor_number: Mapped[str] = mapped_column(String(40), default="")
+    first_name: Mapped[str] = mapped_column(String(120), default="")
+    last_name: Mapped[str] = mapped_column(String(120), default="")
+    email: Mapped[str] = mapped_column(String(255), default="", index=True)
+    phone_number: Mapped[str] = mapped_column(String(40), default="")
+    city: Mapped[str] = mapped_column(String(120), default="")
+    state: Mapped[str] = mapped_column(String(40), default="")
+    zip_code: Mapped[str] = mapped_column(String(20), default="")
+    joint_giver_id: Mapped[str] = mapped_column(String(40), default="")
+    joint_giver_first_name: Mapped[str] = mapped_column(String(120), default="")
+    joint_giver_last_name: Mapped[str] = mapped_column(String(120), default="")
+    first_donated: Mapped[date | None] = mapped_column(Date, nullable=True)
+    donation_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_given: Mapped[float] = mapped_column(Float, default=0.0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Pledge(Base):
+    """One pledge form submission against a campaign. (campaign_id,
+    submission_id) is unique so re-importing the same export doesn't
+    duplicate rows. Matching to a Donor happens separately via
+    PledgeDonorMatch, since a submission may not resolve to any donor yet.
+    """
+
+    __tablename__ = "pledges"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "submission_id", name="uq_pledge_submission"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("pledge_campaigns.id"), index=True)
+    submission_id: Mapped[str] = mapped_column(String(60))
+    first_name: Mapped[str] = mapped_column(String(120), default="")
+    last_name: Mapped[str] = mapped_column(String(120), default="")
+    email: Mapped[str] = mapped_column(String(255), default="")
+    date_submitted: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    initial_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    monthly_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    contact_method: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    campaign: Mapped[PledgeCampaign] = relationship(back_populates="pledges")
+    match: Mapped["PledgeDonorMatch | None"] = relationship(
+        back_populates="pledge", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class PledgeDonorMatch(Base):
+    """Links a Pledge to a Donor - the identity-resolution equivalent of
+    CategoryRule, but one-to-one rather than pattern-to-many. Auto-matching
+    (by email against Donor.email) runs on every import and fills this in
+    when possible; once a match exists, re-running the matcher never
+    overwrites it - only a treasurer's explicit manual re-link changes it.
+
+    donor_id is nullable: most pledges start unmatched (no gift yet, so no
+    Donor row exists for them), which is a normal, expected state, not an
+    error - auto-matching picks it up automatically once that person does
+    give and shows up in a future Donor import.
+    """
+
+    __tablename__ = "pledge_donor_matches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pledge_id: Mapped[int] = mapped_column(ForeignKey("pledges.id"), unique=True, index=True)
+    donor_id: Mapped[str | None] = mapped_column(ForeignKey("donors.donor_id"), nullable=True)
+    match_source: Mapped[str] = mapped_column(String(10), default="auto")  # auto | manual
+    matched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    pledge: Mapped[Pledge] = relationship(back_populates="match")
+    donor: Mapped[Donor | None] = relationship()
+
+
+class PledgeCampaignDonation(Base):
+    """One donation imported against a campaign (pre-filtered to the
+    campaign's fund_name at import time). Aggregated per donor for the
+    dashboard/status views. dedup_key (the Giving App's own transaction id)
+    blocks re-importing the same donation twice.
+    """
+
+    __tablename__ = "pledge_campaign_donations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("pledge_campaigns.id"), index=True)
+    dedup_key: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    donor_id: Mapped[str | None] = mapped_column(
+        ForeignKey("donors.donor_id"), nullable=True, index=True
+    )
+    received_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    net_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    method: Mapped[str] = mapped_column(String(40), default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    campaign: Mapped[PledgeCampaign] = relationship(back_populates="donations")
+    donor: Mapped[Donor | None] = relationship()

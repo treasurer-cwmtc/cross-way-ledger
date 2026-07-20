@@ -58,6 +58,10 @@ GRANTABLE_PERMISSIONS = {
     "accounts",
     "link-receipts",
     "config",
+    "pledge-campaign-status",
+    "pledge-campaign-pledges",
+    "pledge-campaign-actuals",
+    "donors",
 }
 
 
@@ -68,6 +72,19 @@ def require_permission(key: str):
 
     def _check(user: User = Depends(get_current_user)) -> User:
         if user.is_admin or key in (user.permissions or []):
+            return user
+        raise HTTPException(status_code=403, detail="You don't have access to this page.")
+
+    return _check
+
+
+def require_any_permission(*keys: str):
+    """Like require_permission, but passes if the user holds any one of
+    several keys - e.g. the donor lookup is used both by the Donors config
+    page and by the Pledges page's donor picker, each gated separately."""
+
+    def _check(user: User = Depends(get_current_user)) -> User:
+        if user.is_admin or set(keys) & set(user.permissions or []):
             return user
         raise HTTPException(status_code=403, detail="You don't have access to this page.")
 

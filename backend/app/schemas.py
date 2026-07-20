@@ -498,3 +498,102 @@ class DashboardOut(BaseModel):
     expense_ytd: float
     expense_plan_ytd: float
     last_entry_at: datetime | None
+
+
+# --------------------------------------------------------------------------- #
+# Pledge Campaigns
+# --------------------------------------------------------------------------- #
+class PledgeCampaignOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    fund_name: str
+    goal_amount: float
+    starting_balance: float
+    is_active: bool
+
+
+class PledgeCampaignCreate(BaseModel):
+    name: str
+    fund_name: str
+    goal_amount: float = 0.0
+    starting_balance: float = 0.0
+
+
+class PledgeCampaignUpdate(BaseModel):
+    name: str | None = None
+    fund_name: str | None = None
+    goal_amount: float | None = None
+    starting_balance: float | None = None
+    is_active: bool | None = None
+
+
+class DonorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    donor_id: str
+    donor_number: str
+    first_name: str
+    last_name: str
+    email: str
+    phone_number: str
+    city: str
+    state: str
+    donation_count: int
+    total_given: float
+
+
+class PledgeOut(BaseModel):
+    id: int
+    campaign_id: int
+    submission_id: str
+    first_name: str
+    last_name: str
+    email: str
+    date_submitted: datetime | None
+    initial_amount: float
+    due_date: date | None
+    monthly_amount: float
+    contact_method: str
+    donor_id: str | None
+    match_source: str | None
+    actual_amount: float
+
+
+class PledgeMatchUpdate(BaseModel):
+    donor_id: str | None = None  # explicit null clears the match
+
+
+class PledgeImportSummary(BaseModel):
+    donors_imported: int
+    pledges_imported: int
+    donations_imported: int
+    pledges_matched: int
+    pledges_unmatched: int
+
+
+class PledgeCampaignDonationOut(BaseModel):
+    id: int
+    campaign_id: int
+    donor_id: str | None
+    received_date: date | None
+    amount: float
+    net_amount: float
+    method: str
+
+
+class PledgeDashboardPoint(BaseModel):
+    date: date
+    running_total: float
+
+
+class PledgeDashboardOut(BaseModel):
+    campaign: PledgeCampaignOut
+    total_pledged: float
+    total_actual: float
+    total_raised: float
+    pledge_count: int
+    goal_amount: float
+    percent_of_goal: float
+    timeline: list[PledgeDashboardPoint]
