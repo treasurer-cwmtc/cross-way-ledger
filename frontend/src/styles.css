@@ -709,3 +709,43 @@ tr.register-row td {
   color: var(--text);
   font-weight: 600;
 }
+
+.goal-progress-track {
+  background: var(--primary-light);
+  border-radius: 999px;
+  height: 14px;
+  overflow: hidden;
+  margin: 10px 0 6px;
+}
+
+.goal-progress-fill {
+  background: var(--primary);
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.goal-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.match-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.match-badge.matched {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.match-badge.unmatched {
+  background: #f3f4f6;
+  color: var(--muted);
+}

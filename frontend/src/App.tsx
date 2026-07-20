@@ -13,8 +13,13 @@ import LinkReceipts from "./pages/LinkReceipts";
 import Rules from "./pages/Rules";
 import Accounts from "./pages/Accounts";
 import Config from "./pages/Config";
+import Donors from "./pages/Donors";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
+import PledgeCampaignStatus from "./pages/PledgeCampaigns/Status";
+import PledgeCampaignPledges from "./pages/PledgeCampaigns/Pledges";
+import PledgeCampaignActuals from "./pages/PledgeCampaigns/Actuals";
+import PledgeCampaignImportWizard from "./pages/PledgeCampaigns/ImportWizard";
 
 type Tab =
   | "home"
@@ -28,7 +33,12 @@ type Tab =
   | "accounts"
   | "link-receipts"
   | "config"
-  | "users";
+  | "users"
+  | "pledge-campaign-status"
+  | "pledge-campaign-pledges"
+  | "pledge-campaign-actuals"
+  | "pledge-campaign-import"
+  | "donors";
 
 interface NavItem {
   tab: Tab;
@@ -60,11 +70,21 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Pledge Campaigns",
+    items: [
+      { tab: "pledge-campaign-status", label: "Phase 2 Status" },
+      { tab: "pledge-campaign-pledges", label: "Phase 2 Pledges" },
+      { tab: "pledge-campaign-actuals", label: "Phase 2 Actuals" },
+      { tab: "pledge-campaign-import", label: "Import Data" },
+    ],
+  },
+  {
     label: "Setup",
     items: [
       { tab: "rules", label: "Rules" },
       { tab: "accounts", label: "Chart of Accounts" },
       { tab: "link-receipts", label: "Link Receipts" },
+      { tab: "donors", label: "Giving App - Donors" },
       { tab: "config", label: "Config" },
       { tab: "users", label: "Users", adminOnly: true },
     ],
@@ -117,6 +137,11 @@ export default function App() {
             const items = group.items.filter((item) => {
               if (item.adminOnly) return user.is_admin;
               if (item.tab === "home") return true;
+              // Import writes to the same data the Status dashboard reads,
+              // so it's gated by that permission rather than its own key.
+              if (item.tab === "pledge-campaign-import") {
+                return user.is_admin || user.permissions.includes("pledge-campaign-status");
+              }
               return user.is_admin || user.permissions.includes(item.tab);
             });
             if (items.length === 0) return null;
@@ -171,6 +196,11 @@ export default function App() {
           {tab === "accounts" && <Accounts />}
           {tab === "link-receipts" && <LinkReceipts />}
           {tab === "config" && <Config />}
+          {tab === "donors" && <Donors />}
+          {tab === "pledge-campaign-status" && <PledgeCampaignStatus />}
+          {tab === "pledge-campaign-pledges" && <PledgeCampaignPledges />}
+          {tab === "pledge-campaign-actuals" && <PledgeCampaignActuals />}
+          {tab === "pledge-campaign-import" && <PledgeCampaignImportWizard />}
           {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
         </div>
       </main>
