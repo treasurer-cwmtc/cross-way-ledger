@@ -13,9 +13,21 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from .database import Base
+
+
+def _normalize_account_no(instance, key, value):
+    """Shared by every `account_no` FK column below: "" (the frontend's
+    "uncategorized" sentinel - see AccountPicker.tsx) can never be a real
+    foreign key value, so treat it the same as not set. Fires on every
+    assignment path (constructor kwargs, direct attribute set, bulk
+    setattr loops), so nothing has to remember to do this at each call
+    site - only the handful of read sites that surface account_no back to
+    the API need to coerce None -> "" again, keeping the wire format
+    unchanged."""
+    return value or None
 
 
 class User(Base):
@@ -84,7 +96,14 @@ class StatementItem(Base):
     no: Mapped[str] = mapped_column(String(2))
     name: Mapped[str] = mapped_column(String(120))
 
-    statement_category: Mapped[StatementCategory] = relationship(back_populates="items")
+    # selectin: StatementItem -> StatementCategory is read on essentially
+    # every ChartOfAccount access (see ChartOfAccount's derived properties
+    # below) - eager-loading it here means every call site that already
+    # queries ChartOfAccount gets it for free, with no per-query
+    # selectinload(...) to remember.
+    statement_category: Mapped[StatementCategory] = relationship(
+        back_populates="items", lazy="selectin"
+    )
     accounts: Mapped[list["ChartOfAccount"]] = relationship(
         back_populates="parent_item", cascade="all, delete-orphan"
     )
@@ -98,19 +117,20 @@ class ChartOfAccount(Base):
     statement_detail_no auto-increments within its parent StatementItem (or
     is "00" when the detail name is left blank). See services/coa_numbering.py.
 
-    category/statement_category/statement_item and their *_no codes are
-    denormalized copies of the parent chain (kept in sync at creation time)
-    so the reconciler/categorizer/rules UI can read a flat row without joins.
+    statement_category/statement_category_no/statement_item/statement_item_no
+    are *not* stored here - they're derived live from `parent_item` below,
+    the same live-lookup pattern every ledger table in this schema uses for
+    its own Chart-of-Accounts-derived fields (see ReconciliationEntry) - so
+    they can never drift out of sync with the Chart of Accounts. Cheap to
+    do: StatementItem.statement_category is eager-loaded (lazy="selectin"),
+    so reading these properties never triggers a query on top of whatever
+    already loaded this row.
     """
 
     __tablename__ = "chart_of_accounts"
     account_no: Mapped[str] = mapped_column(String(20), primary_key=True)
     statement_item_id: Mapped[int] = mapped_column(ForeignKey("statement_items.id"))
     category: Mapped[str] = mapped_column(String(50))  # Budget | Expense | Income
-    statement_category: Mapped[str] = mapped_column(String(120), default="")
-    statement_category_no: Mapped[str] = mapped_column(String(2), default="")
-    statement_item: Mapped[str] = mapped_column(String(120), default="")
-    statement_item_no: Mapped[str] = mapped_column(String(2), default="")
     statement_detail: Mapped[str] = mapped_column(String(120), default="")
     statement_detail_no: Mapped[str] = mapped_column(String(2), default="")
     statement_description: Mapped[str] = mapped_column(String(300))
@@ -120,7 +140,25 @@ class ChartOfAccount(Base):
     is_youth_chaplain_share: Mapped[str] = mapped_column(String(10), default="")
     is_missions: Mapped[str] = mapped_column(String(10), default="")
 
-    parent_item: Mapped[StatementItem] = relationship(back_populates="accounts")
+    parent_item: Mapped[StatementItem] = relationship(
+        back_populates="accounts", lazy="selectin"
+    )
+
+    @property
+    def statement_item(self) -> str:
+        return self.parent_item.name
+
+    @property
+    def statement_item_no(self) -> str:
+        return self.parent_item.no
+
+    @property
+    def statement_category(self) -> str:
+        return self.parent_item.statement_category.name
+
+    @property
+    def statement_category_no(self) -> str:
+        return self.parent_item.statement_category.no
 
 
 class CategoryRule(Base):
@@ -139,7 +177,7 @@ class CategoryRule(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rule_type: Mapped[str] = mapped_column(String(20), index=True)
     pattern: Mapped[str] = mapped_column(String(200))
-    account_no: Mapped[str] = mapped_column(String(20))
+    account_no: Mapped[str] = mapped_column(ForeignKey("chart_of_accounts.account_no"))
     priority: Mapped[int] = mapped_column(Integer, default=100)
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -242,7 +280,9 @@ class ReconciliationEntry(Base):
     date_posted: Mapped[date | None] = mapped_column(Date, nullable=True)
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
-    account_no: Mapped[str] = mapped_column(String(20), default="")
+    account_no: Mapped[str | None] = mapped_column(
+        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+    )
     description: Mapped[str] = mapped_column(String(300), default="")
     bank_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("bank_accounts.id"), nullable=True
@@ -280,6 +320,10 @@ class ReconciliationEntry(Base):
 
     bank_account: Mapped[BankAccount | None] = relationship()
 
+    @validates("account_no")
+    def _validate_account_no(self, key, value):
+        return _normalize_account_no(self, key, value)
+
 
 class AccrualEntry(Base):
     """One row of the Accrual ledger (the "Accrual" tab) - same shape as
@@ -297,7 +341,9 @@ class AccrualEntry(Base):
     date_posted: Mapped[date | None] = mapped_column(Date, nullable=True)
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
-    account_no: Mapped[str] = mapped_column(String(20), default="")
+    account_no: Mapped[str | None] = mapped_column(
+        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+    )
     description: Mapped[str] = mapped_column(String(300), default="")
     bank_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("bank_accounts.id"), nullable=True
@@ -326,6 +372,10 @@ class AccrualEntry(Base):
 
     bank_account: Mapped[BankAccount | None] = relationship()
 
+    @validates("account_no")
+    def _validate_account_no(self, key, value):
+        return _normalize_account_no(self, key, value)
+
 
 class BudgetEntry(Base):
     """One planned-amount line for a Budget-category (B-prefixed) account.
@@ -348,13 +398,19 @@ class BudgetEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    account_no: Mapped[str] = mapped_column(String(20), default="")
+    account_no: Mapped[str | None] = mapped_column(
+        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+    )
     description: Mapped[str] = mapped_column(String(300), default="")
     amount: Mapped[float] = mapped_column(Float, default=0.0)
     notes: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    @validates("account_no")
+    def _validate_account_no(self, key, value):
+        return _normalize_account_no(self, key, value)
 
 
 class PledgeCampaign(Base):

@@ -21,7 +21,7 @@ def _to_out(entry: BudgetEntry, coa_by_no: dict[str, ChartOfAccount]) -> BudgetE
     return BudgetEntryOut(
         id=entry.id,
         transaction_date=entry.transaction_date,
-        account_no=entry.account_no,
+        account_no=entry.account_no or "",
         description=entry.description,
         amount=entry.amount,
         notes=entry.notes,

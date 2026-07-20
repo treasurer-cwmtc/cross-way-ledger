@@ -184,7 +184,7 @@ erDiagram
     CATEGORY_RULES {
         int id PK
         string pattern "matches a bank line or Stripe fund"
-        string account_no "assigns this account"
+        string account_no FK "assigns this account"
     }
 
     STATEMENT_CATEGORIES ||--o{ STATEMENT_ITEMS : has
@@ -246,10 +246,11 @@ erDiagram
   keep this readable).
 - `RECON_RUNS` is the *preview* output of one Upload wizard run - pushing it
   into Actual is what creates the persistent `RECONCILIATION_ENTRIES` rows.
-- The `account_no` links in both diagrams are **logical today, not yet
-  enforced by the database** - the fix is planned in
-  [issue #23](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/23)
-  (on hold pending a Docker install).
+- The `account_no` links in both diagrams are real, enforced foreign key
+  constraints (nullable on the three ledgers - `NULL` means uncategorized).
+  Schema changes go through Alembic migrations now, not hand-written
+  `ALTER TABLE` statements - see
+  [DEPLOYMENT.md](DEPLOYMENT.md#7-database-migrations).
 - Not pictured: `USERS` and `APP_SETTINGS` - standalone tables that
   configure the app itself, not tied to any of the above.
 

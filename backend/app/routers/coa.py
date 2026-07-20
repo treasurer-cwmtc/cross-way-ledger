@@ -4,7 +4,16 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_current_user, require_permission
-from ..models import CategoryRule, ChartOfAccount, StatementCategory, StatementItem, User
+from ..models import (
+    AccrualEntry,
+    BudgetEntry,
+    CategoryRule,
+    ChartOfAccount,
+    ReconciliationEntry,
+    StatementCategory,
+    StatementItem,
+    User,
+)
 from ..schemas import (
     AccountNoPreview,
     ChartOfAccountCreate,
@@ -174,10 +183,6 @@ def create_account(
         account_no=account_no,
         statement_item_id=item.id,
         category=category_row.category,
-        statement_category=category_row.name,
-        statement_category_no=category_row.no,
-        statement_item=item.name,
-        statement_item_no=item.no,
         statement_detail=detail,
         statement_detail_no=detail_no,
         statement_description=description,
@@ -227,5 +232,15 @@ def delete_account(
             status_code=400,
             detail="This account is used by one or more categorization rules; remove those rules first.",
         )
+    for model, label in (
+        (ReconciliationEntry, "Reconciliation"),
+        (AccrualEntry, "Accrual"),
+        (BudgetEntry, "Budget"),
+    ):
+        if db.scalar(select(model).where(model.account_no == account_no).limit(1)) is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"This account is used by one or more {label} entries; recategorize those first.",
+            )
     db.delete(account)
     db.commit()

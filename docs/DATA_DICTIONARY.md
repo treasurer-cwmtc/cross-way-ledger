@@ -78,8 +78,8 @@ entry ultimately categorizes against.
 | `account_no` | string(20) | PK | Derived, never hand-typed: `<TypePrefix><CategoryNo><ItemNo><DetailNo>` (Type prefix is B/E/I). See `backend/app/services/coa_numbering.py`. |
 | `statement_item_id` | integer | FK -> `statement_items.id`, NOT NULL | |
 | `category` | string(50) | NOT NULL | Copy of the Type (Budget/Expense/Income) for convenient reads. |
-| `statement_category` / `statement_category_no` | string(120) / string(2) | default `""` | Copies of the parent Statement Category's name/number. **Known normalization gap** - currently stored rather than derived live via join, the only place in the schema that does this. Tracked in [issue #23](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/23). |
-| `statement_item` / `statement_item_no` | string(120) / string(2) | default `""` | Same gap, one level up - copies of the parent Statement Item's name/number. |
+| `statement_category` / `statement_category_no` | *(not a column)* | derived | Read-only Python properties, not stored - derived live from `parent_item.statement_category` on every read, so they can never drift out of sync with the Chart of Accounts hierarchy. |
+| `statement_item` / `statement_item_no` | *(not a column)* | derived | Same pattern, one level up - derived live from `parent_item`. |
 | `statement_detail` | string(120) | default `""` | The Detail level's own name - optional ("no subdivision" account when blank). |
 | `statement_detail_no` | string(2) | default `""` | Auto-increments within its parent Statement Item, never reused. |
 | `statement_description` | string(300) | NOT NULL | Human-readable full label, auto-built from the chain unless overridden. |
@@ -100,7 +100,7 @@ User-editable rules that auto-categorize a line during Upload.
 | `id` | integer | PK, auto-increment | |
 | `rule_type` | string(20) | indexed, NOT NULL | `bank_keyword` (matches a bank line's Description) or `stripe_fund` (matches a Stripe donation's fund name). |
 | `pattern` | string(200) | NOT NULL | The text to match against. |
-| `account_no` | string(20) | NOT NULL, **not yet a real FK** | The account to assign on a match. Logically points at `chart_of_accounts.account_no`; a real foreign key constraint is planned in issue #23. |
+| `account_no` | string(20) | FK -> `chart_of_accounts.account_no`, NOT NULL | The account to assign on a match. |
 | `priority` | integer | default `100` | Lower number wins when multiple rules match the same line. |
 | `active` | boolean | default `true` | Inactive rules are ignored during categorization but kept for reference. |
 | `created_at` | datetime (tz-aware) | server default: now | |
@@ -174,7 +174,7 @@ completed Upload run (deduped via `dedup_key`), then freely hand-edited.
 | `transaction_date` / `date_posted` | date | nullable | Real `Date` columns (unlike `recon_lines`). |
 | `reconciled` | boolean | default `false` | Manually checked off once verified against the bank statement. |
 | `is_reimbursement` | boolean | default `false` | |
-| `account_no` | string(20) | default `""`, **not yet a real FK** | The only source of truth for this entry's categorization - Statement Description and every Chart-of-Accounts-derived column shown in the UI are looked up live from this, never stored, so they can't drift. Foreign key constraint planned in issue #23. |
+| `account_no` | string(20) | FK -> `chart_of_accounts.account_no`, nullable | The only source of truth for this entry's categorization - Statement Description and every Chart-of-Accounts-derived column shown in the UI are looked up live from this, never stored, so they can't drift. Nullable = uncategorized; the API still sends/accepts `""` for that state, normalized to `NULL` on write by a shared validator (`models.py::_normalize_account_no`) and coerced back to `""` on read. |
 | `description` | string(300) | default `""` | |
 | `bank_account_id` | integer | FK -> `bank_accounts.id`, nullable | |
 | `method` | string(40) | default `""` | |
@@ -205,7 +205,7 @@ imported bank transaction.
 | `transaction_date` / `date_posted` | date | nullable | |
 | `reconciled` | boolean | default `false` | |
 | `is_reimbursement` | boolean | default `false` | |
-| `account_no` | string(20) | default `""`, **not yet a real FK** | Same live-lookup pattern as `reconciliation_entries`. |
+| `account_no` | string(20) | FK -> `chart_of_accounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as `reconciliation_entries`. |
 | `description` | string(300) | default `""` | |
 | `bank_account_id` | integer | FK -> `bank_accounts.id`, nullable | |
 | `method` | string(40) | default `""` | |
@@ -234,7 +234,7 @@ reporting.
 | --- | --- | --- | --- |
 | `id` | integer | PK, auto-increment | |
 | `transaction_date` | date | nullable | Conventionally Jan 1 of the planned year - `year` is filtered from this, same as every other ledger, with no separate stored year column. |
-| `account_no` | string(20) | default `""`, **not yet a real FK** | Same live-lookup pattern as the other ledgers. |
+| `account_no` | string(20) | FK -> `chart_of_accounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as the other ledgers. |
 | `description` | string(300) | default `""` | |
 | `amount` | float | default `0.0` | Always a plain positive number (no debit/credit sign) - Income Statement reporting takes `abs()` of actual transaction amounts to match. |
 | `notes` | string(300) | default `""` | |
@@ -246,7 +246,9 @@ support, or receipt fields - a planning figure isn't a real transaction._
 ---
 
 _See [ARCHITECTURE.md](ARCHITECTURE.md) for how these tables relate to each
-other visually, and
-[issue #23](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/23)
-for the planned fixes to the gaps called out above (unenforced foreign keys,
-the Chart of Accounts denormalization)._
+other visually. All foreign keys shown above are real, enforced database
+constraints (Postgres enforces these natively - see
+[ARCHITECTURE.md](ARCHITECTURE.md) for why every environment runs the same
+database engine). Schema changes are applied via Alembic migrations
+(`backend/alembic/versions/`), not hand-written `ALTER TABLE` statements -
+see [DEPLOYMENT.md](DEPLOYMENT.md#7-database-migrations)._

@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from .config import get_settings
-from .database import Base, SessionLocal, engine
+from .database import SessionLocal
 from .routers import (
     accrual,
     auth,
@@ -29,7 +31,10 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    # Schema is owned entirely by Alembic now (see `alembic upgrade head` in
+    # the Dockerfile CMD / local dev workflow) - the app no longer creates or
+    # changes tables itself, so a stale schema fails loudly instead of being
+    # silently patched over.
     with SessionLocal() as db:
         seed(db)
     yield
@@ -60,6 +65,17 @@ app.include_router(settings_router.router)
 app.include_router(pledge_campaigns.router)
 app.include_router(donors.router)
 app.include_router(donations.router)
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    # Catches whatever a router didn't already turn into a friendly 400
+    # itself (e.g. a bad account_no rejected by the FK constraint) - a
+    # database constraint violation should never surface as a raw 500.
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "This would violate a database constraint (e.g. an invalid account number)."},
+    )
 
 
 @app.get("/api/health")

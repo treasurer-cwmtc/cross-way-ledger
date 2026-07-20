@@ -33,13 +33,13 @@ def test_create_and_list_entry():
 
 
 def test_multiple_entries_same_account_same_year():
-    a = _create_entry(account_no="B111000", description="Base", amount=500.0)
-    b = _create_entry(account_no="B111000", description="Increase", amount=100.0)
+    a = _create_entry(account_no="B111010", description="Base", amount=500.0)
+    b = _create_entry(account_no="B111010", description="Increase", amount=100.0)
     h = auth_header()
     rows = [
         e
         for e in client.get("/api/budget", headers=h, params={"year": 2026}).json()
-        if e["account_no"] == "B111000"
+        if e["account_no"] == "B111010"
     ]
     ids = {e["id"] for e in rows}
     assert a["id"] in ids and b["id"] in ids
@@ -77,7 +77,7 @@ def test_copy_year():
     h = auth_header()
     # Isolate this test in its own untouched source year.
     _create_entry(account_no="B101310", description="Copy source A", amount=111.0, transaction_date="2030-01-01")
-    _create_entry(account_no="B111000", description="Copy source B", amount=222.0, transaction_date="2030-01-01")
+    _create_entry(account_no="B111010", description="Copy source B", amount=222.0, transaction_date="2030-01-01")
 
     copy = client.post(
         "/api/budget/copy-year", headers=h, json={"from_year": 2030, "to_year": 2031}

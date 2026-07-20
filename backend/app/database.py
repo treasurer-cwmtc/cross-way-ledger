@@ -19,5 +19,12 @@ def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        # A failed commit (e.g. a FOREIGN KEY violation) leaves the session
+        # unusable until rolled back - without this, the global
+        # IntegrityError handler's own response would raise a second,
+        # confusing error when the session closes.
+        db.rollback()
+        raise
     finally:
         db.close()

@@ -3,7 +3,7 @@
 _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/cross-way-ledger
-**Last updated:** 2026-07-19 (dev/test/staging/prod environment build-out)
+**Last updated:** 2026-07-20 (database normalization, issue #23, redone and committed)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack), **[ARCHITECTURE.md](ARCHITECTURE.md)**
@@ -159,6 +159,40 @@ next session.
   resources (previously `crossway-ledger-*`) renamed to `cross-way-ledger-*`
   to match the actual repo/product name.
 
+### Database normalization (issue #23) — redone, this time committed
+
+The work described in "Lesson learned the hard way" above was rebuilt from
+scratch on `feature/db-normalization-alembic`, then rebased twice more: once
+onto this session's new no-SQLite/`ledger_db`/`ledger_user` reality, and
+again onto the Phase 2 pledge-tracking merge (PR #24) once that landed on
+`main` mid-session - the migration was regenerated after that second rebase
+so it captures every table, not just the ones that existed when this work
+started:
+
+- ✅ **Real foreign keys** on every `account_no` column
+  (`reconciliation_entries`, `accrual_entries`, `budget_entries`,
+  `category_rules` → `chart_of_accounts`), nullable on the three ledgers
+  since "uncategorized" is a valid state. A shared `@validates` normalizer
+  converts the frontend's `""` sentinel to `NULL` on write; reads coerce
+  back to `""` so the API contract is unchanged.
+- ✅ **`ChartOfAccount`'s denormalized Statement Category/Item columns**
+  replaced with live-derived `@property`s off the existing `parent_item`
+  relationship.
+- ✅ **`delete_account` ledger-usage guard** — blocks deleting an account in
+  use by any ledger (previously only checked Category Rules), plus a global
+  `IntegrityError` handler so any other constraint violation (e.g. a bad
+  `account_no`) returns a clean 400, not a raw 500.
+- ✅ **One clean Alembic migration** (`8a8d8425fdc6_initial_schema`) -
+  covers every table including Phase 2 pledge tracking (previously created
+  only via `create_all`, with no migration of its own). Verified to
+  bootstrap correctly from a truly empty Postgres database, and applied
+  cleanly against a throwaway database on the same server as the shared dev
+  Postgres (never against `ledger_db` itself, which is live). **This time
+  the migration file is committed to git** - not just applied database
+  state.
+- ✅ **63 tests passing** against real Postgres (5 new integrity tests for
+  the FK rejection and delete guard).
+
 ---
 
 ## Next steps (GitHub issues)
@@ -173,14 +207,6 @@ next session.
   login) before a human is even asked to approve promoting to prod. Would
   have caught the dev crash-loop bug automatically instead of needing a
   manual log check.
-- **Redo the DB normalization work (issue #23) — this time, commit it.** Real
-  foreign keys on every `account_no` column, fix the delete-account gap that
-  can orphan ledger entries, remove `ChartOfAccount`'s denormalized copies,
-  set up Alembic for real versioned migrations. The previous attempt at this
-  was lost (see "Lesson learned" above) because it only ever existed as
-  applied database state, never as committed migration files. Do this one
-  deliberately, in a feature branch, with the migration files themselves as
-  the actual deliverable.
 - **#7 CI/CD auto-deploy to VPS** — done, see this session's work above.
   Close this issue once staging/prod are actually live.
 - **Auditor-specific screens** (phase 4 of the finance-UI push) — a

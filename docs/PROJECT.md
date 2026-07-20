@@ -407,6 +407,11 @@ quick overview - `GET /api/dashboard`
   terminating TLS and publishing the only port reachable from outside the
   box. See `docs/ARCHITECTURE.md` § 5 and `docs/DEPLOYMENT.md` for the full
   dev/staging/prod topology.
+- **Migrations**: Alembic owns the schema (`backend/alembic/`); the app no
+  longer creates or alters tables itself. `alembic upgrade head` runs
+  automatically as part of the Docker container's startup command, and must
+  be run manually after pulling schema changes in local dev (see
+  `docs/DEPLOYMENT.md`).
 
 ### Data model (tables)
 
@@ -414,21 +419,32 @@ quick overview - `GET /api/dashboard`
   Google Sign-In, is_admin, active, `permissions` JSON list of granted page
   keys - ignored for admins, who always have full access).
 - `statement_categories` / `statement_items` / `chart_of_accounts` — the
-  3-level Chart of Accounts hierarchy (see above).
-- `category_rules` — editable rules (`stripe_fund` | `bank_keyword`).
+  3-level Chart of Accounts hierarchy (see above). `chart_of_accounts`'
+  Statement Category/Item name+number are derived live from `statement_items`
+  via a relationship, not stored - they can't drift out of sync.
+- `category_rules` — editable rules (`stripe_fund` | `bank_keyword`);
+  `account_no` is a real foreign key into `chart_of_accounts`.
 - `recon_runs` / `recon_lines` — one Upload run and its ephemeral output
   lines (preview only, not persisted long-term as the source of truth).
 - `bank_accounts` — named bank account lookup (e.g. "Chase Operating").
 - `reconciliation_entries` — the persistent, editable Reconciliation ledger;
-  `dedup_key` prevents re-importing the same transaction twice.
+  `dedup_key` prevents re-importing the same transaction twice. `account_no`
+  is a nullable foreign key into `chart_of_accounts` (NULL = uncategorized;
+  the API still sends/accepts `""` for that state, normalized internally).
 - `accrual_entries` — the persistent, editable Accrual ledger; same shape as
   `reconciliation_entries` minus `dedup_key`/`source_run_id` (always
-  hand-entered, never imported).
+  hand-entered, never imported); same nullable `account_no` foreign key.
 - `app_settings` — generic key/value store (Config tab: `prior_year_end_date`,
   `frequency_*`, `audit_validation_*`).
 - `budget_entries` — the Budget ledger; a Budget-category account can carry
   multiple lines per year (no uniqueness constraint), `year` derived from
-  `transaction_date` like every other ledger.
+  `transaction_date` like every other ledger; same nullable `account_no`
+  foreign key.
+
+All four `account_no` columns above are enforced via real foreign key
+constraints (Postgres enforces these natively). Deleting a Chart of Accounts
+row in use by a rule or any ledger entry is blocked with a friendly error
+(`coa.py::delete_account`) rather than silently orphaning data.
 
 ### API surface
 

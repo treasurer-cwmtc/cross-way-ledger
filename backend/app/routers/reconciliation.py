@@ -35,7 +35,7 @@ def _to_out(
         date_posted=entry.date_posted,
         reconciled=entry.reconciled,
         is_reimbursement=entry.is_reimbursement,
-        account_no=entry.account_no,
+        account_no=entry.account_no or "",
         description=entry.description,
         bank_account_id=entry.bank_account_id,
         bank_account_name=bank_account.name if bank_account else "",

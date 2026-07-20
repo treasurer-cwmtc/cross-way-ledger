@@ -20,7 +20,8 @@ app:
 - **Backend:** FastAPI + SQLAlchemy (Python 3.12)
 - **Database:** PostgreSQL everywhere - dev, CI tests, staging, and prod all run
   the same database engine (SQLite is not used anywhere anymore; see
-  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why)
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why). Schema is managed
+  with Alembic migrations, not hand-written `ALTER TABLE`.
 - **Frontend:** React + Vite + TypeScript
 - **Packaging:** Docker Compose, identical stack in every environment
 - **Reverse proxy / TLS:** Caddy (automatic HTTPS in staging/prod, self-signed
@@ -59,16 +60,22 @@ these**, and set a strong `SECRET_KEY`, before exposing publicly). Admins add mo
 users in the **Users** tab. All API endpoints except `/api/health` and
 `/api/auth/login` require a Bearer token.
 
-## Run locally without Docker (POC)
+## Run locally without Docker (fastest loop)
 
-**Backend** (uses a local SQLite file `recon.db`):
+**Backend** (needs a real Postgres - `docker compose up -d db` starts just the
+`db` service, or point `DATABASE_URL` at any reachable Postgres):
 
 ```powershell
+docker compose up -d db
 cd backend
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m alembic upgrade head   # creates/updates the schema
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
+
+Run `alembic upgrade head` again any time you pull a change that touches
+`app/models.py` - the app no longer creates or alters tables on startup itself.
 
 **Frontend** (proxies `/api` to the backend at :8000):
 
@@ -99,26 +106,27 @@ cd ..
 
 ```
 backend/
+  alembic/             Migrations (schema history) - `alembic upgrade head` applies them
   app/
-    main.py            FastAPI app + startup (create tables, seed)
-    config.py          Settings (DATABASE_URL, CORS)
+    main.py            FastAPI app + startup (runs the seed; schema itself is Alembic's job)
+    config.py          Settings (DATABASE_URL, CORS, auth, Google Sign-In)
     database.py        SQLAlchemy engine/session
-    models.py          SQLAlchemy models (Chart of Accounts, ledgers, users, ...)
+    models.py          User, ChartOfAccount, CategoryRule, ReconRun/ReconLine,
+                        ReconciliationEntry, AccrualEntry, BudgetEntry, ...
     schemas.py         Pydantic request/response models
-    seed.py            Seeds Chart of Accounts (CSV) + default rules
-    routers/           auth, reconcile, reconciliation, accrual, budget,
-                        general_ledger, income_statement, dashboard, rules,
-                        coa, bank_accounts, settings - one file per API area
-    services/          parsers, categorizer, reconciler, coa_numbering,
-                        fiscal, ledger, reporting - core business logic
+    seed.py            Seeds Chart of Accounts (CSV), default rules, seed admin
+    routers/           auth, reconcile, rules, coa, bank_accounts, reconciliation,
+                        accrual, budget, general_ledger, income_statement,
+                        dashboard, settings
+    services/          parsers, categorizer, reconciler, coa_numbering, reporting,
+                        fiscal, ledger  (core logic)
     data/chart_of_accounts.csv
   tests/               pytest + sample CSV fixtures (require Postgres - see Tests)
 frontend/
   src/
-    api.ts             Typed API client
-    pages/             Home, Upload, Reconciliation, Accrual, Budget,
-                        GeneralLedger, IncomeStatement, Accounts, Rules,
-                        Config, Users, LinkReceipts - one folder/file per tab
+    api/               Typed API client, one module per router
+    pages/             Home, Upload, Reconciliation, Accrual, Budget, GeneralLedger,
+                        IncomeStatement, Accounts, Rules, Users, Config, LinkReceipts
 docker-compose.yml        base stack (local dev)
 docker-compose.prod.yml   overlay: adds Caddy, locks down direct port access
 docker/dev-caddy/         dev-only Caddy image (self-signed tls internal)
@@ -127,10 +135,11 @@ scripts/provision-vps.sh  one-time droplet bootstrap (staging/prod)
 
 ## How categorization works
 
-Rules live in the database and are editable on the **Rules** tab. Each rule has a
 `priority` (lower wins). The **Chart of Accounts** tab has three top-down creation
 forms (Category → Item → Account) - see
-[docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) for the full numbering scheme.
+[docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) for the full numbering scheme -
+plus edit/delete on individual accounts (deleting one in use by a rule or ledger
+entry is blocked with a friendly error).
 
 ## Notes / assumptions
 

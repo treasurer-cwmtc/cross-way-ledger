@@ -138,6 +138,10 @@ pushed to GHCR yet):
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
+The `backend` container runs `alembic upgrade head` before starting the API
+(see [Database migrations](#database-migrations) below), then the Chart of
+Accounts and starter rules seed themselves on first boot.
+
 Check health:
 
 ```bash
@@ -257,7 +261,32 @@ box, never in git, and was lost when that state had to be reset.
 
 ---
 
-## 7. Common operations
+## 7. Database migrations
+
+Alembic (`backend/alembic/`) owns the schema - the app no longer creates or
+alters tables on startup itself, so a fresh or drifted database fails loudly
+on boot instead of being silently patched.
+
+- **Docker (dev/staging/prod)**: the `backend` container's start command
+  already runs `alembic upgrade head` before `uvicorn`, so a normal
+  `docker compose up -d --build` after `git pull` applies any new migration
+  automatically.
+- **Local dev without Docker**: after pulling a change that touches
+  `backend/app/models.py`, run migrations by hand before starting the API:
+  ```bash
+  cd backend
+  .venv/Scripts/python.exe -m alembic upgrade head
+  ```
+- New schema changes: edit `backend/app/models.py`, then
+  `alembic revision --autogenerate -m "..."` from `backend/`, review the
+  generated file, then `alembic upgrade head` to apply and verify it locally
+  before committing. Commit the generated migration file itself - it *is*
+  the deliverable, not the applied database state (see
+  [STATUS.md](STATUS.md) for what happens when that gets skipped).
+
+---
+
+## 8. Common operations
 
 ```bash
 # Manual redeploy (e.g. to pick up an .env change)
@@ -275,7 +304,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v
 
 ---
 
-## 8. Security notes
+## 9. Security notes
 
 - No SSH surface beyond key-only access as a non-root `deploy` user;
   `PermitRootLogin`/`PasswordAuthentication` are disabled by the
@@ -292,7 +321,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
