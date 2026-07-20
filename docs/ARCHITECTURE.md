@@ -18,7 +18,7 @@ flowchart LR
         direction LR
         FE["Frontend\nReact + Vite"]
         BE["Backend API\nFastAPI"]
-        DB[("Database\nSQLite / Postgres")]
+        DB[("Database\nPostgreSQL")]
         FE --> BE --> DB
     end
 
@@ -47,9 +47,13 @@ flowchart LR
 - The **backend** is one FastAPI process. Every route is grouped into a
   router file (`app/routers/*.py`), each guarded by an auth dependency
   before it touches the database.
-- The **database** is SQLite for local development (`recon.db`, zero setup)
-  and PostgreSQL in production (`docker-compose.yml` provisions it) - the
-  same SQLAlchemy models work against either.
+- The **database** is PostgreSQL everywhere - dev, CI tests, staging, and
+  prod all run the identical engine (`docker-compose.yml` provisions it as
+  the `db` service). There is no SQLite fallback anywhere: an earlier
+  version of this app allowed one for zero-setup local dev, but a real
+  schema bug once hid behind that gap (it only surfaced once tested against
+  real Postgres) - see [DEPLOYMENT.md](DEPLOYMENT.md) for why environment
+  parity is treated as a hard requirement, not a nice-to-have.
 - **Google** is only ever talked to directly by the browser (Sign-In button,
   Drive file picker) or by the backend for two narrow purposes: verifying a
   Google Sign-In token really came from Google, and creating/finding the
@@ -248,6 +252,60 @@ erDiagram
   (on hold pending a Docker install).
 - Not pictured: `USERS` and `APP_SETTINGS` - standalone tables that
   configure the app itself, not tied to any of the above.
+
+---
+
+## 5. Environments & deployment pipeline
+
+Four environments, each with a distinct job - see
+[DEPLOYMENT.md](DEPLOYMENT.md) for the full setup instructions for each.
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}}}%%
+flowchart TB
+    Dev["Dev\nhome Portainer (LAN only)\nbuilt from whatever you're\ncurrently working on"]
+
+    subgraph CI["GitHub Actions - every push to main"]
+        direction LR
+        Test["Run tests\n(real Postgres)"] --> Build["Build backend +\nfrontend images"]
+    end
+
+    GHCR[("GHCR\nimage registry")]
+    Staging["Staging droplet\nDigitalOcean - auto-deployed"]
+    Smoke{"Smoke test\npasses?"}
+    Approve{{"Manual\napproval"}}
+    Prod["Prod droplet\nDigitalOcean - real church data"]
+    Backup[("Nightly backup\npulled to Synology")]
+
+    Dev -.->|"you push when ready"| CI
+    Build --> GHCR
+    GHCR --> Staging
+    Staging --> Smoke
+    Smoke -->|yes| Approve
+    Approve -->|click| Prod
+    Prod --> Backup
+```
+
+| Environment | Runs on | Purpose | Who/what updates it |
+| --- | --- | --- | --- |
+| **Dev** | Your home Portainer instance | Try out in-progress code before it's committed | You, on demand, from your local checkout |
+| **CI tests** | GitHub Actions (ephemeral) | Gate every push/PR - not a running environment | GitHub, automatically |
+| **Staging** | DigitalOcean droplet | Verify a real build against a real domain/HTTPS/Postgres before it touches church data | CI, automatically, on every push to `main` |
+| **Prod** | DigitalOcean droplet | The real app the church uses | CI, only after a human clicks Approve |
+
+**Why dev can't just be "whatever's on staging"**: staging's job is to show
+*exactly* what's about to go to prod, so someone can trust it as a pre-prod
+checkpoint. If dev work (unmerged, unreviewed) could land there too, staging
+would stop meaning anything. Keeping dev on separate, LAN-only hardware
+means an in-progress mistake there can never be mistaken for "what's about
+to ship."
+
+**Why every environment runs identical Postgres + Caddy + Docker Compose**:
+mismatched environments hide bugs until the worst possible moment. This
+project hit exactly that once already - a schema bug only surfaced when
+tests started running against real Postgres instead of SQLite (see
+[STATUS.md](STATUS.md)). Same stack everywhere means "worked in dev" is
+actually predictive of "will work in prod."
 
 ---
 

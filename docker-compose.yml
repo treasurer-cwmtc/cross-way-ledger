@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-recon}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recon}
-      POSTGRES_DB: ${POSTGRES_DB:-recon}
+      POSTGRES_DB: ${POSTGRES_DB:-ledger_db}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,9 +18,10 @@ services:
 
   backend:
     build: ./backend
+    image: ghcr.io/treasurer-cwmtc/cross-way-ledger-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-recon}:${POSTGRES_PASSWORD:-recon}@db:5432/${POSTGRES_DB:-recon}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-recon}:${POSTGRES_PASSWORD:-recon}@db:5432/${POSTGRES_DB:-ledger_db}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
       SECRET_KEY: ${SECRET_KEY:-change-me-to-a-long-random-secret}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
@@ -35,6 +36,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: ghcr.io/treasurer-cwmtc/cross-way-ledger-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       - backend

@@ -6,14 +6,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application configuration.
 
-    DATABASE_URL defaults to a local SQLite file so the app runs with zero
-    external dependencies for the POC. In Docker / on a VPS, set DATABASE_URL
-    to the Postgres connection string (see docker-compose.yml).
+    DATABASE_URL must be set to a real Postgres connection string - there is
+    no SQLite fallback. Every environment (dev, CI tests, staging, prod) runs
+    the same database engine on purpose (see docs/ARCHITECTURE.md) - a
+    SQLite fallback previously hid a real schema bug that only surfaced
+    against Postgres.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "sqlite:///./recon.db"
+    database_url: str
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # Max days between a bank Stripe payout line and the Stripe payout record
     # when matching on amount is ambiguous.

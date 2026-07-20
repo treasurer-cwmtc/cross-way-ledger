@@ -3,6 +3,7 @@
 Run from the backend/ directory:  python -m pytest
 """
 
+import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, select
@@ -19,7 +20,13 @@ FIXTURES = Path(__file__).parent
 
 
 def make_session():
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    # Real Postgres, same as every real environment - no SQLite fallback.
+    # See docs/DEPLOYMENT.md for how to point this at a throwaway instance.
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL must be set to a real Postgres instance to run tests.")
+    engine = create_engine(database_url)
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     db = Session()
@@ -29,19 +36,29 @@ def make_session():
 
 def run_pipeline():
     db = make_session()
-    bank = parse_bank_csv((FIXTURES / "sample_bank.csv").read_text())
-    stripe = parse_stripe_csv((FIXTURES / "sample_stripe.csv").read_text())
-    categorizer = Categorizer(
-        list(db.scalars(select(CategoryRule)).all()),
-        list(db.scalars(select(ChartOfAccount)).all()),
-    )
-    return reconcile(bank, stripe, categorizer)
+    try:
+        bank = parse_bank_csv((FIXTURES / "sample_bank.csv").read_text())
+        stripe = parse_stripe_csv((FIXTURES / "sample_stripe.csv").read_text())
+        categorizer = Categorizer(
+            list(db.scalars(select(CategoryRule)).all()),
+            list(db.scalars(select(ChartOfAccount)).all()),
+        )
+        return reconcile(bank, stripe, categorizer)
+    finally:
+        # Must close explicitly: against a real (shared) Postgres instance,
+        # a session left open keeps a lock that blocks the next call's
+        # drop_all() - unlike SQLite, where each call got its own throwaway
+        # in-memory DB so a leaked session never mattered.
+        db.close()
 
 
 def test_seed_loads_chart_of_accounts():
     db = make_session()
-    assert db.scalar(select(ChartOfAccount).where(ChartOfAccount.account_no == "I101010"))
-    assert db.scalar(select(CategoryRule).where(CategoryRule.pattern == "Pledges"))
+    try:
+        assert db.scalar(select(ChartOfAccount).where(ChartOfAccount.account_no == "I101010"))
+        assert db.scalar(select(CategoryRule).where(CategoryRule.pattern == "Pledges"))
+    finally:
+        db.close()
 
 
 def test_payout_matched_and_exploded():

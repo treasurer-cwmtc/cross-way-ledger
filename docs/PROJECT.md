@@ -19,10 +19,9 @@ keyword-based auto-categorization.
 - The end goal is to run this **on a VPS as a headless service — it must run
   without a desktop / GUI** (no Excel, no Power BI Desktop, no interactive login).
 - Everything is containerized so `docker compose up` produces the **identical**
-  stack on a laptop and on the VPS.
-- **A local POC is fine for now.** Local dev can run with zero external
-  dependencies (SQLite + Vite dev server); the VPS/production target uses
-  PostgreSQL. The database is intended to be a **proper, persistent database**.
+  stack in every environment - dev, CI tests, staging, and prod all run the
+  same Postgres/FastAPI/nginx/Caddy stack, deliberately, after a schema bug
+  once hid behind a dev/prod database mismatch (see `docs/STATUS.md`).
 - Expected usage: **1–4 people**, a **few times a month** (mostly one person).
 
 ---
@@ -397,14 +396,17 @@ quick overview - `GET /api/dashboard`
 | Layer | Choice |
 | --- | --- |
 | Backend | FastAPI + SQLAlchemy (Python 3.12) |
-| Database | PostgreSQL (production/VPS); SQLite fallback for local POC |
+| Database | PostgreSQL - every environment (dev/CI/staging/prod), no SQLite |
 | Frontend | React + Vite + TypeScript |
-| Packaging | Docker Compose (db + backend + frontend behind nginx) |
+| Packaging | Docker Compose (db + backend + frontend, Caddy in front) |
 
-- `DATABASE_URL` selects the DB. Unset → SQLite file `recon.db` (local POC). In
-  Docker it is set to the Postgres service.
-- Frontend nginx serves the built SPA and proxies `/api` → backend, so the whole
-  app is reachable on one port on the VPS (`:8080`).
+- `DATABASE_URL` is required - there is no SQLite fallback (removed after a
+  schema bug once hid behind it; see `docs/STATUS.md`).
+- Frontend nginx serves the built SPA and proxies `/api` → backend; Caddy sits
+  in front of that in every environment except plain local `docker compose`,
+  terminating TLS and publishing the only port reachable from outside the
+  box. See `docs/ARCHITECTURE.md` § 5 and `docs/DEPLOYMENT.md` for the full
+  dev/staging/prod topology.
 
 ### Data model (tables)
 
@@ -477,7 +479,7 @@ All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.
 - Seed keyword/fund rules are guesses — review on the Rules tab.
 - Not yet built (candidate next steps): saved run history UI, roster-based donor
   normalization, direct export to the accounting system, automated Stripe/Chase
-  pulls instead of manual CSV upload, CI/CD auto-deploy to the VPS.
+  pulls instead of manual CSV upload.
 
 ### Authentication (built)
 

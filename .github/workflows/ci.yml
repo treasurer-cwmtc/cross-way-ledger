@@ -9,6 +9,20 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: recon
+          POSTGRES_PASSWORD: recon
+          POSTGRES_DB: ledger_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -23,6 +37,8 @@ jobs:
           pip install -r requirements.txt pytest httpx
       - name: Run tests
         working-directory: .
+        env:
+          DATABASE_URL: postgresql+psycopg://recon:recon@localhost:5432/ledger_db
         run: python -m pytest -q
 
   frontend:

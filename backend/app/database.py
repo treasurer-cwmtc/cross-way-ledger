@@ -7,14 +7,7 @@ from .config import get_settings
 
 settings = get_settings()
 
-# SQLite needs a special flag for use across FastAPI's threads.
-connect_args = (
-    {"check_same_thread": False}
-    if settings.database_url.startswith("sqlite")
-    else {}
-)
-
-engine = create_engine(settings.database_url, connect_args=connect_args, future=True)
+engine = create_engine(settings.database_url, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 

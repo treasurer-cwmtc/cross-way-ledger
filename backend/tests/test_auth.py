@@ -9,19 +9,26 @@ os.environ.setdefault("ADMIN_PASSWORD", "admin-password")
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
-from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app import database  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
-# Use a single shared in-memory SQLite DB for the app under test.
-engine = create_engine(
-    "sqlite://",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
+# Tests run against a real Postgres instance - same database engine as every
+# real environment (dev/staging/prod) - not SQLite. Point this at a throwaway
+# Postgres, e.g. `docker compose up -d db` then
+# DATABASE_URL=postgresql+psycopg://recon:recon@localhost:5432/ledger_db pytest
+database_url = os.environ.get("DATABASE_URL")
+if not database_url:
+    raise RuntimeError(
+        "DATABASE_URL must be set to a real Postgres instance to run tests "
+        "(see docs/DEPLOYMENT.md) - there is no SQLite fallback."
+    )
+
+# Use a single shared Postgres DB for the app under test, reset fresh below.
+engine = create_engine(database_url, future=True)
 TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 
 

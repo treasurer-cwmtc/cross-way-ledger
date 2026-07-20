@@ -18,11 +18,15 @@ app:
 ## Stack
 
 - **Backend:** FastAPI + SQLAlchemy (Python 3.12)
-- **Database:** PostgreSQL (SQLite fallback for zero-install local dev)
+- **Database:** PostgreSQL everywhere - dev, CI tests, staging, and prod all run
+  the same database engine (SQLite is not used anywhere anymore; see
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why)
 - **Frontend:** React + Vite + TypeScript
-- **Packaging:** Docker Compose (identical locally and on a VPS)
+- **Packaging:** Docker Compose, identical stack in every environment
+- **Reverse proxy / TLS:** Caddy (automatic HTTPS in staging/prod, self-signed
+  `tls internal` in dev)
 
-## Run with Docker (recommended, matches VPS)
+## Run with Docker (recommended)
 
 ```bash
 cp .env.example .env      # edit POSTGRES_PASSWORD
@@ -33,10 +37,19 @@ docker compose up -d --build
 - Backend API + docs: http://localhost:8000/api/health, http://localhost:8000/docs
 
 The Chart of Accounts and a starter set of rules are seeded automatically on first
-startup. See **[docs/STATUS.md](docs/STATUS.md)** for where development left off
-(read this first when resuming). See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
-for the full VPS (headless) setup, HTTPS, boot-on-startup, and backups. See
-**[docs/PROJECT.md](docs/PROJECT.md)** for the project knowledge base.
+startup.
+
+**Where to go next:**
+- **[docs/STATUS.md](docs/STATUS.md)** - where development left off (read this
+  first when resuming a session).
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - how the app is put
+  together, and how dev/test/staging/prod fit together as environments.
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** - the full dev/staging/prod
+  setup: DigitalOcean droplets, system requirements, CI/CD, and backups.
+- **[docs/PROJECT.md](docs/PROJECT.md)** - the project knowledge base
+  (business logic, data model, feature history).
+- **[docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)** - every table and
+  column, in plain language.
 
 ## Authentication
 
@@ -69,9 +82,17 @@ Open http://localhost:5173.
 
 ## Tests
 
+Tests run against a real Postgres instance - same engine as every real
+environment, no SQLite fallback. Start one (the `db` service already in
+`docker-compose.yml` works), then:
+
 ```powershell
+docker compose up -d db
 cd backend
-.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt pytest httpx
+$env:DATABASE_URL = "postgresql+psycopg://recon:recon@localhost:5432/ledger_db"
+cd ..
+.\backend\.venv\Scripts\python.exe -m pytest
 ```
 
 ## Project layout
@@ -82,26 +103,34 @@ backend/
     main.py            FastAPI app + startup (create tables, seed)
     config.py          Settings (DATABASE_URL, CORS)
     database.py        SQLAlchemy engine/session
-    models.py          ChartOfAccount, CategoryRule, ReconRun, ReconLine
+    models.py          SQLAlchemy models (Chart of Accounts, ledgers, users, ...)
     schemas.py         Pydantic request/response models
     seed.py            Seeds Chart of Accounts (CSV) + default rules
-    routers/           reconcile.py, rules.py, coa.py
-    services/          parsers.py, categorizer.py, reconciler.py  (core logic)
+    routers/           auth, reconcile, reconciliation, accrual, budget,
+                        general_ledger, income_statement, dashboard, rules,
+                        coa, bank_accounts, settings - one file per API area
+    services/          parsers, categorizer, reconciler, coa_numbering,
+                        fiscal, ledger, reporting - core business logic
     data/chart_of_accounts.csv
-  tests/               pytest + sample CSV fixtures
+  tests/               pytest + sample CSV fixtures (require Postgres - see Tests)
 frontend/
   src/
     api.ts             Typed API client
-    pages/             Reconcile, Rules, Accounts
-docker-compose.yml
+    pages/             Home, Upload, Reconciliation, Accrual, Budget,
+                        GeneralLedger, IncomeStatement, Accounts, Rules,
+                        Config, Users, LinkReceipts - one folder/file per tab
+docker-compose.yml        base stack (local dev)
+docker-compose.prod.yml   overlay: adds Caddy, locks down direct port access
+docker/dev-caddy/         dev-only Caddy image (self-signed tls internal)
+scripts/provision-vps.sh  one-time droplet bootstrap (staging/prod)
 ```
 
 ## How categorization works
 
 Rules live in the database and are editable on the **Rules** tab. Each rule has a
-`priority` (lower wins). The **Chart of Accounts** tab lets you search accounts and
-replace the whole chart by uploading a fresh CSV export of the
-`IMPORT - Chart of Accounts` sheet tab.
+`priority` (lower wins). The **Chart of Accounts** tab has three top-down creation
+forms (Category → Item → Account) - see
+[docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) for the full numbering scheme.
 
 ## Notes / assumptions
 
