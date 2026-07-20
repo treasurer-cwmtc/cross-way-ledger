@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_current_user, require_permission
-from ..models import Donor, Pledge, PledgeCampaign, PledgeCampaignDonation, PledgeDonorMatch, User
+from ..models import Donation, Donor, Pledge, PledgeCampaign, PledgeDonorMatch, User
 from ..schemas import (
+    DonationOut,
+    DonorImportSummary,
     PledgeCampaignCreate,
-    PledgeCampaignDonationOut,
     PledgeCampaignOut,
     PledgeCampaignUpdate,
     PledgeDashboardOut,
@@ -16,12 +17,7 @@ from ..schemas import (
     PledgeMatchUpdate,
     PledgeOut,
 )
-from ..services.pledge_import import (
-    match_pledge_to_donor,
-    parse_donation_csv,
-    parse_donor_csv,
-    parse_pledge_csv,
-)
+from ..services.pledge_import import match_pledge_to_donor, parse_donor_csv, parse_pledge_csv
 
 router = APIRouter(
     prefix="/api/pledge-campaigns", tags=["pledge-campaigns"], dependencies=[Depends(get_current_user)]
@@ -41,6 +37,42 @@ def _get_campaign(db: Session, campaign_id: int) -> PledgeCampaign:
     if campaign is None:
         raise HTTPException(404, "Campaign not found.")
     return campaign
+
+
+def _rematch_campaign_pledges(db: Session, campaign_id: int) -> tuple[int, int]:
+    """(Re-)run auto-matching for every pledge in this campaign that doesn't
+    already have a manual match. Never touches a manual match. Returns
+    (matched_count, unmatched_count)."""
+    donor_email_map = {d.email: d.donor_id for d in db.scalars(select(Donor)) if d.email}
+    pledges = list(db.scalars(select(Pledge).where(Pledge.campaign_id == campaign_id)))
+    existing_matches = {
+        m.pledge_id: m
+        for m in db.scalars(
+            select(PledgeDonorMatch).join(Pledge).where(Pledge.campaign_id == campaign_id)
+        )
+    }
+    matched = 0
+    unmatched = 0
+    for pledge in pledges:
+        match = existing_matches.get(pledge.id)
+        if match is not None and match.match_source == "manual":
+            if match.donor_id:
+                matched += 1
+            else:
+                unmatched += 1
+            continue
+        donor_id = match_pledge_to_donor(pledge.email, donor_email_map)
+        if match is None:
+            match = PledgeDonorMatch(pledge_id=pledge.id)
+            db.add(match)
+        match.donor_id = donor_id
+        match.match_source = "auto"
+        if donor_id:
+            matched += 1
+        else:
+            unmatched += 1
+    db.commit()
+    return matched, unmatched
 
 
 @router.get("", response_model=list[PledgeCampaignOut])
@@ -78,38 +110,75 @@ def update_campaign(
 
 
 @router.post(
-    "/{campaign_id}/import", response_model=PledgeImportSummary,
+    "/{campaign_id}/import/pledges", response_model=PledgeImportSummary,
     dependencies=[Depends(require_permission("pledge-campaign-status"))],
 )
-async def import_campaign_data(
+async def import_pledges(
     campaign_id: int,
+    fund_name: str = Form(...),
     pledge_file: UploadFile = File(...),
-    donation_file: UploadFile = File(...),
-    donor_file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> PledgeImportSummary:
-    """Upload the three Giving App exports and import/re-import them:
-    upserts donors, upserts pledges (deduped on submission_id per campaign),
-    imports new donations (deduped on their own id), then runs auto-matching
-    for every pledge that doesn't already have a manual match. Safe to
-    re-run as often as fresh exports come in - see services/pledge_import.py
-    for the matching algorithm (verified against the treasurer's own
-    spreadsheet formulas)."""
+    """Step 2 of the wizard: which fund (chosen from GET /api/donations/funds
+    - the donations already on file, step 1) this campaign tracks, plus the
+    pledge form export. Upserts pledges (deduped on submission_id) and
+    attempts matching against whatever donors currently exist - if donors
+    haven't been imported yet, step 3 re-runs this once they have."""
     campaign = _get_campaign(db, campaign_id)
+    campaign.fund_name = fund_name
 
-    donor_rows = parse_donor_csv(await _read_csv(donor_file))
-    pledge_rows = parse_pledge_csv(await _read_csv(pledge_file))
-    donation_rows = parse_donation_csv(await _read_csv(donation_file))
+    rows = parse_pledge_csv(await _read_csv(pledge_file))
+    existing = {
+        p.submission_id: p
+        for p in db.scalars(select(Pledge).where(Pledge.campaign_id == campaign_id))
+    }
+    imported = 0
+    for row in rows:
+        pledge = existing.get(row.submission_id)
+        if pledge is None:
+            pledge = Pledge(campaign_id=campaign_id, submission_id=row.submission_id)
+            db.add(pledge)
+            existing[row.submission_id] = pledge
+        pledge.first_name = row.first_name
+        pledge.last_name = row.last_name
+        pledge.email = row.email
+        pledge.date_submitted = row.date_submitted
+        pledge.initial_amount = row.initial_amount
+        pledge.due_date = row.due_date
+        pledge.monthly_amount = row.monthly_amount
+        pledge.contact_method = row.contact_method
+        imported += 1
+    db.commit()
 
-    # 1. Upsert donors.
-    existing_donors = {d.donor_id: d for d in db.scalars(select(Donor))}
-    donors_imported = 0
-    for row in donor_rows:
-        donor = existing_donors.get(row.donor_id)
+    matched, unmatched = _rematch_campaign_pledges(db, campaign_id)
+    return PledgeImportSummary(
+        pledges_imported=imported, pledges_matched=matched, pledges_unmatched=unmatched
+    )
+
+
+@router.post(
+    "/{campaign_id}/import/donors", response_model=DonorImportSummary,
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+async def import_donors_for_campaign(
+    campaign_id: int, donor_file: UploadFile = File(...), db: Session = Depends(get_db)
+) -> DonorImportSummary:
+    """Step 3 of the wizard: the donor list (general, not campaign-scoped -
+    shared with every campaign and the Config > Giving App - Donors page).
+    Upserts by donor_id, then re-runs matching for this campaign's pledges
+    now that fresh donor data has arrived - a pledge left unmatched in step
+    2 can resolve here without re-uploading anything."""
+    _get_campaign(db, campaign_id)
+
+    rows = parse_donor_csv(await _read_csv(donor_file))
+    existing = {d.donor_id: d for d in db.scalars(select(Donor))}
+    imported = 0
+    for row in rows:
+        donor = existing.get(row.donor_id)
         if donor is None:
             donor = Donor(donor_id=row.donor_id)
             db.add(donor)
-            existing_donors[row.donor_id] = donor
+            existing[row.donor_id] = donor
         donor.donor_number = row.donor_number
         donor.first_name = row.first_name
         donor.last_name = row.last_name
@@ -124,105 +193,18 @@ async def import_campaign_data(
         donor.first_donated = row.first_donated
         donor.donation_count = row.donation_count
         donor.total_given = row.total_given
-        donors_imported += 1
-    db.flush()
-
-    # 2. Upsert pledges for this campaign.
-    existing_pledges = {
-        p.submission_id: p
-        for p in db.scalars(select(Pledge).where(Pledge.campaign_id == campaign_id))
-    }
-    pledges_imported = 0
-    for row in pledge_rows:
-        pledge = existing_pledges.get(row.submission_id)
-        if pledge is None:
-            pledge = Pledge(campaign_id=campaign_id, submission_id=row.submission_id)
-            db.add(pledge)
-            existing_pledges[row.submission_id] = pledge
-        pledge.first_name = row.first_name
-        pledge.last_name = row.last_name
-        pledge.email = row.email
-        pledge.date_submitted = row.date_submitted
-        pledge.initial_amount = row.initial_amount
-        pledge.due_date = row.due_date
-        pledge.monthly_amount = row.monthly_amount
-        pledge.contact_method = row.contact_method
-        pledges_imported += 1
-    db.flush()
-
-    # 3. Import new donations (dedup by the Giving App's own transaction id),
-    #    filtered to this campaign's fund.
-    existing_dedup_keys = set(
-        db.scalars(
-            select(PledgeCampaignDonation.dedup_key).where(
-                PledgeCampaignDonation.campaign_id == campaign_id
-            )
-        )
-    )
-    donations_imported = 0
-    for row in donation_rows:
-        if row.fund != campaign.fund_name or row.dedup_key in existing_dedup_keys:
-            continue
-        db.add(
-            PledgeCampaignDonation(
-                campaign_id=campaign_id,
-                dedup_key=row.dedup_key,
-                donor_id=row.donor_id or None,
-                received_date=row.received_date,
-                amount=row.amount,
-                net_amount=row.net_amount,
-                method=row.method,
-            )
-        )
-        existing_dedup_keys.add(row.dedup_key)
-        donations_imported += 1
-    db.flush()
-
-    # 4. Auto-match every pledge that doesn't already have a match, or whose
-    #    existing match was itself auto (never touch a manual match).
-    donor_email_map = {d.email: d.donor_id for d in existing_donors.values() if d.email}
-    existing_matches = {
-        m.pledge_id: m
-        for m in db.scalars(
-            select(PledgeDonorMatch).join(Pledge).where(Pledge.campaign_id == campaign_id)
-        )
-    }
-    matched = 0
-    unmatched = 0
-    for pledge in existing_pledges.values():
-        match = existing_matches.get(pledge.id)
-        if match is not None and match.match_source == "manual":
-            if match.donor_id:
-                matched += 1
-            else:
-                unmatched += 1
-            continue
-        donor_id = match_pledge_to_donor(pledge.email, donor_email_map)
-        if match is None:
-            match = PledgeDonorMatch(pledge_id=pledge.id)
-            db.add(match)
-        match.donor_id = donor_id
-        match.match_source = "auto"
-        if donor_id:
-            matched += 1
-        else:
-            unmatched += 1
-
+        imported += 1
     db.commit()
-    return PledgeImportSummary(
-        donors_imported=donors_imported,
-        pledges_imported=pledges_imported,
-        donations_imported=donations_imported,
-        pledges_matched=matched,
-        pledges_unmatched=unmatched,
+
+    matched, unmatched = _rematch_campaign_pledges(db, campaign_id)
+    return DonorImportSummary(
+        donors_imported=imported, pledges_matched=matched, pledges_unmatched=unmatched
     )
 
 
-def _donation_totals_by_donor(db: Session, campaign_id: int) -> dict[str, float]:
+def _donation_totals_by_donor(db: Session, fund_name: str) -> dict[str, float]:
     totals: dict[str, float] = {}
-    for donation in db.scalars(
-        select(PledgeCampaignDonation).where(PledgeCampaignDonation.campaign_id == campaign_id)
-    ):
+    for donation in db.scalars(select(Donation).where(Donation.fund == fund_name)):
         if donation.donor_id:
             totals[donation.donor_id] = totals.get(donation.donor_id, 0.0) + donation.net_amount
     return totals
@@ -233,8 +215,8 @@ def _donation_totals_by_donor(db: Session, campaign_id: int) -> dict[str, float]
     dependencies=[Depends(require_permission("pledge-campaign-pledges"))],
 )
 def list_pledges(campaign_id: int, db: Session = Depends(get_db)) -> list[PledgeOut]:
-    _get_campaign(db, campaign_id)
-    totals_by_donor = _donation_totals_by_donor(db, campaign_id)
+    campaign = _get_campaign(db, campaign_id)
+    totals_by_donor = _donation_totals_by_donor(db, campaign.fund_name)
     pledges = db.scalars(
         select(Pledge)
         .where(Pledge.campaign_id == campaign_id)
@@ -272,6 +254,7 @@ def list_pledges(campaign_id: int, db: Session = Depends(get_db)) -> list[Pledge
 def set_pledge_match(
     campaign_id: int, pledge_id: int, payload: PledgeMatchUpdate, db: Session = Depends(get_db)
 ) -> PledgeOut:
+    campaign = _get_campaign(db, campaign_id)
     pledge = db.get(Pledge, pledge_id)
     if pledge is None or pledge.campaign_id != campaign_id:
         raise HTTPException(404, "Pledge not found.")
@@ -286,7 +269,7 @@ def set_pledge_match(
     match.match_source = "manual"
     db.commit()
 
-    totals_by_donor = _donation_totals_by_donor(db, campaign_id)
+    totals_by_donor = _donation_totals_by_donor(db, campaign.fund_name)
     return PledgeOut(
         id=pledge.id,
         campaign_id=pledge.campaign_id,
@@ -306,16 +289,16 @@ def set_pledge_match(
 
 
 @router.get(
-    "/{campaign_id}/donations", response_model=list[PledgeCampaignDonationOut],
+    "/{campaign_id}/donations", response_model=list[DonationOut],
     dependencies=[Depends(require_permission("pledge-campaign-actuals"))],
 )
-def list_donations(campaign_id: int, db: Session = Depends(get_db)) -> list[PledgeCampaignDonation]:
-    _get_campaign(db, campaign_id)
+def list_donations(campaign_id: int, db: Session = Depends(get_db)) -> list[Donation]:
+    campaign = _get_campaign(db, campaign_id)
     return list(
         db.scalars(
-            select(PledgeCampaignDonation)
-            .where(PledgeCampaignDonation.campaign_id == campaign_id)
-            .order_by(PledgeCampaignDonation.received_date.asc().nulls_last())
+            select(Donation)
+            .where(Donation.fund == campaign.fund_name)
+            .order_by(Donation.received_date.asc().nulls_last())
         )
     )
 
@@ -329,9 +312,9 @@ def get_dashboard(campaign_id: int, db: Session = Depends(get_db)) -> PledgeDash
     pledges = list(db.scalars(select(Pledge).where(Pledge.campaign_id == campaign_id)))
     donations = list(
         db.scalars(
-            select(PledgeCampaignDonation)
-            .where(PledgeCampaignDonation.campaign_id == campaign_id)
-            .order_by(PledgeCampaignDonation.received_date.asc().nulls_last())
+            select(Donation)
+            .where(Donation.fund == campaign.fund_name)
+            .order_by(Donation.received_date.asc().nulls_last())
         )
     )
 
@@ -340,10 +323,6 @@ def get_dashboard(campaign_id: int, db: Session = Depends(get_db)) -> PledgeDash
     total_raised = round(campaign.starting_balance + total_actual, 2)
     goal = campaign.goal_amount
 
-    # Timeline: cumulative amount raised over time, starting from the
-    # campaign's pre-tracking starting balance. Simpler and more directly
-    # meaningful for a "are we tracking to goal" chart than reproducing the
-    # spreadsheet's per-row MAX(pledge, actual) running total.
     running = campaign.starting_balance
     timeline: list[PledgeDashboardPoint] = []
     for d in donations:
@@ -358,6 +337,7 @@ def get_dashboard(campaign_id: int, db: Session = Depends(get_db)) -> PledgeDash
         total_actual=total_actual,
         total_raised=total_raised,
         pledge_count=len(pledges),
+        donation_count=len(donations),
         goal_amount=goal,
         percent_of_goal=round((total_raised / goal) * 100, 1) if goal else 0.0,
         timeline=timeline,

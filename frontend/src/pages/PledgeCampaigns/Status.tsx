@@ -133,6 +133,10 @@ export default function PledgeCampaignStatus() {
             <b>{dashboard.pledge_count}</b>
             <span>Number of Pledges</span>
           </div>
+          <div className="stat">
+            <b>{dashboard.donation_count}</b>
+            <span>Number of Gifts</span>
+          </div>
         </div>
       </div>
 

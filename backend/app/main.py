@@ -12,6 +12,7 @@ from .routers import (
     budget,
     coa,
     dashboard,
+    donations,
     donors,
     general_ledger,
     income_statement,
@@ -58,6 +59,7 @@ app.include_router(dashboard.router)
 app.include_router(settings_router.router)
 app.include_router(pledge_campaigns.router)
 app.include_router(donors.router)
+app.include_router(donations.router)
 
 
 @app.get("/api/health")

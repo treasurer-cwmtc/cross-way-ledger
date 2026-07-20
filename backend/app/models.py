@@ -366,9 +366,10 @@ class PledgeCampaign(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), unique=True)
-    # Matches the `fund` column in imported donation files - how a
-    # campaign's donations get isolated from general giving.
-    fund_name: Mapped[str] = mapped_column(String(120))
+    # Which Donation.fund value belongs to this campaign - chosen from the
+    # funds actually present in the donations import (step 2 of the
+    # wizard), never hand-typed. Blank until that step runs.
+    fund_name: Mapped[str] = mapped_column(String(120), default="")
     goal_amount: Mapped[float] = mapped_column(Float, default=0.0)
     # What was already raised toward this fund before formal pledge
     # tracking began - entered once on the import wizard, not derived.
@@ -379,9 +380,6 @@ class PledgeCampaign(Base):
     )
 
     pledges: Mapped[list["Pledge"]] = relationship(
-        back_populates="campaign", cascade="all, delete-orphan"
-    )
-    donations: Mapped[list["PledgeCampaignDonation"]] = relationship(
         back_populates="campaign", cascade="all, delete-orphan"
     )
 
@@ -476,21 +474,33 @@ class PledgeDonorMatch(Base):
     donor: Mapped[Donor | None] = relationship()
 
 
-class PledgeCampaignDonation(Base):
-    """One donation imported against a campaign (pre-filtered to the
-    campaign's fund_name at import time). Aggregated per donor for the
-    dashboard/status views. dedup_key (the Giving App's own transaction id)
-    blocks re-importing the same donation twice.
+class Donation(Base):
+    """The Giving App's donation export, imported in full - this is the
+    source of truth, not scoped to any one campaign. A PledgeCampaign just
+    declares which `fund` value it cares about (chosen from what's actually
+    present here, via GET /api/donations/funds - never hand-typed) and
+    reads/filters this table dynamically at request time, rather than
+    donations being copied/filtered into a campaign at import time. This
+    means uploading donations doesn't require picking a campaign first, and
+    a fund's donations are immediately available to any campaign that later
+    claims that fund.
+
+    dedup_key (the Giving App's own transaction id) blocks re-importing the
+    same donation twice, globally.
     """
 
-    __tablename__ = "pledge_campaign_donations"
+    __tablename__ = "donations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    campaign_id: Mapped[int] = mapped_column(ForeignKey("pledge_campaigns.id"), index=True)
     dedup_key: Mapped[str] = mapped_column(String(60), unique=True, index=True)
-    donor_id: Mapped[str | None] = mapped_column(
-        ForeignKey("donors.donor_id"), nullable=True, index=True
-    )
+    # Deliberately NOT a foreign key: this is the Giving App's own donor_id
+    # for the row, and step 1 (donations) runs before step 3 (donors) in
+    # the wizard - a real FK here would reject every donation on first-time
+    # setup, since the referenced donor doesn't exist locally yet. Matched
+    # up against the donors table by plain string equality at read time
+    # instead (see routers/pledge_campaigns.py's _donation_totals_by_donor).
+    donor_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    fund: Mapped[str] = mapped_column(String(120), default="", index=True)
     received_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     amount: Mapped[float] = mapped_column(Float, default=0.0)
     net_amount: Mapped[float] = mapped_column(Float, default=0.0)
@@ -498,6 +508,3 @@ class PledgeCampaignDonation(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-
-    campaign: Mapped[PledgeCampaign] = relationship(back_populates="donations")
-    donor: Mapped[Donor | None] = relationship()

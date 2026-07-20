@@ -1,6 +1,7 @@
-// Pledge Campaigns module: campaign management, the 3-file import, the
-// Pledges/Actuals ledgers, and the Status dashboard. Used by
-// pages/PledgeCampaigns/*.
+// Pledge Campaigns module: campaign management, the Pledges/Actuals
+// ledgers, and the Status dashboard. Donations themselves (step 1 of the
+// import wizard) live in api/donations.ts, since they're not scoped to any
+// one campaign. Used by pages/PledgeCampaigns/*.
 import { BASE, authHeaders, j } from "./client";
 
 export interface PledgeCampaign {
@@ -14,7 +15,6 @@ export interface PledgeCampaign {
 
 export interface PledgeCampaignCreate {
   name: string;
-  fund_name: string;
   goal_amount?: number;
   starting_balance?: number;
 }
@@ -36,10 +36,10 @@ export interface Pledge {
   actual_amount: number;
 }
 
-export interface PledgeCampaignDonation {
+export interface CampaignDonation {
   id: number;
-  campaign_id: number;
   donor_id: string | null;
+  fund: string;
   received_date: string | null;
   amount: number;
   net_amount: number;
@@ -47,9 +47,13 @@ export interface PledgeCampaignDonation {
 }
 
 export interface PledgeImportSummary {
-  donors_imported: number;
   pledges_imported: number;
-  donations_imported: number;
+  pledges_matched: number;
+  pledges_unmatched: number;
+}
+
+export interface DonorImportSummary {
+  donors_imported: number;
   pledges_matched: number;
   pledges_unmatched: number;
 }
@@ -65,6 +69,7 @@ export interface PledgeDashboard {
   total_actual: number;
   total_raised: number;
   pledge_count: number;
+  donation_count: number;
   goal_amount: number;
   percent_of_goal: number;
   timeline: PledgeDashboardPoint[];
@@ -83,16 +88,29 @@ export const pledgeCampaignsApi = {
       body: JSON.stringify(payload),
     }).then(j<PledgeCampaign>),
 
-  importData: (campaignId: number, pledgeFile: File, donationFile: File, donorFile: File) => {
+  /** Step 2: choose which fund (from donationsApi.funds()) this campaign
+   * tracks, plus the pledge form export. */
+  importPledges: (campaignId: number, fundName: string, pledgeFile: File) => {
     const fd = new FormData();
+    fd.append("fund_name", fundName);
     fd.append("pledge_file", pledgeFile);
-    fd.append("donation_file", donationFile);
-    fd.append("donor_file", donorFile);
-    return fetch(`${BASE}/api/pledge-campaigns/${campaignId}/import`, {
+    return fetch(`${BASE}/api/pledge-campaigns/${campaignId}/import/pledges`, {
       method: "POST",
       headers: authHeaders(),
       body: fd,
     }).then(j<PledgeImportSummary>);
+  },
+
+  /** Step 3: the donor list - re-runs matching for this campaign's pledges
+   * once uploaded. */
+  importDonors: (campaignId: number, donorFile: File) => {
+    const fd = new FormData();
+    fd.append("donor_file", donorFile);
+    return fetch(`${BASE}/api/pledge-campaigns/${campaignId}/import/donors`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+    }).then(j<DonorImportSummary>);
   },
 
   dashboard: (campaignId: number) =>
@@ -115,5 +133,5 @@ export const pledgeCampaignsApi = {
   donations: (campaignId: number) =>
     fetch(`${BASE}/api/pledge-campaigns/${campaignId}/donations`, {
       headers: authHeaders(),
-    }).then(j<PledgeCampaignDonation[]>),
+    }).then(j<CampaignDonation[]>),
 };

@@ -516,7 +516,6 @@ class PledgeCampaignOut(BaseModel):
 
 class PledgeCampaignCreate(BaseModel):
     name: str
-    fund_name: str
     goal_amount: float = 0.0
     starting_balance: float = 0.0
 
@@ -565,18 +564,33 @@ class PledgeMatchUpdate(BaseModel):
     donor_id: str | None = None  # explicit null clears the match
 
 
-class PledgeImportSummary(BaseModel):
-    donors_imported: int
-    pledges_imported: int
+class FundSummary(BaseModel):
+    name: str
+    count: int
+    total: float
+
+
+class DonationImportSummary(BaseModel):
     donations_imported: int
+    funds: list[FundSummary]
+
+
+class PledgeImportSummary(BaseModel):
+    pledges_imported: int
     pledges_matched: int
     pledges_unmatched: int
 
 
-class PledgeCampaignDonationOut(BaseModel):
+class DonorImportSummary(BaseModel):
+    donors_imported: int
+    pledges_matched: int
+    pledges_unmatched: int
+
+
+class DonationOut(BaseModel):
     id: int
-    campaign_id: int
     donor_id: str | None
+    fund: str
     received_date: date | None
     amount: float
     net_amount: float
@@ -594,6 +608,7 @@ class PledgeDashboardOut(BaseModel):
     total_actual: float
     total_raised: float
     pledge_count: int
+    donation_count: int
     goal_amount: float
     percent_of_goal: float
     timeline: list[PledgeDashboardPoint]

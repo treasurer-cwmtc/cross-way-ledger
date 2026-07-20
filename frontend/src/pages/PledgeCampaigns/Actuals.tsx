@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { pledgeCampaignsApi, PledgeCampaignDonation } from "../../api/pledgeCampaigns";
+import { pledgeCampaignsApi, CampaignDonation } from "../../api/pledgeCampaigns";
 import { useCampaign } from "./useCampaign";
 
 function fmtMoney(n: number): string {
@@ -8,7 +8,7 @@ function fmtMoney(n: number): string {
 
 export default function Actuals() {
   const { campaign, campaignId, error: campaignError } = useCampaign();
-  const [donations, setDonations] = useState<PledgeCampaignDonation[] | null>(null);
+  const [donations, setDonations] = useState<CampaignDonation[] | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
