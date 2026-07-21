@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { pledgeCampaignsApi, CampaignDetailRow } from "../../api/pledgeCampaigns";
 import DetailModal from "./DetailModal";
-import { DateColumnFilter, DateFilterValue, TextColumnFilter, dateMatchesFilter } from "./ColumnFilter";
+import { DateColumnFilter, DateFilterValue, TextColumnFilter, dateMatchesFilter } from "../../components/ColumnFilter";
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
