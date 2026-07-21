@@ -541,8 +541,28 @@ class DonorOut(BaseModel):
     phone_number: str
     city: str
     state: str
+    zip_code: str
+    joint_giver_id: str
+    joint_giver_first_name: str
+    joint_giver_last_name: str
+    first_donated: date | None
     donation_count: int
     total_given: float
+    source_file_name: str
+    source_file_link: str
+
+
+class DonorGiftOut(BaseModel):
+    """One gift for the Donors page's click-to-expand detail popup - every
+    fund, not scoped to one campaign like CampaignDonation/DonationOut are,
+    since this is the general donor list, not a campaign view."""
+
+    id: int
+    fund: str
+    received_date: date | None
+    amount: float
+    net_amount: float
+    method: str
     source_file_name: str
     source_file_link: str
 
