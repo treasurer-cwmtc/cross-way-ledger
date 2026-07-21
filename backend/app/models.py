@@ -47,6 +47,11 @@ class User(Base):
     # always have full access. "home" and "users" are never in this list:
     # Home is always visible, Users/Permissions management is admin-only.
     permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # A restriction, not a grant - unlike `permissions`, this applies even to
+    # admins. Redacts donor name/email on the Pledge Campaign pages (real
+    # donor PII) for this user, while leaving every other page/action
+    # (matching, importing, totals) untouched.
+    hide_donor_names: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

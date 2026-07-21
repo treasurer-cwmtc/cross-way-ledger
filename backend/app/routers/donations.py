@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, File, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -75,3 +75,14 @@ async def import_donations(
     db.commit()
 
     return DonationImportSummary(donations_imported=imported, funds=_fund_summary(db))
+
+
+@router.delete("/funds/{fund_name}", response_model=list[FundSummary])
+def delete_fund(fund_name: str, db: Session = Depends(get_db)) -> list[FundSummary]:
+    """Bulk-deletes every Donation row with this fund name - a fund isn't
+    its own record, just a grouping of donations, so "delete a fund" means
+    deleting all of its donations. Real, permanent data; there is no
+    per-fund undo short of restoring a backup."""
+    db.execute(delete(Donation).where(Donation.fund == fund_name))
+    db.commit()
+    return _fund_summary(db)

@@ -191,6 +191,7 @@ class UserOut(BaseModel):
     is_admin: bool
     active: bool
     permissions: list[str]
+    hide_donor_names: bool
     created_at: datetime
 
 
@@ -208,6 +209,7 @@ class UserCreate(BaseModel):
 class UserPermissionsUpdate(BaseModel):
     permissions: list[str]
     is_admin: bool
+    hide_donor_names: bool = False
 
 
 class PasswordChange(BaseModel):
@@ -579,6 +581,8 @@ class PledgeImportSummary(BaseModel):
     pledges_imported: int
     pledges_matched: int
     pledges_unmatched: int
+    new_pledges: list[PledgeOut]
+    updated_pledges: list[PledgeOut]
 
 
 class DonorImportSummary(BaseModel):
@@ -590,6 +594,11 @@ class DonorImportSummary(BaseModel):
 class DonationOut(BaseModel):
     id: int
     donor_id: str | None
+    # Resolved from the donor list (blank if unmatched, or redacted to ""
+    # for a user with hide_donor_names set - same rule as PledgeOut).
+    donor_first_name: str
+    donor_last_name: str
+    donor_email: str
     fund: str
     received_date: date | None
     amount: float
@@ -597,9 +606,25 @@ class DonationOut(BaseModel):
     method: str
 
 
+class PledgeDetailOut(BaseModel):
+    """Full detail for the Pledges tab's click-to-expand popup: the pledge
+    itself, plus every individual gift (this fund only) from the donor it's
+    matched to - not just the aggregate total already on PledgeOut."""
+
+    pledge: PledgeOut
+    gifts: list[DonationOut]
+
+
 class PledgeDashboardPoint(BaseModel):
     date: date
+    # Cumulative actual (received) total as of this date - excludes the
+    # campaign's starting_balance on purpose, so this chart always reads as
+    # "raised since tracking began," matching total_actual, not total_raised.
     running_total: float
+    # This date's own contribution, not cumulative - a day can have either,
+    # both, or (for a hover target with no gift) neither.
+    pledged_amount: float
+    actual_amount: float
 
 
 class PledgeDashboardOut(BaseModel):
