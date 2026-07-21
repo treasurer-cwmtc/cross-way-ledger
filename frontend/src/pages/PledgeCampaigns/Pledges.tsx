@@ -1,41 +1,44 @@
 import { useEffect, useState } from "react";
 import { pledgeCampaignsApi, Pledge } from "../../api/pledgeCampaigns";
-import { donorsApi, Donor } from "../../api/donors";
-import { useCampaign } from "./useCampaign";
-import DonorPicker from "./DonorPicker";
+import PledgeDetailModal from "./PledgeDetailModal";
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 }
 
-export default function Pledges() {
-  const { campaign, campaignId, error: campaignError } = useCampaign();
+export default function Pledges({
+  campaignId,
+  hideDonorNames,
+}: {
+  campaignId: number;
+  hideDonorNames: boolean;
+}) {
   const [pledges, setPledges] = useState<Pledge[] | null>(null);
-  const [donors, setDonors] = useState<Donor[]>([]);
   const [error, setError] = useState("");
+  const [openPledge, setOpenPledge] = useState<Pledge | null>(null);
 
-  function reload(id: number) {
-    pledgeCampaignsApi.pledges(id).then(setPledges).catch((err) => setError((err as Error).message));
+  function reload() {
+    pledgeCampaignsApi
+      .pledges(campaignId)
+      .then(setPledges)
+      .catch((err) => setError((err as Error).message));
   }
 
   useEffect(() => {
-    if (campaignId == null) return;
-    reload(campaignId);
-    donorsApi.list().then(setDonors).catch(() => {
-      /* donor lookup is best-effort here - the picker just shows fewer matches */
-    });
+    setPledges(null);
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
-  if (campaignError || error) return <div className="error">{campaignError || error}</div>;
-  if (!campaign || !pledges) return <p className="subtitle">Loading…</p>;
+  if (error) return <div className="error">{error}</div>;
+  if (!pledges) return <p className="subtitle">Loading…</p>;
 
   return (
     <div>
-      <h2 className="page-title">{campaign.name} Pledges</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         Every pledge form submission. A pledge with "no gift yet" is normal - not everyone has
-        given yet, but their submission is still tracked. Link it to a donor manually if the
-        automatic email match missed it.
+        given yet, but their submission is still tracked. Click a row to see full detail or link
+        it to a donor manually if the automatic email match missed it.
       </p>
 
       <div className="table-wrap">
@@ -43,49 +46,37 @@ export default function Pledges() {
           <thead>
             <tr>
               <th>Submitted</th>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Initial Pledge</th>
-              <th>Due</th>
-              <th>Monthly</th>
-              <th>Matched Donor</th>
-              <th>Received to Date</th>
+              <th>Donor ID</th>
+              {!hideDonorNames && <th>Name</th>}
+              {!hideDonorNames && <th>Email</th>}
+              <th>Pledged Amount</th>
+              <th>Received Amount</th>
+              <th>Delivery by Date</th>
             </tr>
           </thead>
           <tbody>
             {pledges.map((p) => (
-              <tr key={p.id}>
+              <tr
+                key={p.id}
+                onClick={() => setOpenPledge(p)}
+                style={{ cursor: "pointer" }}
+              >
                 <td>{p.date_submitted ? new Date(p.date_submitted).toLocaleDateString() : ""}</td>
-                <td>
-                  {p.first_name} {p.last_name}
-                </td>
-                <td>{p.email}</td>
+                <td>{p.donor_id || "—"}</td>
+                {!hideDonorNames && (
+                  <td>
+                    {p.first_name} {p.last_name}
+                  </td>
+                )}
+                {!hideDonorNames && <td>{p.email}</td>}
                 <td>{fmtMoney(p.initial_amount)}</td>
-                <td>{p.due_date || ""}</td>
-                <td>{fmtMoney(p.monthly_amount)}</td>
-                <td>
-                  <DonorPicker
-                    value={p.donor_id}
-                    donors={donors}
-                    onChange={(donorId) =>
-                      pledgeCampaignsApi
-                        .setPledgeMatch(campaign.id, p.id, donorId)
-                        .then(() => reload(campaign.id))
-                        .catch((err) => setError((err as Error).message))
-                    }
-                  />
-                  {p.donor_id && (
-                    <span className={"match-badge " + (p.match_source === "manual" ? "matched" : "matched")}>
-                      {p.match_source === "manual" ? "manually linked" : "auto-matched"}
-                    </span>
-                  )}
-                </td>
                 <td>{fmtMoney(p.actual_amount)}</td>
+                <td>{p.due_date || ""}</td>
               </tr>
             ))}
             {pledges.length === 0 && (
               <tr>
-                <td colSpan={8} className="subtitle">
+                <td colSpan={hideDonorNames ? 5 : 7} className="subtitle">
                   No pledges imported yet.
                 </td>
               </tr>
@@ -93,6 +84,19 @@ export default function Pledges() {
           </tbody>
         </table>
       </div>
+
+      {openPledge && (
+        <PledgeDetailModal
+          campaignId={campaignId}
+          pledge={openPledge}
+          hideDonorNames={hideDonorNames}
+          onClose={() => setOpenPledge(null)}
+          onMatchChanged={(updated) => {
+            setPledges((prev) => prev?.map((p) => (p.id === updated.id ? updated : p)) ?? prev);
+            setOpenPledge(updated);
+          }}
+        />
+      )}
     </div>
   );
 }

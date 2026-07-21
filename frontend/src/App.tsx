@@ -16,9 +16,7 @@ import Config from "./pages/Config";
 import Donors from "./pages/Donors";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
-import PledgeCampaignStatus from "./pages/PledgeCampaigns/Status";
-import PledgeCampaignPledges from "./pages/PledgeCampaigns/Pledges";
-import PledgeCampaignActuals from "./pages/PledgeCampaigns/Actuals";
+import PledgeCampaigns from "./pages/PledgeCampaigns";
 import PledgeCampaignImportWizard from "./pages/PledgeCampaigns/ImportWizard";
 
 type Tab =
@@ -34,9 +32,7 @@ type Tab =
   | "link-receipts"
   | "config"
   | "users"
-  | "pledge-campaign-status"
-  | "pledge-campaign-pledges"
-  | "pledge-campaign-actuals"
+  | "pledge-campaigns"
   | "pledge-campaign-import"
   | "donors";
 
@@ -72,10 +68,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Pledge Campaigns",
     items: [
-      { tab: "pledge-campaign-status", label: "Phase 2 Status" },
-      { tab: "pledge-campaign-pledges", label: "Phase 2 Pledges" },
-      { tab: "pledge-campaign-actuals", label: "Phase 2 Actuals" },
-      { tab: "pledge-campaign-import", label: "Import Data" },
+      { tab: "pledge-campaigns", label: "Campaign Status" },
+      { tab: "pledge-campaign-import", label: "Import Campaigns" },
     ],
   },
   {
@@ -137,6 +131,17 @@ export default function App() {
             const items = group.items.filter((item) => {
               if (item.adminOnly) return user.is_admin;
               if (item.tab === "home") return true;
+              // The single Campaign Status entry covers three underlying
+              // permission keys (its Status/Pledges/Actuals sub-tabs) - show
+              // it if the user holds any one of them.
+              if (item.tab === "pledge-campaigns") {
+                return (
+                  user.is_admin ||
+                  ["pledge-campaign-status", "pledge-campaign-pledges", "pledge-campaign-actuals"].some(
+                    (k) => user.permissions.includes(k)
+                  )
+                );
+              }
               // Import writes to the same data the Status dashboard reads,
               // so it's gated by that permission rather than its own key.
               if (item.tab === "pledge-campaign-import") {
@@ -197,9 +202,7 @@ export default function App() {
           {tab === "link-receipts" && <LinkReceipts />}
           {tab === "config" && <Config />}
           {tab === "donors" && <Donors />}
-          {tab === "pledge-campaign-status" && <PledgeCampaignStatus />}
-          {tab === "pledge-campaign-pledges" && <PledgeCampaignPledges />}
-          {tab === "pledge-campaign-actuals" && <PledgeCampaignActuals />}
+          {tab === "pledge-campaigns" && <PledgeCampaigns user={user} />}
           {tab === "pledge-campaign-import" && <PledgeCampaignImportWizard />}
           {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
         </div>

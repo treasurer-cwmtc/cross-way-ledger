@@ -9,6 +9,7 @@ export interface User {
   is_admin: boolean;
   active: boolean;
   permissions: string[];
+  hide_donor_names: boolean;
   created_at: string;
 }
 
@@ -61,10 +62,15 @@ export const authApi = {
       headers: authHeaders(),
     }).then(j<void>),
 
-  updatePermissions: (id: number, permissions: string[], is_admin: boolean) =>
+  updatePermissions: (
+    id: number,
+    permissions: string[],
+    is_admin: boolean,
+    hide_donor_names: boolean
+  ) =>
     fetch(`${BASE}/api/auth/users/${id}/permissions`, {
       method: "PUT",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ permissions, is_admin }),
+      body: JSON.stringify({ permissions, is_admin, hide_donor_names }),
     }).then(j<User>),
 };

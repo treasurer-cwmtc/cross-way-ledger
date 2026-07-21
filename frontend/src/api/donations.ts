@@ -25,4 +25,10 @@ export const donationsApi = {
       body: fd,
     }).then(j<DonationImportSummary>);
   },
+
+  deleteFund: (fundName: string) =>
+    fetch(`${BASE}/api/donations/funds/${encodeURIComponent(fundName)}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    }).then(j<FundSummary[]>),
 };

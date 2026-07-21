@@ -16,6 +16,10 @@ const GRANTABLE_PAGES: { key: string; label: string }[] = [
   { key: "accounts", label: "Chart of Accounts" },
   { key: "link-receipts", label: "Link Receipts" },
   { key: "config", label: "Config" },
+  { key: "pledge-campaign-status", label: "Campaign Status" },
+  { key: "pledge-campaign-pledges", label: "Campaign Pledges" },
+  { key: "pledge-campaign-actuals", label: "Campaign Actuals" },
+  { key: "donors", label: "Giving App - Donors" },
 ];
 
 type AccountType = "local" | "google";
@@ -32,6 +36,7 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
   const [selectedUserId, setSelectedUserId] = useState<number | "">("");
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isAdminGrant, setIsAdminGrant] = useState(false);
+  const [hideDonorNames, setHideDonorNames] = useState(false);
   const [permError, setPermError] = useState("");
   const [permMsg, setPermMsg] = useState("");
 
@@ -87,6 +92,7 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
     const u = users.find((x) => x.id === id);
     setPermissions(u ? [...u.permissions] : []);
     setIsAdminGrant(u ? u.is_admin : false);
+    setHideDonorNames(u ? u.hide_donor_names : false);
   }
 
   function togglePermission(key: string) {
@@ -100,7 +106,7 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
     setPermError("");
     setPermMsg("");
     try {
-      await authApi.updatePermissions(selectedUserId, permissions, isAdminGrant);
+      await authApi.updatePermissions(selectedUserId, permissions, isAdminGrant, hideDonorNames);
       setPermMsg("Permissions saved.");
       await load();
     } catch (e) {
@@ -245,6 +251,18 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
                 onChange={(e) => setIsAdminGrant(e.target.checked)}
               />
               <span>Admin (full access to everything)</span>
+            </label>
+
+            <label className="field-checkbox" style={{ marginBottom: 12 }}>
+              <input
+                type="checkbox"
+                checked={hideDonorNames}
+                onChange={(e) => setHideDonorNames(e.target.checked)}
+              />
+              <span>
+                Hide donor names (redacts donor name/email on the Campaign Pledges and
+                Actuals pages for this user - applies even if they're an admin)
+              </span>
             </label>
 
             {!isAdminGrant && (

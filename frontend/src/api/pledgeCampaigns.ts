@@ -19,6 +19,14 @@ export interface PledgeCampaignCreate {
   starting_balance?: number;
 }
 
+export interface PledgeCampaignUpdate {
+  name?: string;
+  fund_name?: string;
+  goal_amount?: number;
+  starting_balance?: number;
+  is_active?: boolean;
+}
+
 export interface Pledge {
   id: number;
   campaign_id: number;
@@ -39,6 +47,9 @@ export interface Pledge {
 export interface CampaignDonation {
   id: number;
   donor_id: string | null;
+  donor_first_name: string;
+  donor_last_name: string;
+  donor_email: string;
   fund: string;
   received_date: string | null;
   amount: number;
@@ -50,6 +61,13 @@ export interface PledgeImportSummary {
   pledges_imported: number;
   pledges_matched: number;
   pledges_unmatched: number;
+  new_pledges: Pledge[];
+  updated_pledges: Pledge[];
+}
+
+export interface PledgeDetail {
+  pledge: Pledge;
+  gifts: CampaignDonation[];
 }
 
 export interface DonorImportSummary {
@@ -61,6 +79,8 @@ export interface DonorImportSummary {
 export interface PledgeDashboardPoint {
   date: string;
   running_total: number;
+  pledged_amount: number;
+  actual_amount: number;
 }
 
 export interface PledgeDashboard {
@@ -84,6 +104,13 @@ export const pledgeCampaignsApi = {
   create: (payload: PledgeCampaignCreate) =>
     fetch(`${BASE}/api/pledge-campaigns`, {
       method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    }).then(j<PledgeCampaign>),
+
+  update: (campaignId: number, payload: PledgeCampaignUpdate) =>
+    fetch(`${BASE}/api/pledge-campaigns/${campaignId}`, {
+      method: "PUT",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     }).then(j<PledgeCampaign>),
@@ -134,4 +161,9 @@ export const pledgeCampaignsApi = {
     fetch(`${BASE}/api/pledge-campaigns/${campaignId}/donations`, {
       headers: authHeaders(),
     }).then(j<CampaignDonation[]>),
+
+  pledgeDetail: (campaignId: number, pledgeId: number) =>
+    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/pledges/${pledgeId}`, {
+      headers: authHeaders(),
+    }).then(j<PledgeDetail>),
 };
