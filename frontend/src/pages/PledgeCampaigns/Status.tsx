@@ -211,12 +211,13 @@ function TimelineChart({ dashboard }: { dashboard: PledgeDashboard }) {
         {(() => {
           const pledgedY = y(last.running_pledged_total);
           const actualY = y(last.running_actual_total);
-          // If the two latest values are close together, stack their labels
-          // further apart than "just above/below the dot" so they don't
-          // collide with each other.
+          // Both labels sit above their own line's dot. If the two latest
+          // values are close together, stack them further apart so they
+          // don't collide with each other.
           const tooClose = Math.abs(pledgedY - actualY) < 20;
-          const pledgedLabelY = tooClose ? Math.min(pledgedY, actualY) - 12 : pledgedY - 8;
-          const actualLabelY = tooClose ? Math.max(pledgedY, actualY) + 16 : actualY + 16;
+          const topY = Math.min(pledgedY, actualY);
+          const pledgedLabelY = tooClose ? topY - 24 : pledgedY - 8;
+          const actualLabelY = tooClose ? topY - 4 : actualY - 8;
           const labelText = (yPos: number, text: string, color: string) => (
             <>
               <rect
