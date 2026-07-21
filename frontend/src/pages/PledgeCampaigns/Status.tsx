@@ -25,7 +25,10 @@ function parseLocalDate(isoDate: string): Date {
   return new Date(y, m - 1, d);
 }
 
-const COLOR_PLEDGED = "var(--green)";
+// A clean warm orange - pairs as a classic complementary contrast against
+// the cool teal used for Actual, instead of the muddy/dark --amber token
+// (#b45309) used elsewhere in the app for status badges.
+const COLOR_PLEDGED = "#f97316";
 const COLOR_ACTUAL = "var(--primary)";
 const COLOR_GOAL = "var(--text)";
 
