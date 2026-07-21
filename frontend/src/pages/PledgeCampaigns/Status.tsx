@@ -25,9 +25,9 @@ function parseLocalDate(isoDate: string): Date {
   return new Date(y, m - 1, d);
 }
 
-const COLOR_PLEDGED = "var(--amber)";
+const COLOR_PLEDGED = "var(--green)";
 const COLOR_ACTUAL = "var(--primary)";
-const COLOR_GOAL = "var(--red)";
+const COLOR_GOAL = "var(--text)";
 
 /** Same plain progress-bar look as the original "Cash Received" bar, reused
  * for "Pledged" too - just with its own label and fill color, so the two
@@ -187,7 +187,7 @@ function TimelineChart({ dashboard }: { dashboard: PledgeDashboard }) {
         {/* Goal reference line - label sits above the line with a background
             so it stays legible no matter what crosses behind it. */}
         <line x1={plotLeft} y1={goalY} x2={plotRight} y2={goalY} stroke={COLOR_GOAL} strokeDasharray="4 4" strokeWidth={1.5} />
-        <rect x={plotRight - 130} y={Math.max(goalY - 21, 2)} width={130} height={18} fill="var(--card)" opacity={0.9} />
+        <rect x={plotRight - 130} y={Math.max(goalY - 21, 2)} width={130} height={18} fill="var(--card)" opacity={1} />
         <text x={plotRight} y={Math.max(goalY - 8, 15)} textAnchor="end" fontSize={13} fontWeight={700} fill={COLOR_GOAL}>
           Goal: {fmtMoney(goal_amount)}
         </text>
@@ -222,7 +222,7 @@ function TimelineChart({ dashboard }: { dashboard: PledgeDashboard }) {
                 width={165}
                 height={18}
                 fill="var(--card)"
-                opacity={0.9}
+                opacity={1}
               />
               <text x={plotRight - 4} y={yPos} textAnchor="end" fontSize={13} fontWeight={700} fill={color}>
                 {text}
