@@ -127,6 +127,10 @@ export interface PledgeDashboard {
   total_pledged: number;
   total_actual: number;
   total_raised: number;
+  // Money already given by someone with no pledge on file - counts toward
+  // the goal alongside total_pledged, since a gift already in hand is at
+  // least as strong a commitment as a pledge.
+  unpledged_actual: number;
   pledge_count: number;
   donation_count: number;
   goal_amount: number;

@@ -39,12 +39,14 @@ function ProgressBar({
   valueLabel,
   goal,
   color,
+  note,
 }: {
   label: string;
   value: number;
   valueLabel: string;
   goal: number;
   color: string;
+  note?: string;
 }) {
   const pct = Math.min(goal ? (value / goal) * 100 : 0, 100);
   const pctOfGoal = goal ? Math.round((value / goal) * 100) : 0;
@@ -63,6 +65,11 @@ function ProgressBar({
           {pctOfGoal}% of {fmtMoney(goal)} goal
         </span>
       </div>
+      {note && (
+        <div className="subtitle" style={{ fontSize: 11.5, marginTop: 2 }}>
+          {note}
+        </div>
+      )}
     </div>
   );
 }
@@ -317,6 +324,11 @@ export default function PledgeCampaignStatus({ campaignId }: { campaignId: numbe
   if (error) return <div className="error">{error}</div>;
   if (!dashboard) return <p className="subtitle">Loading…</p>;
 
+  // Someone who gives without ever pledging (e.g. Lijoy gave $22,000 with
+  // no pledge on file) still counts toward the goal - money already in
+  // hand is at least as strong a commitment as a pledge.
+  const pledgedAndGiven = dashboard.total_pledged + dashboard.unpledged_actual;
+
   return (
     <div>
       <div className="card">
@@ -333,9 +345,10 @@ export default function PledgeCampaignStatus({ campaignId }: { campaignId: numbe
           </div>
           <div style={{ flex: "1 1 260px" }}>
             <ProgressBar
-              label="Pledged"
-              value={dashboard.total_pledged}
-              valueLabel={`${fmtMoney(dashboard.total_pledged)} pledged`}
+              label="Pledged & Given"
+              value={pledgedAndGiven}
+              valueLabel={`${fmtMoney(pledgedAndGiven)} pledged & given`}
+              note={`${fmtMoney(dashboard.total_pledged)} pledged + ${fmtMoney(dashboard.unpledged_actual)} given without a pledge`}
               goal={dashboard.goal_amount}
               color={COLOR_PLEDGED}
             />
