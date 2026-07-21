@@ -106,6 +106,22 @@ export default function PledgeDetailModal({
               <td className="subtitle">Donor ID</td>
               <td>{p.donor_id || "—"}</td>
             </tr>
+            <tr>
+              <td className="subtitle">Source file</td>
+              <td>
+                {p.source_file_name ? (
+                  p.source_file_link ? (
+                    <a href={p.source_file_link} target="_blank" rel="noreferrer">
+                      {p.source_file_name}
+                    </a>
+                  ) : (
+                    p.source_file_name
+                  )
+                ) : (
+                  "—"
+                )}
+              </td>
+            </tr>
             {!hideDonorNames && (
               <>
                 <tr>

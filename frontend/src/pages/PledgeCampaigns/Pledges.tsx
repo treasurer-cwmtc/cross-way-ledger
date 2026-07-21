@@ -60,6 +60,7 @@ export default function Pledges({
                 key={p.id}
                 onClick={() => setOpenPledge(p)}
                 style={{ cursor: "pointer" }}
+                title={p.source_file_name ? `Imported from: ${p.source_file_name}` : undefined}
               >
                 <td>{p.date_submitted ? new Date(p.date_submitted).toLocaleDateString() : ""}</td>
                 <td>{p.donor_id || "—"}</td>

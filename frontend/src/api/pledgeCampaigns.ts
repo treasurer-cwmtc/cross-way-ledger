@@ -42,6 +42,8 @@ export interface Pledge {
   donor_id: string | null;
   match_source: "auto" | "manual" | null;
   actual_amount: number;
+  source_file_name: string;
+  source_file_link: string;
 }
 
 export interface CampaignDonation {
@@ -55,6 +57,8 @@ export interface CampaignDonation {
   amount: number;
   net_amount: number;
   method: string;
+  source_file_name: string;
+  source_file_link: string;
 }
 
 export interface PledgeImportSummary {
@@ -78,7 +82,8 @@ export interface DonorImportSummary {
 
 export interface PledgeDashboardPoint {
   date: string;
-  running_total: number;
+  running_pledged_total: number;
+  running_actual_total: number;
   pledged_amount: number;
   actual_amount: number;
 }
@@ -116,11 +121,22 @@ export const pledgeCampaignsApi = {
     }).then(j<PledgeCampaign>),
 
   /** Step 2: choose which fund (from donationsApi.funds()) this campaign
-   * tracks, plus the pledge form export. */
-  importPledges: (campaignId: number, fundName: string, pledgeFile: File) => {
+   * tracks, plus the pledge form export. sourceFile identifies the Drive
+   * archive copy (see lib/googleDrive.ts::uploadCampaignImportFile) -
+   * omitted if that upload failed, which never blocks the data import. */
+  importPledges: (
+    campaignId: number,
+    fundName: string,
+    pledgeFile: File,
+    sourceFile?: { name: string; url: string }
+  ) => {
     const fd = new FormData();
     fd.append("fund_name", fundName);
     fd.append("pledge_file", pledgeFile);
+    if (sourceFile) {
+      fd.append("source_file_name", sourceFile.name);
+      fd.append("source_file_link", sourceFile.url);
+    }
     return fetch(`${BASE}/api/pledge-campaigns/${campaignId}/import/pledges`, {
       method: "POST",
       headers: authHeaders(),
@@ -130,9 +146,13 @@ export const pledgeCampaignsApi = {
 
   /** Step 3: the donor list - re-runs matching for this campaign's pledges
    * once uploaded. */
-  importDonors: (campaignId: number, donorFile: File) => {
+  importDonors: (campaignId: number, donorFile: File, sourceFile?: { name: string; url: string }) => {
     const fd = new FormData();
     fd.append("donor_file", donorFile);
+    if (sourceFile) {
+      fd.append("source_file_name", sourceFile.name);
+      fd.append("source_file_link", sourceFile.url);
+    }
     return fetch(`${BASE}/api/pledge-campaigns/${campaignId}/import/donors`, {
       method: "POST",
       headers: authHeaders(),

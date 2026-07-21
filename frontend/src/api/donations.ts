@@ -16,9 +16,16 @@ export interface DonationImportSummary {
 export const donationsApi = {
   funds: () => fetch(`${BASE}/api/donations/funds`, { headers: authHeaders() }).then(j<FundSummary[]>),
 
-  import: (donationFile: File) => {
+  /** sourceFile identifies the Drive archive copy of this CSV (see
+   * lib/googleDrive.ts::uploadCampaignImportFile) - omitted if that upload
+   * failed, which never blocks the data import itself. */
+  import: (donationFile: File, sourceFile?: { name: string; url: string }) => {
     const fd = new FormData();
     fd.append("donation_file", donationFile);
+    if (sourceFile) {
+      fd.append("source_file_name", sourceFile.name);
+      fd.append("source_file_link", sourceFile.url);
+    }
     return fetch(`${BASE}/api/donations/import`, {
       method: "POST",
       headers: authHeaders(),

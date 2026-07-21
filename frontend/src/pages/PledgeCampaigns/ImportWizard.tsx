@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { pledgeCampaignsApi, PledgeCampaign, PledgeDashboard, Pledge } from "../../api/pledgeCampaigns";
 import { donationsApi, FundSummary } from "../../api/donations";
+import { uploadCampaignImportFile, PickedFile } from "../../lib/googleDrive";
 
 const STEPS = [
   { key: 1, label: "Campaign" },
@@ -182,12 +183,38 @@ export default function ImportWizard() {
     donationsApi.funds().then(setFunds).catch(() => setFunds([]));
   }, []);
 
+  // Every upload in this wizard is also archived to Google Drive (Campaign
+  // Imports folder / Campaign / <campaign name> / <file>) so a row can
+  // always be traced back to the exact file it came from. A Drive failure
+  // (not configured, popup blocked, network hiccup) never blocks the
+  // actual data import - it just means that one import's rows won't have
+  // a source file reference, surfaced as a dismissable warning instead.
+  const [driveWarning, setDriveWarning] = useState("");
+
+  async function archiveToDrive(file: File): Promise<PickedFile | null> {
+    if (!campaign) return null;
+    try {
+      setDriveWarning("");
+      return await uploadCampaignImportFile(campaign.name, file);
+    } catch (err) {
+      setDriveWarning(
+        `Couldn't save a copy to Google Drive (${(err as Error).message}) - the import will still proceed, ` +
+          `but this file won't be referenced for audit.`
+      );
+      return null;
+    }
+  }
+
   async function runDonationsImport() {
     if (!donationFile) return;
     setBusy(true);
     setError("");
     try {
-      const result = await donationsApi.import(donationFile);
+      const drive = await archiveToDrive(donationFile);
+      const result = await donationsApi.import(
+        donationFile,
+        drive ? { name: drive.name, url: drive.url } : undefined
+      );
       setFunds(result.funds);
       setDonationsImported(result.donations_imported);
     } catch (err) {
@@ -230,7 +257,13 @@ export default function ImportWizard() {
     setBusy(true);
     setError("");
     try {
-      const result = await pledgeCampaignsApi.importPledges(campaignId, fundName, pledgeFile);
+      const drive = await archiveToDrive(pledgeFile);
+      const result = await pledgeCampaignsApi.importPledges(
+        campaignId,
+        fundName,
+        pledgeFile,
+        drive ? { name: drive.name, url: drive.url } : undefined
+      );
       setPledgeSummary(result);
     } catch (err) {
       setError((err as Error).message);
@@ -252,7 +285,12 @@ export default function ImportWizard() {
     setBusy(true);
     setError("");
     try {
-      const result = await pledgeCampaignsApi.importDonors(campaignId, donorFile);
+      const drive = await archiveToDrive(donorFile);
+      const result = await pledgeCampaignsApi.importDonors(
+        campaignId,
+        donorFile,
+        drive ? { name: drive.name, url: drive.url } : undefined
+      );
       setDonorSummary(result);
       advance(5);
     } catch (err) {
@@ -286,6 +324,7 @@ export default function ImportWizard() {
       <Stepper step={step} maxStepReached={maxStepReached} onJump={setStep} />
 
       {error && <div className="error">{error}</div>}
+      {driveWarning && <div className="error">{driveWarning}</div>}
 
       {step === 1 && (
         <div className="card">

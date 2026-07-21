@@ -51,7 +51,7 @@ export default function Actuals({
           </thead>
           <tbody>
             {donations.map((d) => (
-              <tr key={d.id}>
+              <tr key={d.id} title={d.source_file_name ? `Imported from: ${d.source_file_name}` : undefined}>
                 <td>{d.received_date || ""}</td>
                 <td>{d.donor_id || "—"}</td>
                 {!hideDonorNames && (
