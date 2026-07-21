@@ -69,8 +69,32 @@ export interface PledgeImportSummary {
   updated_pledges: Pledge[];
 }
 
-export interface PledgeDetail {
-  pledge: Pledge;
+/** One row of the combined Details tab - either a pledge (has_pledge true,
+ * with its own due_date), or - for someone who gave to this fund but never
+ * submitted a pledge form - a synthesized row with pledged_amount 0 and no
+ * due_date. donor_id is null only for the one row grouping every donation
+ * that never matched any donor record at all. `key` is opaque - pass it
+ * straight to detail() to open the popup. */
+export interface CampaignDetailRow {
+  key: string;
+  donor_id: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+  pledged_amount: number;
+  actual_amount: number;
+  due_date: string | null;
+  has_pledge: boolean;
+  source_file_name: string;
+  source_file_link: string;
+}
+
+export interface CampaignDetail {
+  pledge: Pledge | null;
+  donor_id: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
   gifts: CampaignDonation[];
 }
 
@@ -165,11 +189,6 @@ export const pledgeCampaignsApi = {
       headers: authHeaders(),
     }).then(j<PledgeDashboard>),
 
-  pledges: (campaignId: number) =>
-    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/pledges`, {
-      headers: authHeaders(),
-    }).then(j<Pledge[]>),
-
   setPledgeMatch: (campaignId: number, pledgeId: number, donorId: string | null) =>
     fetch(`${BASE}/api/pledge-campaigns/${campaignId}/pledges/${pledgeId}/match`, {
       method: "PUT",
@@ -177,13 +196,15 @@ export const pledgeCampaignsApi = {
       body: JSON.stringify({ donor_id: donorId }),
     }).then(j<Pledge>),
 
-  donations: (campaignId: number) =>
-    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/donations`, {
+  /** The combined Details tab: pledges plus anyone who gave without
+   * pledging. */
+  details: (campaignId: number) =>
+    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/details`, {
       headers: authHeaders(),
-    }).then(j<CampaignDonation[]>),
+    }).then(j<CampaignDetailRow[]>),
 
-  pledgeDetail: (campaignId: number, pledgeId: number) =>
-    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/pledges/${pledgeId}`, {
+  detail: (campaignId: number, key: string) =>
+    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/details/${encodeURIComponent(key)}`, {
       headers: authHeaders(),
-    }).then(j<PledgeDetail>),
+    }).then(j<CampaignDetail>),
 };

@@ -2,25 +2,28 @@ import { useState } from "react";
 import { User } from "../../api/auth";
 import { useCampaign } from "./useCampaign";
 import Status from "./Status";
-import Pledges from "./Pledges";
-import Actuals from "./Actuals";
+import Details from "./Details";
 
-type SubTab = "status" | "pledges" | "actuals";
+type SubTab = "status" | "details";
 
-const SUB_TABS: { key: SubTab; label: string; permission: string }[] = [
-  { key: "status", label: "Status", permission: "pledge-campaign-status" },
-  { key: "pledges", label: "Pledges", permission: "pledge-campaign-pledges" },
-  { key: "actuals", label: "Actuals", permission: "pledge-campaign-actuals" },
+// "Details" is visible to anyone holding either of the two underlying
+// permission keys (Campaign Pledges / Campaign Actuals) - Users.tsx presents
+// them as one combined toggle now, but both keys still exist so nothing that
+// was already granted silently loses access.
+const SUB_TABS: { key: SubTab; label: string; permissions: string[] }[] = [
+  { key: "status", label: "Campaign Status", permissions: ["pledge-campaign-status"] },
+  { key: "details", label: "Campaign Details", permissions: ["pledge-campaign-pledges", "pledge-campaign-actuals"] },
 ];
 
 /** Single "Campaign Status" nav entry replacing what used to be three
  * separate pages (Phase 2 Status / Pledges / Actuals) - a shared campaign
- * picker up top, and Status/Pledges/Actuals as sub-tabs underneath, each
- * still gated by its own permission key so a user granted only one of the
- * three still sees just that one. */
+ * picker up top, and Status/Details as sub-tabs underneath, each still
+ * gated by permission so a user granted only one still sees just that one. */
 export default function PledgeCampaigns({ user }: { user: User }) {
   const { campaigns, campaign, campaignId, setCampaignId, error } = useCampaign();
-  const visibleTabs = SUB_TABS.filter((t) => user.is_admin || user.permissions.includes(t.permission));
+  const visibleTabs = SUB_TABS.filter(
+    (t) => user.is_admin || t.permissions.some((p) => user.permissions.includes(p))
+  );
   const [subTab, setSubTab] = useState<SubTab>(visibleTabs[0]?.key ?? "status");
 
   if (error) return <div className="error">{error}</div>;
@@ -72,15 +75,8 @@ export default function PledgeCampaigns({ user }: { user: User }) {
       {campaign && campaignId != null && (
         <>
           {activeTab === "status" && <Status campaignId={campaignId} />}
-          {activeTab === "pledges" && (
-            <Pledges campaignId={campaignId} hideDonorNames={user.hide_donor_names} />
-          )}
-          {activeTab === "actuals" && (
-            <Actuals
-              campaignId={campaignId}
-              fundName={campaign.fund_name}
-              hideDonorNames={user.hide_donor_names}
-            />
+          {activeTab === "details" && (
+            <Details campaignId={campaignId} hideDonorNames={user.hide_donor_names} />
           )}
         </>
       )}

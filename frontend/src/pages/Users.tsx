@@ -5,21 +5,25 @@ import { authApi, User } from "../api/auth";
 // corresponding Tab keys in App.tsx - kept as its own small list here since
 // App.tsx's NAV_GROUPS isn't exported, and this is the only other place a
 // page key needs a human label.
-const GRANTABLE_PAGES: { key: string; label: string }[] = [
-  { key: "upload", label: "Upload" },
-  { key: "reconciliation", label: "Actual" },
-  { key: "accrual", label: "Accrual" },
-  { key: "budget", label: "Budget" },
-  { key: "general-ledger", label: "General Ledger" },
-  { key: "income-statement", label: "Income Statement" },
-  { key: "rules", label: "Rules" },
-  { key: "accounts", label: "Chart of Accounts" },
-  { key: "link-receipts", label: "Link Receipts" },
-  { key: "config", label: "Config" },
-  { key: "pledge-campaign-status", label: "Campaign Status" },
-  { key: "pledge-campaign-pledges", label: "Campaign Pledges" },
-  { key: "pledge-campaign-actuals", label: "Campaign Actuals" },
-  { key: "donors", label: "Giving App - Donors" },
+// Most entries grant one permission key; "Campaign Details" grants two at
+// once (pledge-campaign-pledges + pledge-campaign-actuals) since the two
+// tabs those used to gate were merged into one Details tab - kept as two
+// backend keys (require_any_permission on the read side) so nobody already
+// granted one of them silently loses page access.
+const GRANTABLE_PAGES: { keys: string[]; label: string }[] = [
+  { keys: ["upload"], label: "Upload" },
+  { keys: ["reconciliation"], label: "Actual" },
+  { keys: ["accrual"], label: "Accrual" },
+  { keys: ["budget"], label: "Budget" },
+  { keys: ["general-ledger"], label: "General Ledger" },
+  { keys: ["income-statement"], label: "Income Statement" },
+  { keys: ["rules"], label: "Rules" },
+  { keys: ["accounts"], label: "Chart of Accounts" },
+  { keys: ["link-receipts"], label: "Link Receipts" },
+  { keys: ["config"], label: "Config" },
+  { keys: ["pledge-campaign-status"], label: "Campaign Status" },
+  { keys: ["pledge-campaign-pledges", "pledge-campaign-actuals"], label: "Campaign Details" },
+  { keys: ["donors"], label: "Giving App - Donors" },
 ];
 
 type AccountType = "local" | "google";
@@ -95,9 +99,11 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
     setHideDonorNames(u ? u.hide_donor_names : false);
   }
 
-  function togglePermission(key: string) {
+  function togglePermission(keys: string[]) {
     setPermissions((prev) =>
-      prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]
+      keys.every((k) => prev.includes(k))
+        ? prev.filter((p) => !keys.includes(p))
+        : [...prev.filter((p) => !keys.includes(p)), ...keys]
     );
   }
 
@@ -260,19 +266,19 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
                 onChange={(e) => setHideDonorNames(e.target.checked)}
               />
               <span>
-                Hide donor names (redacts donor name/email on the Campaign Pledges and
-                Actuals pages for this user - applies even if they're an admin)
+                Hide donor names (redacts donor name/email on the Campaign Details page for
+                this user - applies even if they're an admin)
               </span>
             </label>
 
             {!isAdminGrant && (
               <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
                 {GRANTABLE_PAGES.map((p) => (
-                  <label key={p.key} className="field-checkbox" style={{ minWidth: 180 }}>
+                  <label key={p.keys.join("+")} className="field-checkbox" style={{ minWidth: 180 }}>
                     <input
                       type="checkbox"
-                      checked={permissions.includes(p.key)}
-                      onChange={() => togglePermission(p.key)}
+                      checked={p.keys.every((k) => permissions.includes(k))}
+                      onChange={() => togglePermission(p.keys)}
                     />
                     <span>{p.label}</span>
                   </label>

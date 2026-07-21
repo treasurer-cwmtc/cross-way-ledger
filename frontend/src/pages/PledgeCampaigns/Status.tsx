@@ -153,27 +153,46 @@ function TimelineChart({ dashboard }: { dashboard: PledgeDashboard }) {
         <path d={pledgedPath} fill="none" stroke={COLOR_PLEDGED} strokeWidth={2.5} />
         <path d={actualPath} fill="none" stroke={COLOR_ACTUAL} strokeWidth={2.5} />
 
-        {/* Latest-value labels at the last dot of each line */}
-        <circle cx={x(last.t)} cy={y(last.running_pledged_total)} r={3.5} fill={COLOR_PLEDGED} />
-        <text
-          x={Math.min(x(last.t) + 6, plotRight - 2)}
-          y={y(last.running_pledged_total) - 6}
-          fontSize={11}
-          fontWeight={600}
-          fill={COLOR_PLEDGED}
-        >
-          {fmtMoney(last.running_pledged_total)}
-        </text>
-        <circle cx={x(last.t)} cy={y(last.running_actual_total)} r={3.5} fill={COLOR_ACTUAL} />
-        <text
-          x={Math.min(x(last.t) + 6, plotRight - 2)}
-          y={y(last.running_actual_total) + 14}
-          fontSize={11}
-          fontWeight={600}
-          fill={COLOR_ACTUAL}
-        >
-          {fmtMoney(last.running_actual_total)}
-        </text>
+        {/* Latest-value labels at the last dot of each line. The last point
+            always sits exactly at plotRight (it's "today"), so a label
+            placed to its right - past the edge of the viewBox - gets
+            silently clipped; anchoring "end" and placing it to the LEFT of
+            the dot instead keeps it fully on-canvas. A background rect
+            behind each (same trick as the goal label) keeps it legible
+            over the gridlines/lines that cross behind it. */}
+        {(() => {
+          const pledgedY = y(last.running_pledged_total);
+          const actualY = y(last.running_actual_total);
+          // If the two latest values are close together, stack their labels
+          // further apart than "just above/below the dot" so they don't
+          // collide with each other.
+          const tooClose = Math.abs(pledgedY - actualY) < 20;
+          const pledgedLabelY = tooClose ? Math.min(pledgedY, actualY) - 12 : pledgedY - 8;
+          const actualLabelY = tooClose ? Math.max(pledgedY, actualY) + 16 : actualY + 16;
+          const labelText = (yPos: number, text: string, color: string) => (
+            <>
+              <rect
+                x={plotRight - 90}
+                y={yPos - 12}
+                width={90}
+                height={16}
+                fill="var(--card)"
+                opacity={0.9}
+              />
+              <text x={plotRight - 4} y={yPos} textAnchor="end" fontSize={11.5} fontWeight={700} fill={color}>
+                {text}
+              </text>
+            </>
+          );
+          return (
+            <>
+              <circle cx={x(last.t)} cy={pledgedY} r={3.5} fill={COLOR_PLEDGED} />
+              <circle cx={x(last.t)} cy={actualY} r={3.5} fill={COLOR_ACTUAL} />
+              {labelText(pledgedLabelY, fmtMoney(last.running_pledged_total), COLOR_PLEDGED)}
+              {labelText(actualLabelY, fmtMoney(last.running_actual_total), COLOR_ACTUAL)}
+            </>
+          );
+        })()}
 
         {/* Crosshair: one vertical line + a marker on each of the 3 series,
             at whatever x the mouse is over - not three separate hover targets. */}

@@ -132,8 +132,8 @@ export default function App() {
               if (item.adminOnly) return user.is_admin;
               if (item.tab === "home") return true;
               // The single Campaign Status entry covers three underlying
-              // permission keys (its Status/Pledges/Actuals sub-tabs) - show
-              // it if the user holds any one of them.
+              // permission keys (its Status/Details sub-tabs) - show it if
+              // the user holds any one of them.
               if (item.tab === "pledge-campaigns") {
                 return (
                   user.is_admin ||
