@@ -7,6 +7,7 @@ export interface PledgeOption {
   email: string;
   pledgedAmount: number;
   matchedDonorId: string | null;
+  jointGiverName: string;
 }
 
 function fmtMoney(n: number): string {
@@ -143,6 +144,7 @@ export default function PledgePicker({
                 {m.matchedDonorId && (
                   <span className="subtitle"> (currently matched to another donor)</span>
                 )}
+                {m.jointGiverName && <span className="subtitle"> · joint giver: {m.jointGiverName}</span>}
               </div>
             ))}
             {matches.length === 0 && <div className="autocomplete-empty">No matching pledges</div>}

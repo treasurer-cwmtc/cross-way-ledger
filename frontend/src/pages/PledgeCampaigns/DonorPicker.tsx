@@ -149,6 +149,12 @@ export default function DonorPicker(props: {
                 onMouseEnter={() => setHighlight(i + 1)}
               >
                 {labelFor(d)} · {d.email}
+                {d.joint_giver_id && (
+                  <span className="subtitle">
+                    {" "}
+                    · joint giver: {`${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim() || d.joint_giver_id}
+                  </span>
+                )}
               </div>
             ))}
             {matches.length === 0 && <div className="autocomplete-empty">No matches</div>}

@@ -74,7 +74,11 @@ export interface PledgeImportSummary {
  * submitted a pledge form - a synthesized row with pledged_amount 0 and no
  * due_date. donor_id is null only for the one row grouping every donation
  * that never matched any donor record at all. `key` is opaque - pass it
- * straight to detail() to open the popup. */
+ * straight to detail() to open the popup.
+ *
+ * When the matched donor has a joint giver with no pledge of their own,
+ * actual_amount already includes that spouse's donations (folded in
+ * server-side) - joint_giver_* here is just for display/context. */
 export interface CampaignDetailRow {
   key: string;
   donor_id: string | null;
@@ -85,6 +89,9 @@ export interface CampaignDetailRow {
   actual_amount: number;
   due_date: string | null;
   has_pledge: boolean;
+  joint_giver_id: string;
+  joint_giver_first_name: string;
+  joint_giver_last_name: string;
   source_file_name: string;
   source_file_link: string;
 }
@@ -92,6 +99,9 @@ export interface CampaignDetailRow {
 export interface CampaignDetail {
   pledge: Pledge | null;
   donor_id: string | null;
+  joint_giver_id: string;
+  joint_giver_first_name: string;
+  joint_giver_last_name: string;
   first_name: string;
   last_name: string;
   email: string;

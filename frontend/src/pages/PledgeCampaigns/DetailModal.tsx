@@ -78,6 +78,9 @@ export default function DetailModal({
 
   const p = detail.pledge;
   const giftTotal = detail.gifts.reduce((sum, g) => sum + g.net_amount, 0);
+  // Only worth its own column when gifts could actually come from more than
+  // one person - i.e. the joint-giver fold is in effect for this pledge.
+  const showGiverColumn = !hideDonorNames && !!detail.joint_giver_id;
   const title = hideDonorNames
     ? `Donor #${detail.donor_id || "?"}`
     : `${detail.first_name} ${detail.last_name}`.trim() || "Giving detail";
@@ -108,6 +111,15 @@ export default function DetailModal({
               <div className="stat">
                 <b>{fmtMoney(giftTotal)}</b>
                 <span>Received Amount</span>
+                {detail.joint_giver_id && !hideDonorNames && (
+                  <span className="subtitle">
+                    {" "}
+                    (includes giving from joint giver:{" "}
+                    {`${detail.joint_giver_first_name} ${detail.joint_giver_last_name}`.trim() ||
+                      detail.joint_giver_id}
+                    )
+                  </span>
+                )}
               </div>
               <div className="stat">
                 <b>{p.due_date || "—"}</b>
@@ -140,6 +152,15 @@ export default function DetailModal({
                     <tr>
                       <td className="subtitle">Email</td>
                       <td>{p.email}</td>
+                    </tr>
+                    <tr>
+                      <td className="subtitle">Joint giver</td>
+                      <td>
+                        {detail.joint_giver_id
+                          ? `${detail.joint_giver_first_name} ${detail.joint_giver_last_name}`.trim() ||
+                            detail.joint_giver_id
+                          : "—"}
+                      </td>
                     </tr>
                   </>
                 )}
@@ -201,6 +222,7 @@ export default function DetailModal({
               <thead>
                 <tr>
                   <th>Date</th>
+                  {showGiverColumn && <th>Giver</th>}
                   <th>Net Amount</th>
                   <th>Method</th>
                   <th>Source file</th>
@@ -210,6 +232,9 @@ export default function DetailModal({
                 {detail.gifts.map((g) => (
                   <tr key={g.id}>
                     <td>{g.received_date || ""}</td>
+                    {showGiverColumn && (
+                      <td>{`${g.donor_first_name} ${g.donor_last_name}`.trim() || g.donor_id || "—"}</td>
+                    )}
                     <td>{fmtMoney(g.net_amount)}</td>
                     <td>{g.method}</td>
                     <td>{sourceFileCell(g.source_file_name, g.source_file_link)}</td>

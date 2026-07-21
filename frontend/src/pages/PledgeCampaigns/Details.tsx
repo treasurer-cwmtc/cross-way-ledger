@@ -7,7 +7,14 @@ function fmtMoney(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 }
 
-type SortKey = "donor_id" | "name" | "email" | "pledged_amount" | "actual_amount" | "due_date";
+type SortKey =
+  | "donor_id"
+  | "name"
+  | "email"
+  | "pledged_amount"
+  | "actual_amount"
+  | "due_date"
+  | "joint_giver";
 
 function sortValue(r: CampaignDetailRow, key: SortKey): string | number {
   switch (key) {
@@ -23,6 +30,8 @@ function sortValue(r: CampaignDetailRow, key: SortKey): string | number {
       return r.actual_amount;
     case "due_date":
       return r.due_date || "";
+    case "joint_giver":
+      return `${r.joint_giver_first_name} ${r.joint_giver_last_name}`.trim();
   }
 }
 
@@ -82,6 +91,7 @@ export default function Details({
   const [nameFilter, setNameFilter] = useState<Set<string> | null>(null);
   const [emailFilter, setEmailFilter] = useState<Set<string> | null>(null);
   const [dueDateFilter, setDueDateFilter] = useState<DateFilterValue | null>(null);
+  const [jointGiverFilter, setJointGiverFilter] = useState<Set<string> | null>(null);
 
   function reload() {
     pledgeCampaignsApi
@@ -96,6 +106,7 @@ export default function Details({
     setNameFilter(null);
     setEmailFilter(null);
     setDueDateFilter(null);
+    setJointGiverFilter(null);
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
@@ -123,16 +134,25 @@ export default function Details({
       Array.from(new Set((rows ?? []).flatMap((r) => (r.due_date ? [r.due_date.slice(0, 7)] : [])))).sort(),
     [rows]
   );
+  const jointGiverOptions = useMemo(
+    () =>
+      Array.from(
+        new Set((rows ?? []).map((r) => `${r.joint_giver_first_name} ${r.joint_giver_last_name}`.trim()))
+      ).sort(),
+    [rows]
+  );
 
   const visibleRows = useMemo(() => {
     if (!rows) return [];
     let out = rows.filter((r) => {
       const donorId = r.donor_id || "—";
       const name = `${r.first_name} ${r.last_name}`.trim();
+      const jointGiver = `${r.joint_giver_first_name} ${r.joint_giver_last_name}`.trim();
       if (donorIdFilter && !donorIdFilter.has(donorId)) return false;
       if (nameFilter && !nameFilter.has(name)) return false;
       if (emailFilter && !emailFilter.has(r.email)) return false;
       if (!dateMatchesFilter(r.due_date, dueDateFilter)) return false;
+      if (jointGiverFilter && !jointGiverFilter.has(jointGiver)) return false;
       return true;
     });
     if (sort.key) {
@@ -145,7 +165,7 @@ export default function Details({
       });
     }
     return out;
-  }, [rows, sort, donorIdFilter, nameFilter, emailFilter, dueDateFilter]);
+  }, [rows, sort, donorIdFilter, nameFilter, emailFilter, dueDateFilter, jointGiverFilter]);
 
   // The pledge rows currently loaded, offered as link targets when fixing a
   // giver-without-a-pledge row's match - built from what's already on the
@@ -160,6 +180,7 @@ export default function Details({
           email: r.email,
           pledgedAmount: r.pledged_amount,
           matchedDonorId: r.donor_id,
+          jointGiverName: `${r.joint_giver_first_name} ${r.joint_giver_last_name}`.trim(),
         })),
     [rows]
   );
@@ -172,7 +193,8 @@ export default function Details({
       <p className="subtitle" style={{ marginTop: 0 }}>
         Every pledge form submission, plus anyone who gave to this fund without pledging. Click a
         row to see full detail, or link it to a pledge/donor manually if the automatic email match
-        missed it.
+        missed it. When a pledge's donor has a joint giver who didn't pledge separately, Received
+        Amount already includes that spouse's giving.
       </p>
 
       <div className="table-wrap">
@@ -241,6 +263,22 @@ export default function Details({
                   />
                 }
               />
+              {!hideDonorNames && (
+                <SortableHeader
+                  label="Joint Giver"
+                  sortKey="joint_giver"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Joint Giver"
+                      options={jointGiverOptions}
+                      selected={jointGiverFilter}
+                      onChange={setJointGiverFilter}
+                    />
+                  }
+                />
+              )}
             </tr>
           </thead>
           <tbody>
@@ -264,11 +302,18 @@ export default function Details({
                 <td>{r.has_pledge ? fmtMoney(r.pledged_amount) : "—"}</td>
                 <td>{fmtMoney(r.actual_amount)}</td>
                 <td>{r.due_date || ""}</td>
+                {!hideDonorNames && (
+                  <td>
+                    {r.joint_giver_id
+                      ? `${r.joint_giver_first_name} ${r.joint_giver_last_name}`.trim() || r.joint_giver_id
+                      : ""}
+                  </td>
+                )}
               </tr>
             ))}
             {visibleRows.length === 0 && (
               <tr>
-                <td colSpan={hideDonorNames ? 4 : 6} className="subtitle">
+                <td colSpan={hideDonorNames ? 4 : 7} className="subtitle">
                   {rows.length === 0 ? "No pledges or giving on file yet." : "No rows match the current filters."}
                 </td>
               </tr>
