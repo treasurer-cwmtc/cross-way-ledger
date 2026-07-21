@@ -543,6 +543,8 @@ class DonorOut(BaseModel):
     state: str
     donation_count: int
     total_given: float
+    source_file_name: str
+    source_file_link: str
 
 
 class PledgeOut(BaseModel):
@@ -560,6 +562,8 @@ class PledgeOut(BaseModel):
     donor_id: str | None
     match_source: str | None
     actual_amount: float
+    source_file_name: str
+    source_file_link: str
 
 
 class PledgeMatchUpdate(BaseModel):
@@ -604,6 +608,8 @@ class DonationOut(BaseModel):
     amount: float
     net_amount: float
     method: str
+    source_file_name: str
+    source_file_link: str
 
 
 class PledgeDetailOut(BaseModel):
@@ -617,10 +623,11 @@ class PledgeDetailOut(BaseModel):
 
 class PledgeDashboardPoint(BaseModel):
     date: date
-    # Cumulative actual (received) total as of this date - excludes the
-    # campaign's starting_balance on purpose, so this chart always reads as
-    # "raised since tracking began," matching total_actual, not total_raised.
-    running_total: float
+    # Cumulative totals as of this date - both exclude the campaign's
+    # starting_balance on purpose (shown as its own KPI instead), so the
+    # chart always reads as "since tracking began," not "since forever."
+    running_pledged_total: float
+    running_actual_total: float
     # This date's own contribution, not cumulative - a day can have either,
     # both, or (for a hover target with no gift) neither.
     pledged_amount: float

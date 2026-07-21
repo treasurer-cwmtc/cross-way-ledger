@@ -120,6 +120,8 @@ async def import_pledges(
     campaign_id: int,
     fund_name: str = Form(...),
     pledge_file: UploadFile = File(...),
+    source_file_name: str = Form(""),
+    source_file_link: str = Form(""),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> PledgeImportSummary:
@@ -127,7 +129,14 @@ async def import_pledges(
     - the donations already on file, step 1) this campaign tracks, plus the
     pledge form export. Upserts pledges (deduped on submission_id) and
     attempts matching against whatever donors currently exist - if donors
-    haven't been imported yet, step 3 re-runs this once they have."""
+    haven't been imported yet, step 3 re-runs this once they have.
+
+    source_file_name/source_file_link identify the Drive copy of the CSV
+    the frontend archived before calling this endpoint (see
+    lib/googleDrive.ts::uploadCampaignImportFile) - stored on every row
+    touched by this import so a treasurer can trace any pledge back to the
+    exact file it came from. Left blank if the Drive upload failed or
+    wasn't configured; that never blocks the actual data import."""
     campaign = _get_campaign(db, campaign_id)
     campaign.fund_name = fund_name
 
@@ -155,6 +164,9 @@ async def import_pledges(
         pledge.due_date = row.due_date
         pledge.monthly_amount = row.monthly_amount
         pledge.contact_method = row.contact_method
+        if source_file_name:
+            pledge.source_file_name = source_file_name
+            pledge.source_file_link = source_file_link
     db.commit()
 
     matched, unmatched = _rematch_campaign_pledges(db, campaign_id)
@@ -181,13 +193,18 @@ async def import_pledges(
     dependencies=[Depends(require_permission("pledge-campaign-status"))],
 )
 async def import_donors_for_campaign(
-    campaign_id: int, donor_file: UploadFile = File(...), db: Session = Depends(get_db)
+    campaign_id: int,
+    donor_file: UploadFile = File(...),
+    source_file_name: str = Form(""),
+    source_file_link: str = Form(""),
+    db: Session = Depends(get_db),
 ) -> DonorImportSummary:
     """Step 3 of the wizard: the donor list (general, not campaign-scoped -
     shared with every campaign and the Config > Giving App - Donors page).
     Upserts by donor_id, then re-runs matching for this campaign's pledges
     now that fresh donor data has arrived - a pledge left unmatched in step
-    2 can resolve here without re-uploading anything."""
+    2 can resolve here without re-uploading anything. source_file_name/link
+    identify the Drive-archived copy of this CSV - see import_pledges."""
     _get_campaign(db, campaign_id)
 
     rows = parse_donor_csv(await _read_csv(donor_file))
@@ -213,6 +230,9 @@ async def import_donors_for_campaign(
         donor.first_donated = row.first_donated
         donor.donation_count = row.donation_count
         donor.total_given = row.total_given
+        if source_file_name:
+            donor.source_file_name = source_file_name
+            donor.source_file_link = source_file_link
         imported += 1
     db.commit()
 
@@ -250,6 +270,8 @@ def _pledge_out(p: Pledge, match: PledgeDonorMatch | None, actual_amount: float,
         donor_id=match.donor_id if match else None,
         match_source=match.match_source if match else None,
         actual_amount=actual_amount,
+        source_file_name=p.source_file_name,
+        source_file_link=p.source_file_link,
     )
 
 
@@ -265,6 +287,8 @@ def _donation_out(d: Donation, donor: Donor | None, redact: bool) -> DonationOut
         amount=d.amount,
         net_amount=d.net_amount,
         method=d.method,
+        source_file_name=d.source_file_name,
+        source_file_link=d.source_file_link,
     )
 
 
@@ -406,10 +430,10 @@ def get_dashboard(campaign_id: int, db: Session = Depends(get_db)) -> PledgeDash
 
     # One point per day that had EITHER a pledge submission or a donation -
     # not just donation dates, so there's more to see on the x-axis than a
-    # sparse "only when money actually arrived" line. running_total is
-    # cumulative actual (received) giving ONLY - starting_balance is
-    # deliberately excluded here (it's shown as its own KPI card instead),
-    # so this always reads as "raised since tracking began."
+    # sparse "only when money actually arrived" line. Both running totals
+    # deliberately exclude starting_balance (it's shown as its own KPI card
+    # instead), so the chart and the progress bar both always read as
+    # "since tracking began," not "since forever."
     pledged_by_date: dict[date, float] = {}
     for p in pledges:
         if p.date_submitted is None:
@@ -426,14 +450,17 @@ def get_dashboard(campaign_id: int, db: Session = Depends(get_db)) -> PledgeDash
         )
 
     all_dates = sorted(set(pledged_by_date) | set(actual_by_date))
-    running = 0.0
+    running_pledged = 0.0
+    running_actual = 0.0
     timeline: list[PledgeDashboardPoint] = []
     for d in all_dates:
-        running += actual_by_date.get(d, 0.0)
+        running_pledged += pledged_by_date.get(d, 0.0)
+        running_actual += actual_by_date.get(d, 0.0)
         timeline.append(
             PledgeDashboardPoint(
                 date=d,
-                running_total=round(running, 2),
+                running_pledged_total=round(running_pledged, 2),
+                running_actual_total=round(running_actual, 2),
                 pledged_amount=round(pledged_by_date.get(d, 0.0), 2),
                 actual_amount=round(actual_by_date.get(d, 0.0), 2),
             )
@@ -447,6 +474,11 @@ def get_dashboard(campaign_id: int, db: Session = Depends(get_db)) -> PledgeDash
         pledge_count=len(pledges),
         donation_count=len(donations),
         goal_amount=goal,
-        percent_of_goal=round((total_raised / goal) * 100, 1) if goal else 0.0,
+        # Progress toward goal is judged against money actually raised since
+        # tracking began (total_actual), not total_raised - starting_balance
+        # is real money but predates this campaign's own tracking, and
+        # mixing it in here would make the progress bar disagree with the
+        # chart directly below it.
+        percent_of_goal=round((total_actual / goal) * 100, 1) if goal else 0.0,
         timeline=timeline,
     )

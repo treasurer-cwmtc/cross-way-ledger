@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -45,13 +45,18 @@ def list_funds(db: Session = Depends(get_db)) -> list[FundSummary]:
 
 @router.post("/import", response_model=DonationImportSummary)
 async def import_donations(
-    donation_file: UploadFile = File(...), db: Session = Depends(get_db)
+    donation_file: UploadFile = File(...),
+    source_file_name: str = Form(""),
+    source_file_link: str = Form(""),
+    db: Session = Depends(get_db),
 ) -> DonationImportSummary:
-    """Step 1 of the pledge campaign wizard: the Giving App's donation
-    export is the source of truth, imported in full and independent of any
-    one campaign - a campaign just picks a fund from what shows up here.
-    Safe to re-run; donations already on file (by the Giving App's own
-    transaction id) are skipped."""
+    """Step 1 of the pledge campaign wizard (now step 2, after choosing a
+    campaign - see ImportWizard.tsx): the Giving App's donation export is
+    the source of truth, imported in full and independent of any one
+    campaign - a campaign just picks a fund from what shows up here. Safe
+    to re-run; donations already on file (by the Giving App's own
+    transaction id) are skipped. source_file_name/link identify the Drive-
+    archived copy of this CSV - see import_pledges."""
     rows = parse_donation_csv(await _read_csv(donation_file))
     existing_keys = set(db.scalars(select(Donation.dedup_key)))
 
@@ -68,6 +73,8 @@ async def import_donations(
                 amount=row.amount,
                 net_amount=row.net_amount,
                 method=row.method,
+                source_file_name=source_file_name,
+                source_file_link=source_file_link,
             )
         )
         existing_keys.add(row.dedup_key)

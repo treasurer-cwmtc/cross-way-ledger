@@ -128,7 +128,11 @@ def test_pledge_import_donor_match_and_dashboard():
     # total_raised includes starting_balance, but the timeline must not.
     assert round(dashboard["total_raised"], 2) == 448.50
     final_point = dashboard["timeline"][-1]
-    assert round(final_point["running_total"], 2) == 348.50
+    assert round(final_point["running_actual_total"], 2) == 348.50
+    assert round(final_point["running_pledged_total"], 2) == 1500.00
+    # Progress toward goal is judged against money actually raised, not
+    # money raised + starting balance.
+    assert dashboard["percent_of_goal"] == round(348.50 / 2000 * 100, 1)
 
 
 def test_dashboard_timeline_has_per_day_pledge_and_actual_amounts():
@@ -145,8 +149,9 @@ def test_dashboard_timeline_has_per_day_pledge_and_actual_amounts():
     assert "2026-01-01" in by_date
     assert round(by_date["2026-01-01"]["pledged_amount"], 2) == 1000.00
     assert by_date["2026-01-01"]["actual_amount"] == 0.0
-    # No point's running_total should ever include the 500 starting balance.
-    assert all(p["running_total"] <= 348.50 + 0.01 for p in timeline)
+    # No point's running totals should ever include the 500 starting balance.
+    assert all(p["running_actual_total"] <= 348.50 + 0.01 for p in timeline)
+    assert all(p["running_pledged_total"] <= 1500.00 + 0.01 for p in timeline)
 
 
 def test_manual_match_and_pledge_detail_popup():
@@ -261,3 +266,51 @@ def test_delete_fund_removes_only_that_funds_donations():
     assert r.status_code == 200, r.text
     after = {f["name"]: f for f in r.json()}
     assert "Delete Me Fund" not in after
+
+
+def test_source_file_reference_stored_on_import():
+    """The frontend archives each uploaded CSV to Google Drive before
+    calling the import endpoint, then passes the resulting file name/link
+    along so every row can be traced back to the file it came from."""
+    h = auth_header()
+    donation_csv = (
+        "id,donor_id,received_date,fund,amount,net_amount,payment_method\n"
+        "srcfile1,DONX,2026-05-01,Source File Fund,10.00,10.00,check\n"
+    )
+    r = _upload(
+        "/api/donations/import",
+        "donations.csv",
+        donation_csv,
+        "donation_file",
+        {"source_file_name": "2026-05-01_donations.csv", "source_file_link": "https://drive.google.com/file/d/abc"},
+    )
+    assert r.status_code == 200, r.text
+
+    campaign = _create_campaign(name="Source File Campaign")
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/pledges",
+        "pledges.csv",
+        PLEDGES_CSV,
+        "pledge_file",
+        {
+            "fund_name": "Source File Fund",
+            "source_file_name": "2026-05-01_pledges.csv",
+            "source_file_link": "https://drive.google.com/file/d/def",
+        },
+    )
+    assert r.status_code == 200, r.text
+    pledge = r.json()["new_pledges"][0]
+    assert pledge["source_file_name"] == "2026-05-01_pledges.csv"
+    assert pledge["source_file_link"] == "https://drive.google.com/file/d/def"
+
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/donors",
+        "donors.csv",
+        DONORS_CSV,
+        "donor_file",
+        {"source_file_name": "2026-05-01_donors.csv", "source_file_link": "https://drive.google.com/file/d/ghi"},
+    )
+    assert r.status_code == 200, r.text
+
+    donations = client.get(f"/api/pledge-campaigns/{campaign['id']}/donations", headers=h).json()
+    assert any(d["source_file_name"] == "2026-05-01_donations.csv" for d in donations)

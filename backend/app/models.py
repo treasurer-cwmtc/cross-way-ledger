@@ -468,6 +468,11 @@ class Donor(Base):
     first_donated: Mapped[date | None] = mapped_column(Date, nullable=True)
     donation_count: Mapped[int] = mapped_column(Integer, default=0)
     total_given: Mapped[float] = mapped_column(Float, default=0.0)
+    # The Drive copy of the donor-export CSV this row was last
+    # imported/updated from - lets a treasurer trace any row back to the
+    # actual file for audit, rather than just trusting the import happened.
+    source_file_name: Mapped[str] = mapped_column(String(300), default="")
+    source_file_link: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -501,6 +506,10 @@ class Pledge(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # The Drive copy of the pledge-form export CSV this row was last
+    # imported/updated from - see Donor.source_file_name.
+    source_file_name: Mapped[str] = mapped_column(String(300), default="")
+    source_file_link: Mapped[str] = mapped_column(Text, default="")
 
     campaign: Mapped[PledgeCampaign] = relationship(back_populates="pledges")
     match: Mapped["PledgeDonorMatch | None"] = relationship(
@@ -569,3 +578,8 @@ class Donation(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # The Drive copy of the donations export CSV this row was imported
+    # from - see Donor.source_file_name. Donations are never updated after
+    # creation (only inserted, deduped by dedup_key), so this is set once.
+    source_file_name: Mapped[str] = mapped_column(String(300), default="")
+    source_file_link: Mapped[str] = mapped_column(Text, default="")
