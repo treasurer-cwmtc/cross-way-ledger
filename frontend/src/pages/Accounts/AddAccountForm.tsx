@@ -12,6 +12,8 @@ export default function AddAccountForm(props: {
   const [category, setCategory] = useState("Income");
   const [statementCategoryId, setStatementCategoryId] = useState<number | "">("");
   const [statementItemId, setStatementItemId] = useState<number | "">("");
+  const [creatingNewItem, setCreatingNewItem] = useState(false);
+  const [newItemName, setNewItemName] = useState("");
   const [statementDetail, setStatementDetail] = useState("");
   const [isTaxDeductible, setIsTaxDeductible] = useState(false);
   const [isMandatory, setIsMandatory] = useState(false);
@@ -24,6 +26,16 @@ export default function AddAccountForm(props: {
   const categoriesInScope = props.statementCategories.filter((c) => c.category === category);
   const itemsInScope = props.statementItems.filter(
     (i) => i.statement_category_id === statementCategoryId
+  );
+
+  // Same duplicate rule AddStatementItemForm enforces server-side: a
+  // Statement Item name can't repeat under the same Statement Category.
+  const trimmedNewItemName = newItemName.trim();
+  const isNewItemDuplicate = useMemo(
+    () =>
+      !!trimmedNewItemName &&
+      itemsInScope.some((i) => i.name.trim().toLowerCase() === trimmedNewItemName.toLowerCase()),
+    [trimmedNewItemName, itemsInScope]
   );
 
   const trimmedDetail = statementDetail.trim();
@@ -42,7 +54,10 @@ export default function AddAccountForm(props: {
   useEffect(() => {
     setPreview("");
     setPreviewError("");
-    if (!statementItemId || isDuplicate) return;
+    // Can't preview account_no until the Statement Item actually exists -
+    // when creating one inline, the preview only becomes possible after
+    // that item is created, which happens at submit time instead.
+    if (!statementItemId || isDuplicate || creatingNewItem) return;
     const handle = setTimeout(async () => {
       try {
         const p = await accountsApi.previewAccountNo({
@@ -55,22 +70,31 @@ export default function AddAccountForm(props: {
       }
     }, 300);
     return () => clearTimeout(handle);
-  }, [statementItemId, statementDetail, isDuplicate]);
+  }, [statementItemId, statementDetail, isDuplicate, creatingNewItem]);
 
   async function submit() {
-    if (!statementItemId || isDuplicate) return;
+    if (creatingNewItem ? !statementCategoryId || !trimmedNewItemName || isNewItemDuplicate : !statementItemId || isDuplicate) {
+      return;
+    }
     setError("");
     setMsg("");
     setSaving(true);
     try {
+      let itemId = statementItemId as number;
+      if (creatingNewItem) {
+        const newItem = await accountsApi.createStatementItem(statementCategoryId as number, newItemName);
+        itemId = newItem.id;
+      }
       const created = await accountsApi.createAccount({
-        statement_item_id: statementItemId,
+        statement_item_id: itemId,
         statement_detail: statementDetail,
         is_tax_deductible: isTaxDeductible ? "Yes" : "",
         is_mandatory: isMandatory ? "Yes" : "",
       });
       setMsg(`Created ${created.account_no}.`);
       setStatementDetail("");
+      setNewItemName("");
+      setCreatingNewItem(false);
       props.onCreated();
     } catch (e) {
       setError((e as Error).message);
@@ -123,18 +147,42 @@ export default function AddAccountForm(props: {
         </label>
         <label className="field">
           <span>Statement Item</span>
-          <select
-            value={statementItemId}
-            onChange={(e) => setStatementItemId(Number(e.target.value) || "")}
+          {creatingNewItem ? (
+            <input
+              type="text"
+              className={isNewItemDuplicate ? "input-error" : ""}
+              value={newItemName}
+              placeholder="New Statement Item name"
+              onChange={(e) => setNewItemName(e.target.value)}
+              disabled={!statementCategoryId}
+            />
+          ) : (
+            <select
+              value={statementItemId}
+              onChange={(e) => setStatementItemId(Number(e.target.value) || "")}
+              disabled={!statementCategoryId}
+            >
+              <option value="">Select…</option>
+              {itemsInScope.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.no} · {i.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            className="link"
+            style={{ fontSize: 12, marginTop: 4, textAlign: "left" }}
             disabled={!statementCategoryId}
+            onClick={() => {
+              setCreatingNewItem((v) => !v);
+              setStatementItemId("");
+              setNewItemName("");
+            }}
           >
-            <option value="">Select…</option>
-            {itemsInScope.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.no} · {i.name}
-              </option>
-            ))}
-          </select>
+            {creatingNewItem ? "← Choose an existing Statement Item instead" : "+ Create a new Statement Item"}
+          </button>
         </label>
         <label className="field">
           <span>Statement Detail (optional)</span>
@@ -152,6 +200,11 @@ export default function AddAccountForm(props: {
           {trimmedDetail
             ? `A Statement Detail named "${trimmedDetail}" already exists under this item.`
             : "A blank-detail account already exists under this item."}
+        </div>
+      )}
+      {creatingNewItem && isNewItemDuplicate && (
+        <div className="error">
+          A Statement Item named "{trimmedNewItemName}" already exists under this category.
         </div>
       )}
       <div className="row">
@@ -174,15 +227,22 @@ export default function AddAccountForm(props: {
         <div className="field">
           <span>Account number</span>
           <div style={{ fontFamily: "monospace", fontSize: 16, padding: "6px 0" }}>
-            {preview || (previewError ? "—" : statementItemId ? "…" : "")}
+            {creatingNewItem
+              ? "assigned after the new Statement Item is created"
+              : preview || (previewError ? "—" : statementItemId ? "…" : "")}
           </div>
         </div>
       </div>
-      {previewError && <div className="error">{previewError}</div>}
+      {previewError && !creatingNewItem && <div className="error">{previewError}</div>}
       <button
         className="btn"
         onClick={submit}
-        disabled={saving || !statementItemId || isDuplicate || !preview || !!previewError}
+        disabled={
+          saving ||
+          (creatingNewItem
+            ? !statementCategoryId || !trimmedNewItemName || isNewItemDuplicate
+            : !statementItemId || isDuplicate || !preview || !!previewError)
+        }
       >
         Add account
       </button>
