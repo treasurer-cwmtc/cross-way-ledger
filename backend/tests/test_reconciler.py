@@ -111,17 +111,21 @@ def test_bank_keyword_categorization():
 
 
 def test_bank_keyword_rule_description_fills_description():
+    # make_session() drop_all/create_all/reseeds fresh, but that only
+    # happens on the NEXT call to it - this is the last test in this file,
+    # so a rule left behind here would otherwise leak into whatever other
+    # test file's shared (non-reset) DB runs next. Delete it again before
+    # closing, so this test's DB footprint doesn't outlive the test.
     db = make_session()
     try:
-        db.add(
-            CategoryRule(
-                rule_type="bank_keyword",
-                pattern="SAMS CLUB",
-                account_no="E151910",
-                description="Sams Club",
-                priority=1,
-            )
+        rule = CategoryRule(
+            rule_type="bank_keyword",
+            pattern="SAMS CLUB",
+            account_no="E151910",
+            description="Sams Club",
+            priority=1,
         )
+        db.add(rule)
         db.commit()
         bank = parse_bank_csv((FIXTURES / "sample_bank.csv").read_text())
         stripe = parse_stripe_csv((FIXTURES / "sample_stripe.csv").read_text())
@@ -130,8 +134,10 @@ def test_bank_keyword_rule_description_fills_description():
             list(db.scalars(select(ChartOfAccount)).all()),
         )
         result = reconcile(bank, stripe, categorizer)
+        sams_lines = [l for l in result.lines if "sams club" in l.bank_description.lower()]
+        assert sams_lines
+        assert all(l.description == "Sams Club" for l in sams_lines)
     finally:
+        db.delete(rule)
+        db.commit()
         db.close()
-    sams_lines = [l for l in result.lines if "sams club" in l.bank_description.lower()]
-    assert sams_lines
-    assert all(l.description == "Sams Club" for l in sams_lines)

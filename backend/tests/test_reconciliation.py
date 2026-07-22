@@ -78,6 +78,36 @@ def test_import_run_dedups_on_reimport():
     assert any(not e["account_no"] for e in imported_entries), "expected an uncategorized line in the fixture"
     assert all(e["notes"] != "Uncategorized - add a rule" for e in imported_entries)
 
+    # Description is a live join to the matching bank-keyword rule's own
+    # Description, not a value stamped in at import time - setting one on
+    # the SAMS CLUB rule after the fact must show up immediately on every
+    # already-imported line it matches, with no reimport needed.
+    sams_lines = [e for e in imported_entries if "sams club" in e["bank_description"].lower()]
+    assert sams_lines
+    assert all(e["description"] == "" for e in sams_lines)
+    sams_rule = next(
+        r
+        for r in client.get("/api/rules", headers=h).json()
+        if r["rule_type"] == "bank_keyword" and r["pattern"] == "SAMS CLUB"
+    )
+    upd = client.put(
+        f"/api/rules/{sams_rule['id']}", headers=h, json={"description": "Sams Club"}
+    )
+    assert upd.status_code == 200, upd.text
+    entries_after = client.get("/api/reconciliation", headers=h).json()
+    sams_lines_after = [e for e in entries_after if e["source_run_id"] == run_id and e["id"] in {s["id"] for s in sams_lines}]
+    assert sams_lines_after
+    assert all(e["description"] == "Sams Club" for e in sams_lines_after)
+
+    # A manually-typed description is never overwritten by a rule's.
+    manual = sams_lines_after[0]
+    client.put(
+        f"/api/reconciliation/{manual['id']}", headers=h, json={"description": "Manually typed"}
+    )
+    entries_manual = client.get("/api/reconciliation", headers=h).json()
+    manual_after = next(e for e in entries_manual if e["id"] == manual["id"])
+    assert manual_after["description"] == "Manually typed"
+
     # Re-importing the exact same run must skip everything - no duplicates.
     r2 = client.post(
         f"/api/reconciliation/import-run/{run_id}",

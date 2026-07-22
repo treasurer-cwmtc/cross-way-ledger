@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import require_permission
-from ..models import BankAccount, ChartOfAccount, ReconciliationEntry, ReconRun
+from ..models import BankAccount, CategoryRule, ChartOfAccount, ReconciliationEntry, ReconRun
 from ..schemas import (
     ReconciliationEntryOut,
     ReconciliationEntryUpdate,
@@ -13,6 +13,7 @@ from ..schemas import (
     SplitGroupOut,
     SplitRequest,
 )
+from ..services.categorizer import Categorizer
 from ..services.ledger import build_dedup_key, friendly_method, parse_date
 from ..services.reconciler import UNCATEGORIZED_NOTE
 
@@ -27,9 +28,17 @@ def _to_out(
     entry: ReconciliationEntry,
     coa_by_no: dict[str, ChartOfAccount],
     bank_accounts_by_id: dict[int, BankAccount],
+    categorizer: Categorizer,
 ) -> ReconciliationEntryOut:
     coa = coa_by_no.get(entry.account_no)
     bank_account = bank_accounts_by_id.get(entry.bank_account_id) if entry.bank_account_id else None
+    # Description is a live join to the current bank-keyword rules, same as
+    # Statement Description is a live join to the Chart of Accounts - a rule's
+    # Description is picked up immediately by every entry it matches,
+    # including ones imported before the rule had (or even was) one. Only
+    # kicks in when nothing's been typed directly on the entry, so a real
+    # manual description (a donor name, a note) is never overwritten.
+    description = entry.description or categorizer.categorize_bank(entry.bank_description).description
     return ReconciliationEntryOut(
         id=entry.id,
         transaction_date=entry.transaction_date,
@@ -37,7 +46,7 @@ def _to_out(
         reconciled=entry.reconciled,
         is_reimbursement=entry.is_reimbursement,
         account_no=entry.account_no or "",
-        description=entry.description,
+        description=description,
         bank_account_id=entry.bank_account_id,
         bank_account_name=bank_account.name if bank_account else "",
         method=entry.method,
@@ -61,21 +70,26 @@ def _to_out(
     )
 
 
-def _lookups(db: Session) -> tuple[dict[str, ChartOfAccount], dict[int, BankAccount]]:
-    coa_by_no = {a.account_no: a for a in db.scalars(select(ChartOfAccount))}
+def _lookups(
+    db: Session,
+) -> tuple[dict[str, ChartOfAccount], dict[int, BankAccount], Categorizer]:
+    accounts = list(db.scalars(select(ChartOfAccount)))
+    coa_by_no = {a.account_no: a for a in accounts}
     bank_accounts_by_id = {b.id: b for b in db.scalars(select(BankAccount))}
-    return coa_by_no, bank_accounts_by_id
+    rules = list(db.scalars(select(CategoryRule)))
+    categorizer = Categorizer(rules, accounts)
+    return coa_by_no, bank_accounts_by_id, categorizer
 
 
 @router.get("", response_model=list[ReconciliationEntryOut])
 def list_entries(db: Session = Depends(get_db)) -> list[ReconciliationEntryOut]:
-    coa_by_no, bank_accounts_by_id = _lookups(db)
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
     entries = db.scalars(
         select(ReconciliationEntry)
         .where(ReconciliationEntry.is_split == False)  # noqa: E712 - hidden once split
         .order_by(ReconciliationEntry.transaction_date.desc())
     )
-    return [_to_out(e, coa_by_no, bank_accounts_by_id) for e in entries]
+    return [_to_out(e, coa_by_no, bank_accounts_by_id, categorizer) for e in entries]
 
 
 @router.put("/{entry_id}", response_model=ReconciliationEntryOut)
@@ -89,8 +103,8 @@ def update_entry(
         setattr(entry, field, value.strip() if isinstance(value, str) else value)
     db.commit()
     db.refresh(entry)
-    coa_by_no, bank_accounts_by_id = _lookups(db)
-    return _to_out(entry, coa_by_no, bank_accounts_by_id)
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
+    return _to_out(entry, coa_by_no, bank_accounts_by_id, categorizer)
 
 
 @router.delete("/{entry_id}", status_code=204)
@@ -153,8 +167,8 @@ def split_entry(
     db.commit()
     for c in children:
         db.refresh(c)
-    coa_by_no, bank_accounts_by_id = _lookups(db)
-    return [_to_out(c, coa_by_no, bank_accounts_by_id) for c in children]
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
+    return [_to_out(c, coa_by_no, bank_accounts_by_id, categorizer) for c in children]
 
 
 @router.post("/{parent_id}/unsplit", response_model=ReconciliationEntryOut)
@@ -172,8 +186,8 @@ def unsplit_entry(parent_id: int, db: Session = Depends(get_db)) -> Reconciliati
     parent.is_split = False
     db.commit()
     db.refresh(parent)
-    coa_by_no, bank_accounts_by_id = _lookups(db)
-    return _to_out(parent, coa_by_no, bank_accounts_by_id)
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
+    return _to_out(parent, coa_by_no, bank_accounts_by_id, categorizer)
 
 
 @router.get("/split-group/{parent_id}", response_model=SplitGroupOut)
@@ -186,10 +200,10 @@ def get_split_group(parent_id: int, db: Session = Depends(get_db)) -> SplitGroup
             select(ReconciliationEntry).where(ReconciliationEntry.split_parent_id == parent_id)
         )
     )
-    coa_by_no, bank_accounts_by_id = _lookups(db)
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
     return SplitGroupOut(
-        parent=_to_out(parent, coa_by_no, bank_accounts_by_id),
-        children=[_to_out(c, coa_by_no, bank_accounts_by_id) for c in children],
+        parent=_to_out(parent, coa_by_no, bank_accounts_by_id, categorizer),
+        children=[_to_out(c, coa_by_no, bank_accounts_by_id, categorizer) for c in children],
     )
 
 
