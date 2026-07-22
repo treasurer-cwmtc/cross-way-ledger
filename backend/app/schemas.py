@@ -86,6 +86,7 @@ class CategoryRuleBase(BaseModel):
     rule_type: str  # 'bank_keyword' | 'stripe_fund'
     pattern: str
     account_no: str
+    description: str = ""
     priority: int = 100
     active: bool = True
 
@@ -98,6 +99,7 @@ class CategoryRuleUpdate(BaseModel):
     rule_type: str | None = None
     pattern: str | None = None
     account_no: str | None = None
+    description: str | None = None
     priority: int | None = None
     active: bool | None = None
 

@@ -79,8 +79,10 @@ def _categorize_bank_row(bank: BankRow, categorizer: Categorizer) -> OutputLine:
         # Description is a human-entered name (who/what), not the
         # raw bank statement text - leave it blank when we don't
         # know it rather than dumping the full ACH/CO NAME string.
-        # The raw text is still preserved in bank_description.
-        description="",
+        # The raw text is still preserved in bank_description. A
+        # matching rule's own friendly name (e.g. "Sams Club") fills
+        # this in automatically when one is set.
+        description=cat.description,
         statement_description=cat.statement_description,
         account_no=cat.account_no,
         category=cat.category or ("Income" if bank.amount > 0 else "Expense"),

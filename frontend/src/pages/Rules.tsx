@@ -13,6 +13,7 @@ export default function Rules() {
   );
   const [pattern, setPattern] = useState("");
   const [accountNo, setAccountNo] = useState("");
+  const [description, setDescription] = useState("");
   const [priority, setPriority] = useState(100);
 
   async function load() {
@@ -32,9 +33,16 @@ export default function Rules() {
   async function addRule() {
     setError("");
     try {
-      await rulesApi.createRule({ rule_type: ruleType, pattern, account_no: accountNo, priority });
+      await rulesApi.createRule({
+        rule_type: ruleType,
+        pattern,
+        account_no: accountNo,
+        description: ruleType === "bank_keyword" ? description : "",
+        priority,
+      });
       setPattern("");
       setAccountNo("");
+      setDescription("");
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -105,6 +113,17 @@ export default function Rules() {
               ))}
             </select>
           </label>
+          {ruleType === "bank_keyword" && (
+            <label className="field">
+              <span>Description (optional)</span>
+              <input
+                type="text"
+                value={description}
+                placeholder="e.g. Sams Club"
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </label>
+          )}
           <label className="field" style={{ maxWidth: 120 }}>
             <span>Priority</span>
             <input
@@ -114,6 +133,12 @@ export default function Rules() {
             />
           </label>
         </div>
+        <p className="subtitle" style={{ marginTop: 0 }}>
+          Description (bank keyword rules only) auto-fills a matched line's
+          Description field with a friendly payee name, e.g. "Sams Club"
+          instead of the raw bank text — same idea as the treasurer's upload
+          template spreadsheet's Description column.
+        </p>
         <button className="btn" onClick={addRule} disabled={!pattern || !accountNo}>
           Add rule
         </button>
@@ -125,6 +150,7 @@ export default function Rules() {
         subtitle="If a bank line's description contains the phrase, assign the category."
         rules={keywordRules}
         accounts={accounts}
+        showDescription
         onToggle={toggle}
         onSelect={setSelected}
       />
@@ -155,11 +181,13 @@ function RuleTable(props: {
   subtitle: string;
   rules: Rule[];
   accounts: ChartAccount[];
+  showDescription?: boolean;
   onToggle: (r: Rule) => void;
   onSelect: (r: Rule) => void;
 }) {
   const desc = (no: string) =>
     props.accounts.find((a) => a.account_no === no)?.statement_description || "";
+  const colCount = props.showDescription ? 6 : 5;
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>{props.title}</h3>
@@ -168,6 +196,7 @@ function RuleTable(props: {
         <thead>
           <tr>
             <th>Match</th>
+            {props.showDescription && <th>Description</th>}
             <th>Account</th>
             <th>Category</th>
             <th className="num">Priority</th>
@@ -180,6 +209,7 @@ function RuleTable(props: {
               <td>
                 <b>{r.pattern}</b>
               </td>
+              {props.showDescription && <td>{r.description}</td>}
               <td>{r.account_no}</td>
               <td>{desc(r.account_no)}</td>
               <td className="num">{r.priority}</td>
@@ -195,7 +225,7 @@ function RuleTable(props: {
           ))}
           {props.rules.length === 0 && (
             <tr>
-              <td colSpan={5} style={{ color: "var(--muted)" }}>
+              <td colSpan={colCount} style={{ color: "var(--muted)" }}>
                 No rules yet.
               </td>
             </tr>
@@ -216,10 +246,12 @@ function RuleDetailModal(props: {
   const r = props.rule;
   const [accountNo, setAccountNo] = useState(r.account_no);
   const [priority, setPriority] = useState(r.priority);
+  const [description, setDescription] = useState(r.description);
 
   useEffect(() => {
     setAccountNo(r.account_no);
     setPriority(r.priority);
+    setDescription(r.description);
   }, [r]);
 
   useEffect(() => {
@@ -242,6 +274,10 @@ function RuleDetailModal(props: {
 
   function savePriority() {
     if (priority !== r.priority) props.onUpdate(r.id, { priority });
+  }
+
+  function saveDescription() {
+    if (description !== r.description) props.onUpdate(r.id, { description });
   }
 
   return (
@@ -279,6 +315,19 @@ function RuleDetailModal(props: {
             ))}
           </select>
         </label>
+
+        {r.rule_type === "bank_keyword" && (
+          <label className="field">
+            <span>Description (optional)</span>
+            <input
+              type="text"
+              value={description}
+              placeholder="e.g. Sams Club"
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={saveDescription}
+            />
+          </label>
+        )}
 
         <label className="field">
           <span>Priority</span>

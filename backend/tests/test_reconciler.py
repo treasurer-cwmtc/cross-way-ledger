@@ -102,6 +102,36 @@ def test_bank_keyword_categorization():
     # Unmatched line has no account and is flagged.
     assert by_desc["TAQUERIA"].account_no == ""
     assert by_desc["TAQUERIA"].matched is False
-    # Description is left for the treasurer to fill in by hand - never the
-    # raw ACH/CO NAME statement text (that lives in bank_description).
+    # Description is left blank unless a matching rule sets its own friendly
+    # name - never the raw ACH/CO NAME statement text (that lives in
+    # bank_description). None of the seeded rules set one, so every line
+    # here is blank; test_bank_keyword_rule_description_fills_description
+    # covers the rule-provides-one case.
     assert all(l.description == "" for l in bank_lines)
+
+
+def test_bank_keyword_rule_description_fills_description():
+    db = make_session()
+    try:
+        db.add(
+            CategoryRule(
+                rule_type="bank_keyword",
+                pattern="SAMS CLUB",
+                account_no="E151910",
+                description="Sams Club",
+                priority=1,
+            )
+        )
+        db.commit()
+        bank = parse_bank_csv((FIXTURES / "sample_bank.csv").read_text())
+        stripe = parse_stripe_csv((FIXTURES / "sample_stripe.csv").read_text())
+        categorizer = Categorizer(
+            list(db.scalars(select(CategoryRule)).all()),
+            list(db.scalars(select(ChartOfAccount)).all()),
+        )
+        result = reconcile(bank, stripe, categorizer)
+    finally:
+        db.close()
+    sams_lines = [l for l in result.lines if "sams club" in l.bank_description.lower()]
+    assert sams_lines
+    assert all(l.description == "Sams Club" for l in sams_lines)

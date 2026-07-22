@@ -183,6 +183,12 @@ class CategoryRule(Base):
     rule_type: Mapped[str] = mapped_column(String(20), index=True)
     pattern: Mapped[str] = mapped_column(String(200))
     account_no: Mapped[str] = mapped_column(ForeignKey("chart_of_accounts.account_no"))
+    # Optional friendly "who/what" name to also stamp onto a matched bank
+    # line's Description field (e.g. "Sams Club", "Direct Energy") - mirrors
+    # the payee-name column on the treasurer's own upload-template
+    # spreadsheet. Only applied for bank_keyword rules; harmless/unused on
+    # stripe_fund rules, which already get a real donor name.
+    description: Mapped[str] = mapped_column(String(200), default="")
     priority: Mapped[int] = mapped_column(Integer, default=100)
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(

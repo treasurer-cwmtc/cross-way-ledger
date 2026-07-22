@@ -6,6 +6,9 @@ export interface Rule {
   rule_type: "bank_keyword" | "stripe_fund";
   pattern: string;
   account_no: string;
+  // Friendly "who/what" name (e.g. "Sams Club") stamped onto a matched
+  // bank line's Description field - only meaningful for bank_keyword rules.
+  description: string;
   priority: number;
   active: boolean;
   created_at: string;

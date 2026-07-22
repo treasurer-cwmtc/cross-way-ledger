@@ -12,6 +12,10 @@ class Category:
     account_no: str = ""
     statement_description: str = ""
     category: str = ""
+    # The rule's own friendly "who/what" name (e.g. "Sams Club"), not to be
+    # confused with statement_description (the Chart of Accounts category
+    # name) - only bank_keyword rules populate this.
+    description: str = ""
 
 
 class Categorizer:
@@ -24,14 +28,15 @@ class Categorizer:
         self.fund_rules = [r for r in active if r.rule_type == "stripe_fund"]
         self.keyword_rules = [r for r in active if r.rule_type == "bank_keyword"]
 
-    def _resolve(self, account_no: str) -> Category:
+    def _resolve(self, account_no: str, description: str = "") -> Category:
         acct = self.coa.get(account_no)
         if acct is None:
-            return Category(account_no=account_no)
+            return Category(account_no=account_no, description=description)
         return Category(
             account_no=acct.account_no,
             statement_description=acct.statement_description,
             category=acct.category,
+            description=description,
         )
 
     def categorize_fund(self, fund: str) -> Category:
@@ -41,12 +46,12 @@ class Categorizer:
         # Exact (normalized) match wins first.
         for rule in self.fund_rules:
             if rule.pattern.lower().strip() == f:
-                return self._resolve(rule.account_no)
+                return self._resolve(rule.account_no, rule.description)
         # Then substring match (e.g. rule 'VBS' matches fund 'VBS 2026').
         for rule in self.fund_rules:
             p = rule.pattern.lower().strip()
             if p and (p in f or f in p):
-                return self._resolve(rule.account_no)
+                return self._resolve(rule.account_no, rule.description)
         return Category()
 
     def categorize_bank(self, description: str) -> Category:
@@ -56,5 +61,5 @@ class Categorizer:
         for rule in self.keyword_rules:
             p = rule.pattern.lower().strip()
             if p and p in d:
-                return self._resolve(rule.account_no)
+                return self._resolve(rule.account_no, rule.description)
         return Category()

@@ -202,6 +202,8 @@ def recategorize_endpoint(run_id: int, db: Session = Depends(get_db)) -> ReconRu
                 line.account_no = cat.account_no
                 line.statement_description = cat.statement_description
                 line.category = cat.category
+                if cat.description:
+                    line.description = cat.description
                 line.matched = True
                 line.notes = ""
     db.commit()
