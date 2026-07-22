@@ -20,6 +20,11 @@ function RegisterRow(props: {
   // wide-but-bounded cell instead of forcing the whole table to scroll
   // horizontally - the row just gets taller.
   wideBankDescription?: boolean;
+  // Reconciliation shows Posted Date as its own leading column (in addition
+  // to Transaction Date) - Accrual keeps just the one Date column, so this
+  // is opt-in rather than always-on.
+  showPostedDate?: boolean;
+  hideMethod?: boolean;
 }) {
   const e = props.entry;
   const bankAccountName =
@@ -34,6 +39,9 @@ function RegisterRow(props: {
           onChange={(ev) => props.onUpdate(e.id, { reconciled: ev.target.checked })}
         />
       </td>
+      {props.showPostedDate && (
+        <td style={{ whiteSpace: "nowrap" }}>{e.date_posted || "—"}</td>
+      )}
       <td style={{ whiteSpace: "nowrap" }}>{e.transaction_date || "—"}</td>
       <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {e.split_parent_id != null && (
@@ -60,7 +68,7 @@ function RegisterRow(props: {
         </td>
       )}
       <td style={{ whiteSpace: "nowrap" }}>{bankAccountName || "—"}</td>
-      <td>{e.method || "—"}</td>
+      {!props.hideMethod && <td>{e.method || "—"}</td>}
       <td className="num" style={{ whiteSpace: "nowrap" }}>
         ${e.amount.toFixed(2)}
       </td>

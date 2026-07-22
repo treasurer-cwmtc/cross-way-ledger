@@ -15,12 +15,12 @@ import RegisterRow from "../ledger/RegisterRow";
 import TransactionModal from "../ledger/TransactionModal";
 
 type SortKey =
+  | "date_posted"
   | "transaction_date"
   | "description"
   | "statement_description"
   | "bank_description"
   | "bank_account"
-  | "method"
   | "amount";
 
 function SortableHeader({
@@ -62,15 +62,15 @@ export default function Reconciliation() {
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
 
   const [sort, setSort] = useState<{ key: SortKey | null; dir: "asc" | "desc" }>({
-    key: "transaction_date",
+    key: "date_posted",
     dir: "desc",
   });
-  const [dateFilter, setDateFilter] = useState<DateFilterValue | null>(null);
+  const [datePostedFilter, setDatePostedFilter] = useState<DateFilterValue | null>(null);
+  const [transactionDateFilter, setTransactionDateFilter] = useState<DateFilterValue | null>(null);
   const [descriptionFilter, setDescriptionFilter] = useState<Set<string> | null>(null);
   const [statementDescriptionFilter, setStatementDescriptionFilter] = useState<Set<string> | null>(null);
   const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
   const [bankAccountFilter, setBankAccountFilter] = useState<Set<string> | null>(null);
-  const [methodFilter, setMethodFilter] = useState<Set<string> | null>(null);
 
   async function load() {
     try {
@@ -99,6 +99,8 @@ export default function Reconciliation() {
 
   function sortValue(e: ReconciliationEntry, key: SortKey): string | number {
     switch (key) {
+      case "date_posted":
+        return e.date_posted || "";
       case "transaction_date":
         return e.transaction_date || "";
       case "description":
@@ -109,8 +111,6 @@ export default function Reconciliation() {
         return e.bank_description;
       case "bank_account":
         return bankAccountName(e);
-      case "method":
-        return e.method;
       case "amount":
         return e.amount;
     }
@@ -131,7 +131,11 @@ export default function Reconciliation() {
     return map;
   }, [entries]);
 
-  const monthOptions = useMemo(
+  const datePostedMonthOptions = useMemo(
+    () => Array.from(new Set(entries.flatMap((e) => (e.date_posted ? [e.date_posted.slice(0, 7)] : [])))).sort(),
+    [entries]
+  );
+  const transactionDateMonthOptions = useMemo(
     () => Array.from(new Set(entries.flatMap((e) => (e.transaction_date ? [e.transaction_date.slice(0, 7)] : [])))).sort(),
     [entries]
   );
@@ -152,17 +156,14 @@ export default function Reconciliation() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [entries, bankAccounts]
   );
-  const methodOptions = useMemo(
-    () => Array.from(new Set(entries.map((e) => e.method || "—"))).sort(),
-    [entries]
-  );
 
   const activeColumn = filterColumn ? COLUMNS.find((c) => c.key === filterColumn) : null;
 
   const visibleEntries = useMemo(() => {
     let out = activeColumn ? entries.filter((e) => !activeColumn.isPopulated(e)) : entries;
     out = out.filter((e) => {
-      if (!dateMatchesFilter(e.transaction_date, dateFilter)) return false;
+      if (!dateMatchesFilter(e.date_posted, datePostedFilter)) return false;
+      if (!dateMatchesFilter(e.transaction_date, transactionDateFilter)) return false;
       if (descriptionFilter && !descriptionFilter.has(e.description || "(no description)")) return false;
       if (
         statementDescriptionFilter &&
@@ -171,7 +172,6 @@ export default function Reconciliation() {
         return false;
       if (bankDescriptionFilter && !bankDescriptionFilter.has(e.bank_description || "—")) return false;
       if (bankAccountFilter && !bankAccountFilter.has(bankAccountName(e) || "—")) return false;
-      if (methodFilter && !methodFilter.has(e.method || "—")) return false;
       return true;
     });
     if (sort.key) {
@@ -190,12 +190,12 @@ export default function Reconciliation() {
     entries,
     bankAccounts,
     activeColumn,
-    dateFilter,
+    datePostedFilter,
+    transactionDateFilter,
     descriptionFilter,
     statementDescriptionFilter,
     bankDescriptionFilter,
     bankAccountFilter,
-    methodFilter,
     sort,
   ]);
 
@@ -262,16 +262,30 @@ export default function Reconciliation() {
               <tr>
                 <th></th>
                 <SortableHeader
-                  label="Date"
+                  label="Posted Date"
+                  sortKey="date_posted"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <DateColumnFilter
+                      label="Posted Date"
+                      monthOptions={datePostedMonthOptions}
+                      value={datePostedFilter}
+                      onChange={setDatePostedFilter}
+                    />
+                  }
+                />
+                <SortableHeader
+                  label="Transaction Date"
                   sortKey="transaction_date"
                   activeSort={sort}
                   onSort={onSort}
                   filter={
                     <DateColumnFilter
-                      label="Date"
-                      monthOptions={monthOptions}
-                      value={dateFilter}
-                      onChange={setDateFilter}
+                      label="Transaction Date"
+                      monthOptions={transactionDateMonthOptions}
+                      value={transactionDateFilter}
+                      onChange={setTransactionDateFilter}
                     />
                   }
                 />
@@ -331,20 +345,6 @@ export default function Reconciliation() {
                     />
                   }
                 />
-                <SortableHeader
-                  label="Method"
-                  sortKey="method"
-                  activeSort={sort}
-                  onSort={onSort}
-                  filter={
-                    <TextColumnFilter
-                      label="Method"
-                      options={methodOptions}
-                      selected={methodFilter}
-                      onChange={setMethodFilter}
-                    />
-                  }
-                />
                 <SortableHeader label="Amount" sortKey="amount" activeSort={sort} onSort={onSort} />
               </tr>
             </thead>
@@ -358,6 +358,8 @@ export default function Reconciliation() {
                   onOpen={setOpenEntryId}
                   showBankDescription
                   wideBankDescription
+                  showPostedDate
+                  hideMethod
                 />
               ))}
               {visibleEntries.length === 0 && (
