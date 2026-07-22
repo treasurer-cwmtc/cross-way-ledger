@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { accountsApi, ChartAccount } from "../api/accounts";
 import { rulesApi, Rule } from "../api/rules";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../components/ColumnResize";
 
 export default function Rules() {
   const [rules, setRules] = useState<Rule[]>([]);
@@ -153,6 +154,7 @@ export default function Rules() {
         showDescription
         onToggle={toggle}
         onSelect={setSelected}
+        storageKey="rules-bank-keyword"
       />
       <RuleTable
         title="Stripe fund rules"
@@ -161,6 +163,7 @@ export default function Rules() {
         accounts={accounts}
         onToggle={toggle}
         onSelect={setSelected}
+        storageKey="rules-stripe-fund"
       />
 
       {selected && (
@@ -184,23 +187,54 @@ function RuleTable(props: {
   showDescription?: boolean;
   onToggle: (r: Rule) => void;
   onSelect: (r: Rule) => void;
+  storageKey: string;
 }) {
   const desc = (no: string) =>
     props.accounts.find((a) => a.account_no === no)?.statement_description || "";
   const colCount = props.showDescription ? 6 : 5;
+  const { widths, startResize } = useColumnWidths(props.storageKey);
+  const columns = [
+    "match",
+    ...(props.showDescription ? ["description"] : []),
+    "account",
+    "category",
+    "priority",
+    "active",
+  ];
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>{props.title}</h3>
       <p className="subtitle">{props.subtitle}</p>
-      <table>
+      <table className="resizable-cols">
+        <ColGroup columns={columns} widths={widths} />
         <thead>
           <tr>
-            <th>Match</th>
-            {props.showDescription && <th>Description</th>}
-            <th>Account</th>
-            <th>Category</th>
-            <th className="num">Priority</th>
-            <th>Active</th>
+            <th>
+              Match
+              <ColResizeHandle col="match" startResize={startResize} />
+            </th>
+            {props.showDescription && (
+              <th>
+                Description
+                <ColResizeHandle col="description" startResize={startResize} />
+              </th>
+            )}
+            <th>
+              Account
+              <ColResizeHandle col="account" startResize={startResize} />
+            </th>
+            <th>
+              Category
+              <ColResizeHandle col="category" startResize={startResize} />
+            </th>
+            <th className="num">
+              Priority
+              <ColResizeHandle col="priority" startResize={startResize} />
+            </th>
+            <th>
+              Active
+              <ColResizeHandle col="active" startResize={startResize} />
+            </th>
           </tr>
         </thead>
         <tbody>

@@ -25,6 +25,10 @@ export default function PledgeCampaigns({ user }: { user: User }) {
     (t) => user.is_admin || t.permissions.some((p) => user.permissions.includes(p))
   );
   const [subTab, setSubTab] = useState<SubTab>(visibleTabs[0]?.key ?? "status");
+  // Page-local, defaults to hidden every time the page loads - separate
+  // from the account-level hide_donor_names admin setting (Users.tsx),
+  // which forces redaction server-side regardless of this button.
+  const [hideDonorInfo, setHideDonorInfo] = useState(true);
 
   if (error) return <div className="error">{error}</div>;
   if (!campaigns) return <p className="subtitle">Loading…</p>;
@@ -43,21 +47,31 @@ export default function PledgeCampaigns({ user }: { user: User }) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <h2 className="page-title">{campaign ? campaign.name : "Campaign"} Status</h2>
-        <label className="field" style={{ maxWidth: 260 }}>
-          <span>Campaign</span>
-          <select
-            value={campaignId ?? ""}
-            onChange={(ev) => setCampaignId(Number(ev.target.value))}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
+          <button
+            type="button"
+            className={"btn" + (hideDonorInfo ? "" : " secondary")}
+            onClick={() => setHideDonorInfo((v) => !v)}
+            title="Hides donor names and joint donor names, showing only Donor ID / Joint Donor ID"
           >
-            {campaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            {hideDonorInfo ? "Donor info hidden" : "Donor info shown"}
+          </button>
+          <label className="field" style={{ maxWidth: 260 }}>
+            <span>Campaign</span>
+            <select
+              value={campaignId ?? ""}
+              onChange={(ev) => setCampaignId(Number(ev.target.value))}
+            >
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       <div className="sub-tabs" style={{ display: "flex", gap: 4, marginBottom: 16 }}>
@@ -76,7 +90,7 @@ export default function PledgeCampaigns({ user }: { user: User }) {
         <>
           {activeTab === "status" && <Status campaignId={campaignId} />}
           {activeTab === "details" && (
-            <Details campaignId={campaignId} hideDonorNames={user.hide_donor_names} />
+            <Details campaignId={campaignId} hideDonorNames={hideDonorInfo} />
           )}
         </>
       )}

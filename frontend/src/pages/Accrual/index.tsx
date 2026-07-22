@@ -8,6 +8,7 @@ import ColumnHealthStrip from "../ledger/ColumnHealthStrip";
 import RegisterRow from "../ledger/RegisterRow";
 import TransactionModal from "../ledger/TransactionModal";
 import QuickAddModal from "./QuickAddModal";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 export default function Accrual() {
   const [entries, setEntries] = useState<AccrualEntry[]>([]);
@@ -17,6 +18,7 @@ export default function Accrual() {
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const { widths, startResize } = useColumnWidths("accrual-list");
 
   async function load() {
     try {
@@ -114,17 +116,53 @@ export default function Accrual() {
 
       <div className="card">
         <div className="table-wrap">
-          <table>
+          <table className="resizable-cols">
+            <ColGroup
+              columns={[
+                "expand",
+                "date",
+                "description",
+                "statement_description",
+                "bank_description",
+                "bank_account",
+                "method",
+                "amount",
+              ]}
+              widths={widths}
+            />
             <thead>
               <tr>
-                <th></th>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Statement Description</th>
-                <th>Bank Description</th>
-                <th>Bank Account</th>
-                <th>Method</th>
-                <th className="num">Amount</th>
+                <th>
+                  <ColResizeHandle col="expand" startResize={startResize} />
+                </th>
+                <th>
+                  Date
+                  <ColResizeHandle col="date" startResize={startResize} />
+                </th>
+                <th>
+                  Description
+                  <ColResizeHandle col="description" startResize={startResize} />
+                </th>
+                <th>
+                  Statement Description
+                  <ColResizeHandle col="statement_description" startResize={startResize} />
+                </th>
+                <th>
+                  Bank Description
+                  <ColResizeHandle col="bank_description" startResize={startResize} />
+                </th>
+                <th>
+                  Bank Account
+                  <ColResizeHandle col="bank_account" startResize={startResize} />
+                </th>
+                <th>
+                  Method
+                  <ColResizeHandle col="method" startResize={startResize} />
+                </th>
+                <th className="num">
+                  Amount
+                  <ColResizeHandle col="amount" startResize={startResize} />
+                </th>
               </tr>
             </thead>
             <tbody>

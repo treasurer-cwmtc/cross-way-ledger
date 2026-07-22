@@ -355,6 +355,33 @@ th {
   background: var(--card);
 }
 
+table.resizable-cols {
+  table-layout: fixed;
+}
+
+table.resizable-cols th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 14px;
+}
+
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+
+.col-resize-handle:hover,
+.col-resize-handle:active {
+  background: var(--primary);
+  opacity: 0.4;
+}
+
 .num {
   text-align: right;
   font-variant-numeric: tabular-nums;

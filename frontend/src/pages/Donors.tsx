@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { donorsApi, Donor } from "../api/donors";
 import DonorDetailModal from "./DonorDetailModal";
 import { TextColumnFilter } from "../components/ColumnFilter";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../components/ColumnResize";
 
 type SortKey = "name" | "email" | "city" | "state" | "joint_giver";
 
@@ -26,12 +27,14 @@ function SortableHeader({
   activeSort,
   onSort,
   filter,
+  resizeHandle,
 }: {
   label: string;
   sortKey: SortKey;
   activeSort: { key: SortKey | null; dir: "asc" | "desc" };
   onSort: (key: SortKey) => void;
   filter?: React.ReactNode;
+  resizeHandle?: React.ReactNode;
 }) {
   const active = activeSort.key === sortKey;
   return (
@@ -46,6 +49,7 @@ function SortableHeader({
         </span>
       </span>
       {filter}
+      {resizeHandle}
     </th>
   );
 }
@@ -70,6 +74,7 @@ export default function Donors() {
   const [cityFilter, setCityFilter] = useState<Set<string> | null>(null);
   const [stateFilter, setStateFilter] = useState<Set<string> | null>(null);
   const [jointGiverFilter, setJointGiverFilter] = useState<Set<string> | null>(null);
+  const { widths, startResize } = useColumnWidths("donors-list");
 
   useEffect(() => {
     donorsApi.list().then(setDonors).catch((err) => setError((err as Error).message));
@@ -134,7 +139,8 @@ export default function Donors() {
       </p>
 
       <div className="table-wrap">
-        <table>
+        <table className="resizable-cols">
+          <ColGroup columns={["name", "email", "city", "state", "joint_giver"]} widths={widths} />
           <thead>
             <tr>
               <SortableHeader
@@ -145,6 +151,7 @@ export default function Donors() {
                 filter={
                   <TextColumnFilter label="Name" options={nameOptions} selected={nameFilter} onChange={setNameFilter} />
                 }
+                resizeHandle={<ColResizeHandle col="name" startResize={startResize} />}
               />
               <SortableHeader
                 label="Email"
@@ -159,6 +166,7 @@ export default function Donors() {
                     onChange={setEmailFilter}
                   />
                 }
+                resizeHandle={<ColResizeHandle col="email" startResize={startResize} />}
               />
               <SortableHeader
                 label="City"
@@ -168,6 +176,7 @@ export default function Donors() {
                 filter={
                   <TextColumnFilter label="City" options={cityOptions} selected={cityFilter} onChange={setCityFilter} />
                 }
+                resizeHandle={<ColResizeHandle col="city" startResize={startResize} />}
               />
               <SortableHeader
                 label="State"
@@ -182,6 +191,7 @@ export default function Donors() {
                     onChange={setStateFilter}
                   />
                 }
+                resizeHandle={<ColResizeHandle col="state" startResize={startResize} />}
               />
               <SortableHeader
                 label="Joint Giver"
@@ -196,6 +206,7 @@ export default function Donors() {
                     onChange={setJointGiverFilter}
                   />
                 }
+                resizeHandle={<ColResizeHandle col="joint_giver" startResize={startResize} />}
               />
             </tr>
           </thead>

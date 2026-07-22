@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ledgerApi } from "../../api/ledger";
 import { reconcileApi, ReconRun } from "../../api/reconcile";
 import { Rule } from "../../api/rules";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 export default function Step4Validate(props: {
   run: ReconRun;
@@ -16,6 +17,7 @@ export default function Step4Validate(props: {
   const [result, setResult] = useState<{ imported: number; skipped_duplicates: number } | null>(
     null
   );
+  const { widths, startResize } = useColumnWidths("upload-step4-rules-added");
 
   useEffect(() => {
     reconcileApi
@@ -92,12 +94,22 @@ export default function Step4Validate(props: {
         {props.rulesAdded.length === 0 ? (
           <p className="subtitle">No new rules were added during this upload.</p>
         ) : (
-          <table>
+          <table className="resizable-cols">
+            <ColGroup columns={["type", "match", "account"]} widths={widths} />
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Match</th>
-                <th>Account</th>
+                <th>
+                  Type
+                  <ColResizeHandle col="type" startResize={startResize} />
+                </th>
+                <th>
+                  Match
+                  <ColResizeHandle col="match" startResize={startResize} />
+                </th>
+                <th>
+                  Account
+                  <ColResizeHandle col="account" startResize={startResize} />
+                </th>
               </tr>
             </thead>
             <tbody>

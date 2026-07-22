@@ -4,6 +4,7 @@ import { budgetApi, BudgetEntry, BudgetEntryUpdate } from "../../api/budget";
 import { settingsApi } from "../../api/settings";
 import QuickAddModal from "./QuickAddModal";
 import DetailModal from "./DetailModal";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 function currentYearFromCutoff(priorYearEndDate: string): number {
   const y = Number(priorYearEndDate.slice(0, 4));
@@ -32,6 +33,7 @@ export default function Budget() {
   // (only years with something to copy make sense there) and folds into
   // the Year dropdown's own option list.
   const [yearsWithData, setYearsWithData] = useState<number[]>([]);
+  const { widths, startResize } = useColumnWidths("budget-list");
 
   useEffect(() => {
     accountsApi.listAccounts("Budget").then(setAccounts).catch((err) => setError((err as Error).message));
@@ -201,14 +203,33 @@ export default function Budget() {
 
       <div className="card">
         <div className="table-wrap">
-          <table>
+          <table className="resizable-cols">
+            <ColGroup
+              columns={["date", "description", "statement_description", "amount", "notes"]}
+              widths={widths}
+            />
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Statement Description</th>
-                <th className="num">Amount</th>
-                <th>Notes</th>
+                <th>
+                  Date
+                  <ColResizeHandle col="date" startResize={startResize} />
+                </th>
+                <th>
+                  Description
+                  <ColResizeHandle col="description" startResize={startResize} />
+                </th>
+                <th>
+                  Statement Description
+                  <ColResizeHandle col="statement_description" startResize={startResize} />
+                </th>
+                <th className="num">
+                  Amount
+                  <ColResizeHandle col="amount" startResize={startResize} />
+                </th>
+                <th>
+                  Notes
+                  <ColResizeHandle col="notes" startResize={startResize} />
+                </th>
               </tr>
             </thead>
             <tbody>

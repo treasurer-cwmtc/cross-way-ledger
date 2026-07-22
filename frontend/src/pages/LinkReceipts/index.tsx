@@ -4,6 +4,7 @@ import { ledgerApi } from "../../api/ledger";
 import { pickMultipleReceiptFiles, PickedFile } from "../../lib/googleDrive";
 import EntryPicker from "./EntryPicker";
 import { LinkableEntry } from "./types";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 function stripExtension(name: string): string {
   const idx = name.lastIndexOf(".");
@@ -31,6 +32,7 @@ export default function LinkReceipts() {
   const [rows, setRows] = useState<Row[]>([]);
   const [picking, setPicking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { widths, startResize } = useColumnWidths("link-receipts");
 
   async function load() {
     setLoading(true);
@@ -149,13 +151,25 @@ export default function LinkReceipts() {
           </p>
         ) : (
           <div className="table-wrap">
-            <table>
+            <table className="resizable-cols">
+              <ColGroup columns={["file", "matched_entry", "status", "actions"]} widths={widths} />
               <thead>
                 <tr>
-                  <th>File</th>
-                  <th>Matched entry</th>
-                  <th>Status</th>
-                  <th></th>
+                  <th>
+                    File
+                    <ColResizeHandle col="file" startResize={startResize} />
+                  </th>
+                  <th>
+                    Matched entry
+                    <ColResizeHandle col="matched_entry" startResize={startResize} />
+                  </th>
+                  <th>
+                    Status
+                    <ColResizeHandle col="status" startResize={startResize} />
+                  </th>
+                  <th>
+                    <ColResizeHandle col="actions" startResize={startResize} />
+                  </th>
                 </tr>
               </thead>
               <tbody>

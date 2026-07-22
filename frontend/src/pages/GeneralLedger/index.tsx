@@ -11,6 +11,7 @@ import {
   TextColumnFilter,
   dateMatchesFilter,
 } from "../../components/ColumnFilter";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 import TransactionModal from "../ledger/TransactionModal";
 import BudgetDetailModal from "../Budget/DetailModal";
 
@@ -30,12 +31,14 @@ function SortableHeader({
   activeSort,
   onSort,
   filter,
+  resizeHandle,
 }: {
   label: string;
   sortKey: SortKey;
   activeSort: { key: SortKey | null; dir: "asc" | "desc" };
   onSort: (key: SortKey) => void;
   filter?: React.ReactNode;
+  resizeHandle?: React.ReactNode;
 }) {
   const active = activeSort.key === sortKey;
   return (
@@ -50,6 +53,7 @@ function SortableHeader({
         </span>
       </span>
       {filter}
+      {resizeHandle}
     </th>
   );
 }
@@ -82,6 +86,8 @@ export default function GeneralLedger() {
   const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
   const [methodFilter, setMethodFilter] = useState<Set<string> | null>(null);
   const [checkInvoiceNameFilter, setCheckInvoiceNameFilter] = useState<Set<string> | null>(null);
+
+  const { widths, startResize } = useColumnWidths("general-ledger");
 
   const [openReconId, setOpenReconId] = useState<number | null>(null);
   const [openAccrualId, setOpenAccrualId] = useState<number | null>(null);
@@ -300,7 +306,20 @@ export default function GeneralLedger() {
 
       <div className="card">
         <div className="table-wrap">
-          <table>
+          <table className="resizable-cols">
+            <ColGroup
+              columns={[
+                "transaction_date",
+                "date_posted",
+                "statement_description",
+                "description",
+                "method",
+                "amount",
+                "check_invoice_name",
+                "bank_description",
+              ]}
+              widths={widths}
+            />
             <thead>
               <tr>
                 <SortableHeader
@@ -316,6 +335,7 @@ export default function GeneralLedger() {
                       onChange={setTransactionDateFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="transaction_date" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Posted Date"
@@ -330,6 +350,7 @@ export default function GeneralLedger() {
                       onChange={setDatePostedFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="date_posted" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Statement Description"
@@ -344,6 +365,7 @@ export default function GeneralLedger() {
                       onChange={setStatementDescriptionFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="statement_description" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Description"
@@ -358,6 +380,7 @@ export default function GeneralLedger() {
                       onChange={setDescriptionFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="description" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Method"
@@ -372,8 +395,15 @@ export default function GeneralLedger() {
                       onChange={setMethodFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="method" startResize={startResize} />}
                 />
-                <SortableHeader label="Amount" sortKey="amount" activeSort={sort} onSort={onSort} />
+                <SortableHeader
+                  label="Amount"
+                  sortKey="amount"
+                  activeSort={sort}
+                  onSort={onSort}
+                  resizeHandle={<ColResizeHandle col="amount" startResize={startResize} />}
+                />
                 <SortableHeader
                   label="Check/Invoice Name"
                   sortKey="check_invoice_name"
@@ -387,6 +417,7 @@ export default function GeneralLedger() {
                       onChange={setCheckInvoiceNameFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="check_invoice_name" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Bank Description"
@@ -401,6 +432,7 @@ export default function GeneralLedger() {
                       onChange={setBankDescriptionFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="bank_description" startResize={startResize} />}
                 />
               </tr>
             </thead>

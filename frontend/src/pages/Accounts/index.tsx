@@ -5,6 +5,7 @@ import AddStatementItemForm from "./AddStatementItemForm";
 import AddAccountForm from "./AddAccountForm";
 import AccountRow from "./AccountRow";
 import AccountDetailModal from "./AccountDetailModal";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
@@ -14,6 +15,7 @@ export default function Accounts() {
   const [category, setCategory] = useState("");
   const [error, setError] = useState("");
   const [openAccount, setOpenAccount] = useState<ChartAccount | null>(null);
+  const { widths, startResize } = useColumnWidths("accounts-list");
 
   async function load() {
     try {
@@ -99,14 +101,33 @@ export default function Accounts() {
         </div>
         {error && <div className="error">{error}</div>}
         <div className="table-wrap">
-          <table>
+          <table className="resizable-cols">
+            <ColGroup
+              columns={["account_no", "category", "statement_description", "tax_deductible", "mandatory"]}
+              widths={widths}
+            />
             <thead>
               <tr>
-                <th>Account No</th>
-                <th>Category</th>
-                <th>Statement Description</th>
-                <th>Tax Deductible</th>
-                <th>Mandatory</th>
+                <th>
+                  Account No
+                  <ColResizeHandle col="account_no" startResize={startResize} />
+                </th>
+                <th>
+                  Category
+                  <ColResizeHandle col="category" startResize={startResize} />
+                </th>
+                <th>
+                  Statement Description
+                  <ColResizeHandle col="statement_description" startResize={startResize} />
+                </th>
+                <th>
+                  Tax Deductible
+                  <ColResizeHandle col="tax_deductible" startResize={startResize} />
+                </th>
+                <th>
+                  Mandatory
+                  <ColResizeHandle col="mandatory" startResize={startResize} />
+                </th>
               </tr>
             </thead>
             <tbody>

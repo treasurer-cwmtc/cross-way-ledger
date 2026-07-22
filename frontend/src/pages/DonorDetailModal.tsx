@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { donorsApi, Donor, DonorGift } from "../api/donors";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../components/ColumnResize";
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -23,6 +24,7 @@ function sourceFileCell(name: string, link: string) {
 export default function DonorDetailModal({ donor, onClose }: { donor: Donor; onClose: () => void }) {
   const [gifts, setGifts] = useState<DonorGift[] | null>(null);
   const [error, setError] = useState("");
+  const { widths, startResize } = useColumnWidths("donor-gift-history");
 
   useEffect(() => {
     setGifts(null);
@@ -128,14 +130,33 @@ export default function DonorDetailModal({ donor, onClose }: { donor: Donor; onC
             <p className="subtitle" style={{ marginTop: 0 }}>
               {gifts.length} gifts, {fmtMoney(giftTotal)} total.
             </p>
-            <table>
+            <table className="resizable-cols">
+              <ColGroup
+                columns={["date", "fund", "net_amount", "method", "source_file"]}
+                widths={widths}
+              />
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Fund</th>
-                  <th>Net Amount</th>
-                  <th>Method</th>
-                  <th>Source file</th>
+                  <th>
+                    Date
+                    <ColResizeHandle col="date" startResize={startResize} />
+                  </th>
+                  <th>
+                    Fund
+                    <ColResizeHandle col="fund" startResize={startResize} />
+                  </th>
+                  <th>
+                    Net Amount
+                    <ColResizeHandle col="net_amount" startResize={startResize} />
+                  </th>
+                  <th>
+                    Method
+                    <ColResizeHandle col="method" startResize={startResize} />
+                  </th>
+                  <th>
+                    Source file
+                    <ColResizeHandle col="source_file" startResize={startResize} />
+                  </th>
                 </tr>
               </thead>
               <tbody>

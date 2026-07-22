@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
 import { getCurrentFiscalYear } from "../../api/settings";
 import { uploadBankOrStripeFile } from "../../lib/googleDrive";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -17,6 +18,10 @@ export default function Step3Reconcile(props: {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const { widths, startResize } = useColumnWidths("upload-step3-by-day");
+  const { widths: issueWidths, startResize: startIssueResize } = useColumnWidths(
+    "upload-step3-issue-lines"
+  );
 
   const run = props.run;
 
@@ -138,15 +143,37 @@ export default function Step3Reconcile(props: {
 
           <div className="card">
             <h3 style={{ marginTop: 0 }}>By day</h3>
-            <table>
+            <table className="resizable-cols">
+              <ColGroup
+                columns={["date_posted", "bank_total", "stripe_total", "variance", "lines", "status"]}
+                widths={widths}
+              />
               <thead>
                 <tr>
-                  <th>Date posted</th>
-                  <th className="num">Bank total</th>
-                  <th className="num">Stripe total</th>
-                  <th className="num">Variance</th>
-                  <th className="num">Lines</th>
-                  <th>Status</th>
+                  <th>
+                    Date posted
+                    <ColResizeHandle col="date_posted" startResize={startResize} />
+                  </th>
+                  <th className="num">
+                    Bank total
+                    <ColResizeHandle col="bank_total" startResize={startResize} />
+                  </th>
+                  <th className="num">
+                    Stripe total
+                    <ColResizeHandle col="stripe_total" startResize={startResize} />
+                  </th>
+                  <th className="num">
+                    Variance
+                    <ColResizeHandle col="variance" startResize={startResize} />
+                  </th>
+                  <th className="num">
+                    Lines
+                    <ColResizeHandle col="lines" startResize={startResize} />
+                  </th>
+                  <th>
+                    Status
+                    <ColResizeHandle col="status" startResize={startResize} />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -182,12 +209,25 @@ export default function Step3Reconcile(props: {
                       <tr>
                         <td colSpan={6} style={{ background: "var(--bg)" }}>
                           {row.issueLines.length > 0 ? (
-                            <table style={{ margin: "4px 0" }}>
+                            <table style={{ margin: "4px 0" }} className="resizable-cols">
+                              <ColGroup
+                                columns={["description", "amount", "whats_wrong"]}
+                                widths={issueWidths}
+                              />
                               <thead>
                                 <tr>
-                                  <th>Description</th>
-                                  <th className="num">Amount</th>
-                                  <th>What's wrong</th>
+                                  <th>
+                                    Description
+                                    <ColResizeHandle col="description" startResize={startIssueResize} />
+                                  </th>
+                                  <th className="num">
+                                    Amount
+                                    <ColResizeHandle col="amount" startResize={startIssueResize} />
+                                  </th>
+                                  <th>
+                                    What's wrong
+                                    <ColResizeHandle col="whats_wrong" startResize={startIssueResize} />
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>

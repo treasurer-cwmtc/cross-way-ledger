@@ -3,6 +3,7 @@ import { pledgeCampaignsApi, CampaignDetail } from "../../api/pledgeCampaigns";
 import { donorsApi, Donor } from "../../api/donors";
 import DonorPicker from "./DonorPicker";
 import PledgePicker, { PledgeOption } from "./PledgePicker";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -32,6 +33,7 @@ export default function DetailModal({
   const [detail, setDetail] = useState<CampaignDetail | null>(null);
   const [donors, setDonors] = useState<Donor[]>([]);
   const [error, setError] = useState("");
+  const { widths, startResize } = useColumnWidths("campaign-detail-gifts");
 
   function reload() {
     pledgeCampaignsApi
@@ -218,14 +220,41 @@ export default function DetailModal({
         )}
         {detail.gifts.length > 0 && (
           <div className="table-wrap">
-            <table>
+            <table className="resizable-cols">
+              <ColGroup
+                columns={[
+                  "date",
+                  ...(showGiverColumn ? ["giver"] : []),
+                  "net_amount",
+                  "method",
+                  "source_file",
+                ]}
+                widths={widths}
+              />
               <thead>
                 <tr>
-                  <th>Date</th>
-                  {showGiverColumn && <th>Giver</th>}
-                  <th>Net Amount</th>
-                  <th>Method</th>
-                  <th>Source file</th>
+                  <th>
+                    Date
+                    <ColResizeHandle col="date" startResize={startResize} />
+                  </th>
+                  {showGiverColumn && (
+                    <th>
+                      Giver
+                      <ColResizeHandle col="giver" startResize={startResize} />
+                    </th>
+                  )}
+                  <th>
+                    Net Amount
+                    <ColResizeHandle col="net_amount" startResize={startResize} />
+                  </th>
+                  <th>
+                    Method
+                    <ColResizeHandle col="method" startResize={startResize} />
+                  </th>
+                  <th>
+                    Source file
+                    <ColResizeHandle col="source_file" startResize={startResize} />
+                  </th>
                 </tr>
               </thead>
               <tbody>

@@ -13,6 +13,7 @@ import { COLUMNS, setPriorYearEndDate } from "../ledger/columns";
 import ColumnHealthStrip from "../ledger/ColumnHealthStrip";
 import RegisterRow from "../ledger/RegisterRow";
 import TransactionModal from "../ledger/TransactionModal";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 type SortKey =
   | "date_posted"
@@ -30,12 +31,14 @@ function SortableHeader({
   activeSort,
   onSort,
   filter,
+  resizeHandle,
 }: {
   label: string;
   sortKey: SortKey;
   activeSort: { key: SortKey | null; dir: "asc" | "desc" };
   onSort: (key: SortKey) => void;
   filter?: React.ReactNode;
+  resizeHandle?: React.ReactNode;
 }) {
   const active = activeSort.key === sortKey;
   return (
@@ -50,6 +53,7 @@ function SortableHeader({
         </span>
       </span>
       {filter}
+      {resizeHandle}
     </th>
   );
 }
@@ -73,6 +77,7 @@ export default function Reconciliation() {
   const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
   const [bankAccountFilter, setBankAccountFilter] = useState<Set<string> | null>(null);
   const [fileNameFilter, setFileNameFilter] = useState<Set<string> | null>(null);
+  const { widths, startResize } = useColumnWidths("actual-ledger");
 
   async function load() {
     try {
@@ -268,7 +273,21 @@ export default function Reconciliation() {
 
       <div className="card">
         <div className="table-wrap">
-          <table>
+          <table className="resizable-cols">
+            <ColGroup
+              columns={[
+                "expand",
+                "date_posted",
+                "transaction_date",
+                "description",
+                "statement_description",
+                "bank_description",
+                "bank_account",
+                "file_name",
+                "amount",
+              ]}
+              widths={widths}
+            />
             <thead>
               <tr>
                 <th></th>
@@ -285,6 +304,7 @@ export default function Reconciliation() {
                       onChange={setDatePostedFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="date_posted" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Transaction Date"
@@ -299,6 +319,7 @@ export default function Reconciliation() {
                       onChange={setTransactionDateFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="transaction_date" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Description"
@@ -313,6 +334,7 @@ export default function Reconciliation() {
                       onChange={setDescriptionFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="description" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Statement Description"
@@ -327,6 +349,7 @@ export default function Reconciliation() {
                       onChange={setStatementDescriptionFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="statement_description" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Bank Description"
@@ -341,6 +364,7 @@ export default function Reconciliation() {
                       onChange={setBankDescriptionFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="bank_description" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Bank Account"
@@ -355,6 +379,7 @@ export default function Reconciliation() {
                       onChange={setBankAccountFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="bank_account" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="File Name"
@@ -369,8 +394,15 @@ export default function Reconciliation() {
                       onChange={setFileNameFilter}
                     />
                   }
+                  resizeHandle={<ColResizeHandle col="file_name" startResize={startResize} />}
                 />
-                <SortableHeader label="Amount" sortKey="amount" activeSort={sort} onSort={onSort} />
+                <SortableHeader
+                  label="Amount"
+                  sortKey="amount"
+                  activeSort={sort}
+                  onSort={onSort}
+                  resizeHandle={<ColResizeHandle col="amount" startResize={startResize} />}
+                />
               </tr>
             </thead>
             <tbody>

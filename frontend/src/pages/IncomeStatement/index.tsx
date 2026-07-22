@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { incomeStatementApi, IncomeStatement as IncomeStatementData, IncomeStatementGroup, IncomeStatementRow } from "../../api/incomeStatement";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 function fmt(n: number): string {
   const sign = n < 0 ? "-" : "";
@@ -50,6 +51,7 @@ function Section(props: { title: string; groups: IncomeStatementGroup[]; total: 
 export default function IncomeStatement() {
   const [data, setData] = useState<IncomeStatementData | null>(null);
   const [error, setError] = useState("");
+  const { widths, startResize } = useColumnWidths("income-statement");
 
   useEffect(() => {
     incomeStatementApi.get().then(setData).catch((err) => setError((err as Error).message));
@@ -70,13 +72,25 @@ export default function IncomeStatement() {
       {data && (
         <div className="card">
           <div className="table-wrap">
-            <table>
+            <table className="resizable-cols">
+              <ColGroup columns={["label", "plan", "actuals", "variance"]} widths={widths} />
               <thead>
                 <tr>
-                  <th></th>
-                  <th className="num">Plan</th>
-                  <th className="num">Actuals</th>
-                  <th className="num">Variance</th>
+                  <th>
+                    <ColResizeHandle col="label" startResize={startResize} />
+                  </th>
+                  <th className="num">
+                    Plan
+                    <ColResizeHandle col="plan" startResize={startResize} />
+                  </th>
+                  <th className="num">
+                    Actuals
+                    <ColResizeHandle col="actuals" startResize={startResize} />
+                  </th>
+                  <th className="num">
+                    Variance
+                    <ColResizeHandle col="variance" startResize={startResize} />
+                  </th>
                 </tr>
               </thead>
               <tbody>

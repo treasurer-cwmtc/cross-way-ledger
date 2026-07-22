@@ -5,6 +5,7 @@ import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
 import { Rule, rulesApi } from "../../api/rules";
 import { getCurrentFiscalYear } from "../../api/settings";
 import { uploadBankOrStripeFile } from "../../lib/googleDrive";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 import AccountPicker from "../ledger/AccountPicker";
 import WizardLineModal from "./WizardLineModal";
 import WizardLineRow from "./WizardLineRow";
@@ -23,6 +24,7 @@ export default function Step1BankUpload(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [opened, setOpened] = useState<ReconLine | null>(null);
+  const { widths, startResize } = useColumnWidths("upload-step1-bank-preview");
 
   const run = props.run;
 
@@ -141,14 +143,33 @@ export default function Step1BankUpload(props: {
               Lines with no data yet (like remote deposits) are fine to leave as-is.
             </p>
             <div className="table-wrap">
-              <table>
+              <table className="resizable-cols">
+                <ColGroup
+                  columns={["date", "bank_description", "amount", "category", "status"]}
+                  widths={widths}
+                />
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Bank Description</th>
-                    <th className="num">Amount</th>
-                    <th>Category</th>
-                    <th>Status</th>
+                    <th>
+                      Date
+                      <ColResizeHandle col="date" startResize={startResize} />
+                    </th>
+                    <th>
+                      Bank Description
+                      <ColResizeHandle col="bank_description" startResize={startResize} />
+                    </th>
+                    <th className="num">
+                      Amount
+                      <ColResizeHandle col="amount" startResize={startResize} />
+                    </th>
+                    <th>
+                      Category
+                      <ColResizeHandle col="category" startResize={startResize} />
+                    </th>
+                    <th>
+                      Status
+                      <ColResizeHandle col="status" startResize={startResize} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { reconcileApi, StripeFundCheckItem, StripeFundCheckResult } from "../../api/reconcile";
 import { rulesApi, Rule } from "../../api/rules";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 import AccountPicker from "../ledger/AccountPicker";
 
 export default function Step2StripeUpload(props: {
@@ -16,6 +17,7 @@ export default function Step2StripeUpload(props: {
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const { widths, startResize } = useColumnWidths("upload-step2-stripe-funds");
 
   async function runCheck(file: File) {
     setBusy(true);
@@ -77,12 +79,22 @@ export default function Step2StripeUpload(props: {
               land in the right account.
             </p>
           )}
-          <table>
+          <table className="resizable-cols">
+            <ColGroup columns={["fund", "status", "account"]} widths={widths} />
             <thead>
               <tr>
-                <th>Fund</th>
-                <th>Status</th>
-                <th>Account</th>
+                <th>
+                  Fund
+                  <ColResizeHandle col="fund" startResize={startResize} />
+                </th>
+                <th>
+                  Status
+                  <ColResizeHandle col="status" startResize={startResize} />
+                </th>
+                <th>
+                  Account
+                  <ColResizeHandle col="account" startResize={startResize} />
+                </th>
               </tr>
             </thead>
             <tbody>

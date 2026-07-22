@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { settingsApi } from "../../api/settings";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 import { ensureYearFolderExists } from "../../lib/googleDrive";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 function addDays(iso: string, days: number): string {
   const d = new Date(iso + "T00:00:00Z");
@@ -38,6 +39,7 @@ function BankAccountsCard() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const { widths, startResize } = useColumnWidths("config-bank-accounts");
 
   async function load() {
     try {
@@ -80,11 +82,17 @@ function BankAccountsCard() {
         The accounts available to tag when uploading a bank statement on the
         Upload tab.
       </p>
-      <table>
+      <table className="resizable-cols">
+        <ColGroup columns={["name", "actions"]} widths={widths} />
         <thead>
           <tr>
-            <th>Name</th>
-            <th></th>
+            <th>
+              Name
+              <ColResizeHandle col="name" startResize={startResize} />
+            </th>
+            <th>
+              <ColResizeHandle col="actions" startResize={startResize} />
+            </th>
           </tr>
         </thead>
         <tbody>
