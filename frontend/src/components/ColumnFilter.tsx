@@ -4,14 +4,22 @@ import { createPortal } from "react-dom";
 /** Shared anchoring for a column-header filter popover: a portaled panel
  * positioned under whatever button opened it, closed on outside click or
  * scroll - same approach as DonorPicker's dropdown, factored out since two
- * filter variants (text checklist, date) both need identical positioning. */
+ * filter variants (text checklist, date) both need identical positioning.
+ *
+ * Dismissal listens on "click", not "mousedown" - "mousedown" fires before
+ * the anchor button's own onClick, which is exactly the kind of ordering
+ * that makes an opening click also look like an outside click to a
+ * different listener depending on browser/input-device timing. "click"
+ * bubbles through the same phase as the anchor's onClick, so its
+ * ev.stopPropagation() reliably keeps the popover open when it's the
+ * button itself being clicked. */
 function useAnchoredPopover(open: boolean, onClose: () => void) {
   const anchorRef = useRef<HTMLButtonElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     if (!open) return;
-    function onDocMouseDown(ev: MouseEvent) {
+    function onDocClick(ev: MouseEvent) {
       const target = ev.target as Node;
       if (
         anchorRef.current &&
@@ -21,8 +29,8 @@ function useAnchoredPopover(open: boolean, onClose: () => void) {
         onClose();
       }
     }
-    document.addEventListener("mousedown", onDocMouseDown);
-    return () => document.removeEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -67,7 +75,11 @@ function FilterIcon({ active }: { active: boolean }) {
 /** Excel-style "choose which values to show" filter for a text column -
  * every distinct value present in the column, with checkboxes. `null`
  * means no filter (show everything); an empty Set is never produced (the
- * "Clear filter" action resets straight to null instead). */
+ * "Clear filter" action resets straight to null instead).
+ *
+ * Checkbox changes are staged locally and only take effect on "Apply" -
+ * closing the popover any other way (Cancel, outside click, Escape)
+ * discards them, so a stray click never silently changes what's shown. */
 export function TextColumnFilter({
   label,
   options,
@@ -80,15 +92,26 @@ export function TextColumnFilter({
   onChange: (next: Set<string> | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<Set<string> | null>(selected);
   const { anchorRef, coords } = useAnchoredPopover(open, () => setOpen(false));
   const active = selected !== null;
 
+  function openPopover() {
+    setDraft(selected);
+    setOpen(true);
+  }
+
   function toggle(value: string) {
-    const base = selected ?? new Set(options);
+    const base = draft ?? new Set(options);
     const next = new Set(base);
     if (next.has(value)) next.delete(value);
     else next.add(value);
-    onChange(next.size === options.length ? null : next);
+    setDraft(next.size === options.length ? null : next);
+  }
+
+  function apply() {
+    onChange(draft);
+    setOpen(false);
   }
 
   return (
@@ -101,7 +124,8 @@ export function TextColumnFilter({
         title={`Filter ${label}`}
         onClick={(ev) => {
           ev.stopPropagation();
-          setOpen((o) => !o);
+          if (open) setOpen(false);
+          else openPopover();
         }}
       >
         <FilterIcon active={active} />
@@ -115,35 +139,46 @@ export function TextColumnFilter({
               top: coords.top,
               left: coords.left,
               width: 240,
-              maxHeight: 280,
-              overflowY: "auto",
+              maxHeight: 320,
+              display: "flex",
+              flexDirection: "column",
               zIndex: 60,
               padding: 10,
             }}
           >
             <div className="row" style={{ marginBottom: 6, gap: 8 }}>
-              <button className="link" onClick={() => onChange(null)}>
+              <button className="link" onClick={() => setDraft(null)}>
                 Select all
               </button>
-              <button className="link" onClick={() => onChange(new Set())}>
+              <button className="link" onClick={() => setDraft(new Set())}>
                 Clear
               </button>
             </div>
-            {options.map((opt) => (
-              <label
-                key={opt}
-                className="field-checkbox"
-                style={{ display: "flex", fontSize: 13, marginBottom: 2 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected === null || selected.has(opt)}
-                  onChange={() => toggle(opt)}
-                />
-                <span>{opt || "(blank)"}</span>
-              </label>
-            ))}
-            {options.length === 0 && <p className="subtitle">No values.</p>}
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {options.map((opt) => (
+                <label
+                  key={opt}
+                  className="field-checkbox"
+                  style={{ display: "flex", fontSize: 13, marginBottom: 2 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={draft === null || draft.has(opt)}
+                    onChange={() => toggle(opt)}
+                  />
+                  <span>{opt || "(blank)"}</span>
+                </label>
+              ))}
+              {options.length === 0 && <p className="subtitle">No values.</p>}
+            </div>
+            <div className="row" style={{ marginTop: 8, gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn secondary" style={{ padding: "5px 12px" }} onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+              <button className="btn" style={{ padding: "5px 12px" }} onClick={apply}>
+                Apply
+              </button>
+            </div>
           </div>,
           document.body
         )}
@@ -173,7 +208,8 @@ export function dateMatchesFilter(value: string | null, filter: DateFilterValue 
 }
 
 /** Date column filter - exact date, a from/to range, or a whole month
- * (picked from the months actually present in the data). */
+ * (picked from the months actually present in the data). Same stage-then-
+ * Apply pattern as TextColumnFilter. */
 export function DateColumnFilter({
   label,
   monthOptions,
@@ -186,11 +222,18 @@ export function DateColumnFilter({
   onChange: (next: DateFilterValue | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<DateFilterValue | null>(value);
   const { anchorRef, coords } = useAnchoredPopover(open, () => setOpen(false));
-  const mode = value?.mode ?? "range";
+  const mode = draft?.mode ?? "range";
 
-  function setMode(nextMode: DateFilterMode) {
-    onChange({ mode: nextMode });
+  function openPopover() {
+    setDraft(value);
+    setOpen(true);
+  }
+
+  function apply() {
+    onChange(draft);
+    setOpen(false);
   }
 
   return (
@@ -203,7 +246,8 @@ export function DateColumnFilter({
         title={`Filter ${label}`}
         onClick={(ev) => {
           ev.stopPropagation();
-          setOpen((o) => !o);
+          if (open) setOpen(false);
+          else openPopover();
         }}
       >
         <FilterIcon active={value !== null} />
@@ -220,7 +264,7 @@ export function DateColumnFilter({
                   key={m}
                   className={"btn" + (mode === m ? "" : " secondary")}
                   style={{ padding: "4px 10px", fontSize: 12 }}
-                  onClick={() => setMode(m)}
+                  onClick={() => setDraft({ mode: m })}
                 >
                   {m === "date" ? "Exact date" : m === "range" ? "Range" : "Month"}
                 </button>
@@ -232,8 +276,8 @@ export function DateColumnFilter({
                 <span>Date</span>
                 <input
                   type="date"
-                  value={value?.date ?? ""}
-                  onChange={(ev) => onChange({ mode: "date", date: ev.target.value })}
+                  value={draft?.date ?? ""}
+                  onChange={(ev) => setDraft({ mode: "date", date: ev.target.value })}
                 />
               </label>
             )}
@@ -244,16 +288,16 @@ export function DateColumnFilter({
                   <span>From</span>
                   <input
                     type="date"
-                    value={value?.from ?? ""}
-                    onChange={(ev) => onChange({ mode: "range", from: ev.target.value, to: value?.to })}
+                    value={draft?.from ?? ""}
+                    onChange={(ev) => setDraft({ mode: "range", from: ev.target.value, to: draft?.to })}
                   />
                 </label>
                 <label className="field">
                   <span>To</span>
                   <input
                     type="date"
-                    value={value?.to ?? ""}
-                    onChange={(ev) => onChange({ mode: "range", from: value?.from, to: ev.target.value })}
+                    value={draft?.to ?? ""}
+                    onChange={(ev) => setDraft({ mode: "range", from: draft?.from, to: ev.target.value })}
                   />
                 </label>
               </>
@@ -263,8 +307,8 @@ export function DateColumnFilter({
               <label className="field">
                 <span>Month</span>
                 <select
-                  value={value?.month ?? ""}
-                  onChange={(ev) => onChange({ mode: "month", month: ev.target.value })}
+                  value={draft?.month ?? ""}
+                  onChange={(ev) => setDraft({ mode: "month", month: ev.target.value })}
                 >
                   <option value="">— choose —</option>
                   {monthOptions.map((m) => (
@@ -279,9 +323,24 @@ export function DateColumnFilter({
               </label>
             )}
 
-            <button className="link" style={{ marginTop: 8 }} onClick={() => onChange(null)}>
-              Clear filter
-            </button>
+            <div className="row" style={{ marginTop: 10, gap: 8 }}>
+              <button
+                className="link"
+                onClick={() => {
+                  setDraft(null);
+                }}
+              >
+                Clear filter
+              </button>
+            </div>
+            <div className="row" style={{ marginTop: 8, gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn secondary" style={{ padding: "5px 12px" }} onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+              <button className="btn" style={{ padding: "5px 12px" }} onClick={apply}>
+                Apply
+              </button>
+            </div>
           </div>,
           document.body
         )}
