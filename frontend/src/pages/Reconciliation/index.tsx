@@ -3,10 +3,55 @@ import { accountsApi, ChartAccount } from "../../api/accounts";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 import { ledgerApi, ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
 import { settingsApi } from "../../api/settings";
+import {
+  DateColumnFilter,
+  DateFilterValue,
+  TextColumnFilter,
+  dateMatchesFilter,
+} from "../../components/ColumnFilter";
 import { COLUMNS, setPriorYearEndDate } from "../ledger/columns";
 import ColumnHealthStrip from "../ledger/ColumnHealthStrip";
 import RegisterRow from "../ledger/RegisterRow";
 import TransactionModal from "../ledger/TransactionModal";
+
+type SortKey =
+  | "transaction_date"
+  | "description"
+  | "statement_description"
+  | "bank_description"
+  | "bank_account"
+  | "method"
+  | "amount";
+
+function SortableHeader({
+  label,
+  sortKey,
+  activeSort,
+  onSort,
+  filter,
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeSort: { key: SortKey | null; dir: "asc" | "desc" };
+  onSort: (key: SortKey) => void;
+  filter?: React.ReactNode;
+}) {
+  const active = activeSort.key === sortKey;
+  return (
+    <th>
+      <span
+        onClick={() => onSort(sortKey)}
+        style={{ cursor: "pointer", userSelect: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+      >
+        {label}
+        <span style={{ fontSize: 10, color: active ? "var(--primary)" : "var(--muted)" }}>
+          {active ? (activeSort.dir === "asc" ? "▲" : "▼") : "⇅"}
+        </span>
+      </span>
+      {filter}
+    </th>
+  );
+}
 
 export default function Reconciliation() {
   const [entries, setEntries] = useState<ReconciliationEntry[]>([]);
@@ -15,6 +60,17 @@ export default function Reconciliation() {
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
+
+  const [sort, setSort] = useState<{ key: SortKey | null; dir: "asc" | "desc" }>({
+    key: "transaction_date",
+    dir: "desc",
+  });
+  const [dateFilter, setDateFilter] = useState<DateFilterValue | null>(null);
+  const [descriptionFilter, setDescriptionFilter] = useState<Set<string> | null>(null);
+  const [statementDescriptionFilter, setStatementDescriptionFilter] = useState<Set<string> | null>(null);
+  const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
+  const [bankAccountFilter, setBankAccountFilter] = useState<Set<string> | null>(null);
+  const [methodFilter, setMethodFilter] = useState<Set<string> | null>(null);
 
   async function load() {
     try {
@@ -37,6 +93,35 @@ export default function Reconciliation() {
     load();
   }, []);
 
+  function bankAccountName(e: ReconciliationEntry): string {
+    return bankAccounts.find((b) => b.id === e.bank_account_id)?.name || e.bank_account_name;
+  }
+
+  function sortValue(e: ReconciliationEntry, key: SortKey): string | number {
+    switch (key) {
+      case "transaction_date":
+        return e.transaction_date || "";
+      case "description":
+        return e.description;
+      case "statement_description":
+        return e.statement_description;
+      case "bank_description":
+        return e.bank_description;
+      case "bank_account":
+        return bankAccountName(e);
+      case "method":
+        return e.method;
+      case "amount":
+        return e.amount;
+    }
+  }
+
+  function onSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }
+    );
+  }
+
   const completeness = useMemo(() => {
     const map = new Map<string, { complete: boolean; missingCount: number }>();
     for (const col of COLUMNS) {
@@ -46,10 +131,73 @@ export default function Reconciliation() {
     return map;
   }, [entries]);
 
+  const monthOptions = useMemo(
+    () => Array.from(new Set(entries.flatMap((e) => (e.transaction_date ? [e.transaction_date.slice(0, 7)] : [])))).sort(),
+    [entries]
+  );
+  const descriptionOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.description || "(no description)"))).sort(),
+    [entries]
+  );
+  const statementDescriptionOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.statement_description || "— uncategorized —"))).sort(),
+    [entries]
+  );
+  const bankDescriptionOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.bank_description || "—"))).sort(),
+    [entries]
+  );
+  const bankAccountOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => bankAccountName(e) || "—"))).sort(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entries, bankAccounts]
+  );
+  const methodOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.method || "—"))).sort(),
+    [entries]
+  );
+
   const activeColumn = filterColumn ? COLUMNS.find((c) => c.key === filterColumn) : null;
-  const visibleEntries = activeColumn
-    ? entries.filter((e) => !activeColumn.isPopulated(e))
-    : entries;
+
+  const visibleEntries = useMemo(() => {
+    let out = activeColumn ? entries.filter((e) => !activeColumn.isPopulated(e)) : entries;
+    out = out.filter((e) => {
+      if (!dateMatchesFilter(e.transaction_date, dateFilter)) return false;
+      if (descriptionFilter && !descriptionFilter.has(e.description || "(no description)")) return false;
+      if (
+        statementDescriptionFilter &&
+        !statementDescriptionFilter.has(e.statement_description || "— uncategorized —")
+      )
+        return false;
+      if (bankDescriptionFilter && !bankDescriptionFilter.has(e.bank_description || "—")) return false;
+      if (bankAccountFilter && !bankAccountFilter.has(bankAccountName(e) || "—")) return false;
+      if (methodFilter && !methodFilter.has(e.method || "—")) return false;
+      return true;
+    });
+    if (sort.key) {
+      const key = sort.key;
+      out = [...out].sort((a, b) => {
+        const av = sortValue(a, key);
+        const bv = sortValue(b, key);
+        const res =
+          typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+        return sort.dir === "asc" ? res : -res;
+      });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    entries,
+    bankAccounts,
+    activeColumn,
+    dateFilter,
+    descriptionFilter,
+    statementDescriptionFilter,
+    bankDescriptionFilter,
+    bankAccountFilter,
+    methodFilter,
+    sort,
+  ]);
 
   async function onUpdate(id: number, patch: ReconciliationEntryUpdate) {
     // Optimistic local update so typing/toggling feels instant.
@@ -83,8 +231,10 @@ export default function Reconciliation() {
         Click a row to open every field for editing. Statement Description is
         always whatever the linked Chart of Accounts account currently says.
         Click a chip below to filter down to just the rows missing that column.
-        The Txn/Posted CY/PY columns are driven by the fiscal year date set on
-        the Config tab (shared with Accrual).
+        Every column header sorts and filters — Bank Description shows the raw
+        bank line in full, so the table scrolls horizontally rather than
+        truncating it. The Txn/Posted CY/PY columns are driven by the fiscal
+        year date set on the Config tab (shared with Accrual).
       </p>
       {error && <div className="error">{error}</div>}
 
@@ -111,12 +261,91 @@ export default function Reconciliation() {
             <thead>
               <tr>
                 <th></th>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Statement Description</th>
-                <th>Bank Account</th>
-                <th>Method</th>
-                <th className="num">Amount</th>
+                <SortableHeader
+                  label="Date"
+                  sortKey="transaction_date"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <DateColumnFilter
+                      label="Date"
+                      monthOptions={monthOptions}
+                      value={dateFilter}
+                      onChange={setDateFilter}
+                    />
+                  }
+                />
+                <SortableHeader
+                  label="Description"
+                  sortKey="description"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Description"
+                      options={descriptionOptions}
+                      selected={descriptionFilter}
+                      onChange={setDescriptionFilter}
+                    />
+                  }
+                />
+                <SortableHeader
+                  label="Statement Description"
+                  sortKey="statement_description"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Statement Description"
+                      options={statementDescriptionOptions}
+                      selected={statementDescriptionFilter}
+                      onChange={setStatementDescriptionFilter}
+                    />
+                  }
+                />
+                <SortableHeader
+                  label="Bank Description"
+                  sortKey="bank_description"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Bank Description"
+                      options={bankDescriptionOptions}
+                      selected={bankDescriptionFilter}
+                      onChange={setBankDescriptionFilter}
+                    />
+                  }
+                />
+                <SortableHeader
+                  label="Bank Account"
+                  sortKey="bank_account"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Bank Account"
+                      options={bankAccountOptions}
+                      selected={bankAccountFilter}
+                      onChange={setBankAccountFilter}
+                    />
+                  }
+                />
+                <SortableHeader
+                  label="Method"
+                  sortKey="method"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Method"
+                      options={methodOptions}
+                      selected={methodFilter}
+                      onChange={setMethodFilter}
+                    />
+                  }
+                />
+                <SortableHeader label="Amount" sortKey="amount" activeSort={sort} onSort={onSort} />
               </tr>
             </thead>
             <tbody>
@@ -127,11 +356,13 @@ export default function Reconciliation() {
                   bankAccounts={bankAccounts}
                   onUpdate={onUpdate}
                   onOpen={setOpenEntryId}
+                  showBankDescription
+                  wideBankDescription
                 />
               ))}
               {visibleEntries.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ color: "var(--muted)" }}>
+                  <td colSpan={8} style={{ color: "var(--muted)" }}>
                     {entries.length === 0
                       ? "No entries yet — push a completed run from the Upload tab."
                       : "No rows match this filter."}

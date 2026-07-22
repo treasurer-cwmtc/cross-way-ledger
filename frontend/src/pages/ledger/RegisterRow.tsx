@@ -14,6 +14,11 @@ function RegisterRow(props: {
   onUpdate: (id: number, patch: LedgerEntryUpdate) => void;
   onOpen: (id: number) => void;
   showBankDescription?: boolean;
+  // Reconciliation's register needs the full Bank Description readable (the
+  // raw bank line is often the only way to identify a transaction) rather
+  // than truncated to a fixed width - the table already scrolls
+  // horizontally (.table-wrap), so letting this cell run wide is fine.
+  wideBankDescription?: boolean;
 }) {
   const e = props.entry;
   const bankAccountName =
@@ -44,7 +49,11 @@ function RegisterRow(props: {
       </td>
       {props.showBankDescription && (
         <td
-          style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          style={
+            props.wideBankDescription
+              ? { minWidth: 420, whiteSpace: "nowrap" }
+              : { maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
+          }
         >
           {e.bank_description || <span style={{ color: "var(--muted)" }}>—</span>}
         </td>
