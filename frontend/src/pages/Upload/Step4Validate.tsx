@@ -139,7 +139,21 @@ export default function Step4Validate(props: {
             {importing ? "Processing…" : "Process"}
           </button>
         )}
-        {error && <div className="error">{error}</div>}
+        {error && (
+          <div
+            className="error"
+            style={{
+              marginTop: 12,
+              padding: "10px 12px",
+              background: "rgba(220, 38, 38, 0.08)",
+              border: "1px solid var(--red)",
+              borderRadius: 6,
+              fontWeight: 600,
+            }}
+          >
+            {error}
+          </div>
+        )}
       </div>
     </div>
   );
