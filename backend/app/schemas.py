@@ -191,6 +191,7 @@ class UserOut(BaseModel):
     is_admin: bool
     active: bool
     permissions: list[str]
+    hide_donor_names: bool
     created_at: datetime
 
 
@@ -208,6 +209,7 @@ class UserCreate(BaseModel):
 class UserPermissionsUpdate(BaseModel):
     permissions: list[str]
     is_admin: bool
+    hide_donor_names: bool = False
 
 
 class PasswordChange(BaseModel):
@@ -539,8 +541,30 @@ class DonorOut(BaseModel):
     phone_number: str
     city: str
     state: str
+    zip_code: str
+    joint_giver_id: str
+    joint_giver_first_name: str
+    joint_giver_last_name: str
+    first_donated: date | None
     donation_count: int
     total_given: float
+    source_file_name: str
+    source_file_link: str
+
+
+class DonorGiftOut(BaseModel):
+    """One gift for the Donors page's click-to-expand detail popup - every
+    fund, not scoped to one campaign like CampaignDonation/DonationOut are,
+    since this is the general donor list, not a campaign view."""
+
+    id: int
+    fund: str
+    received_date: date | None
+    amount: float
+    net_amount: float
+    method: str
+    source_file_name: str
+    source_file_link: str
 
 
 class PledgeOut(BaseModel):
@@ -558,6 +582,8 @@ class PledgeOut(BaseModel):
     donor_id: str | None
     match_source: str | None
     actual_amount: float
+    source_file_name: str
+    source_file_link: str
 
 
 class PledgeMatchUpdate(BaseModel):
@@ -579,6 +605,8 @@ class PledgeImportSummary(BaseModel):
     pledges_imported: int
     pledges_matched: int
     pledges_unmatched: int
+    new_pledges: list[PledgeOut]
+    updated_pledges: list[PledgeOut]
 
 
 class DonorImportSummary(BaseModel):
@@ -590,16 +618,82 @@ class DonorImportSummary(BaseModel):
 class DonationOut(BaseModel):
     id: int
     donor_id: str | None
+    # Resolved from the donor list (blank if unmatched, or redacted to ""
+    # for a user with hide_donor_names set - same rule as PledgeOut).
+    donor_first_name: str
+    donor_last_name: str
+    donor_email: str
     fund: str
     received_date: date | None
     amount: float
     net_amount: float
     method: str
+    source_file_name: str
+    source_file_link: str
+
+
+class CampaignDetailRow(BaseModel):
+    """One row of the combined Details tab: either a pledge (has_pledge
+    True, with its due_date) or - for someone who gave to this fund but
+    never submitted a pledge form - a synthesized row with pledged_amount
+    0 and no due_date, so their giving still shows up somewhere. donor_id
+    is None only for donations that never matched any donor record at all
+    (grouped into one row so the numbers still reconcile to the dashboard
+    total, even though there's no single person to attribute them to).
+
+    When the matched donor has a joint_giver_id and that spouse has no
+    pledge of their own in this campaign, actual_amount and the gift-history
+    popup fold in the joint giver's donations too - a household where one
+    spouse pledges and the other gives shouldn't show the pledge as
+    "unreceived" just because the money came in under the spouse's own
+    donor record."""
+
+    key: str  # "pledge:<id>" or "donor:<donor_id-or-'none'>" - opaque, passed back to get_detail
+    donor_id: str | None
+    first_name: str
+    last_name: str
+    email: str
+    pledged_amount: float
+    actual_amount: float
+    due_date: date | None
+    has_pledge: bool
+    joint_giver_id: str
+    joint_giver_first_name: str
+    joint_giver_last_name: str
+    source_file_name: str
+    source_file_link: str
+
+
+class CampaignDetailOut(BaseModel):
+    """Full detail for the Details tab's click-to-expand popup: the pledge
+    (if this row has one) plus every individual gift (this fund only) from
+    the matched donor - not just the aggregate totals already on
+    CampaignDetailRow, since the popup shows a real date-by-date history.
+    Gifts include the joint giver's donations too, under the same fold rule
+    as CampaignDetailRow.actual_amount."""
+
+    pledge: PledgeOut | None
+    donor_id: str | None
+    joint_giver_id: str
+    joint_giver_first_name: str
+    joint_giver_last_name: str
+    first_name: str
+    last_name: str
+    email: str
+    gifts: list[DonationOut]
 
 
 class PledgeDashboardPoint(BaseModel):
     date: date
-    running_total: float
+    # Cumulative totals as of this date - both exclude the campaign's
+    # starting_balance on purpose (shown as its own KPI instead), so the
+    # chart always reads as "since tracking began," not "since forever."
+    running_pledged_total: float
+    running_actual_total: float
+    # This date's own contribution, not cumulative - a day can have either,
+    # both, or (for a hover target with no gift) neither.
+    pledged_amount: float
+    actual_amount: float
 
 
 class PledgeDashboardOut(BaseModel):
@@ -607,6 +701,11 @@ class PledgeDashboardOut(BaseModel):
     total_pledged: float
     total_actual: float
     total_raised: float
+    # Money already given by someone with no pledge on file (e.g. a $22,000
+    # gift with no matching pledge) - counted toward the goal alongside
+    # total_pledged, since money already in hand is at least as strong a
+    # commitment as a pledge.
+    unpledged_actual: float
     pledge_count: int
     donation_count: int
     goal_amount: float

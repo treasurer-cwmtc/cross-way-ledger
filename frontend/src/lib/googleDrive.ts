@@ -154,6 +154,107 @@ async function getReceiptsFolderForYear(token: string, year: number): Promise<st
   return getOrCreateFolder(String(year), root, token);
 }
 
+// --------------------------------------------------------------------------
+// Pledge Campaign import archiving: every donations/pledges/donors CSV
+// uploaded through the Import Campaigns wizard is also archived to Drive,
+// under a shared folder the treasurer already uses -
+// <CAMPAIGN_IMPORTS_ROOT_FOLDER_ID>/Campaign/<campaign name>/<file> - so a
+// row in the app can always be traced back to the exact file it came from.
+// --------------------------------------------------------------------------
+
+// A real, existing folder in the treasurer's Drive (not one this app
+// created) - under drive.file scope the app can only read/write it once the
+// user has explicitly granted access to it via the Picker (see
+// ensureCampaignImportsRootAccess below), which only has to happen once.
+const CAMPAIGN_IMPORTS_ROOT_FOLDER_ID = "1xc26-KngtfILik8Y2_8GA--6pJRYkK7P";
+const CAMPAIGN_IMPORTS_ACCESS_CACHE_KEY = "cwl_drive_campaign_imports_access_granted";
+
+/** Grants (one time only, cached in localStorage) this app's drive.file
+ * token access to CAMPAIGN_IMPORTS_ROOT_FOLDER_ID. Since that folder
+ * already exists and wasn't created by this app, drive.file scope can't
+ * see it until the user explicitly selects it through the Picker once -
+ * after that, the grant persists across sessions the same way a receipt
+ * upload's folder does. */
+async function ensureCampaignImportsRootAccess(token: string): Promise<void> {
+  if (localStorage.getItem(CAMPAIGN_IMPORTS_ACCESS_CACHE_KEY) === CAMPAIGN_IMPORTS_ROOT_FOLDER_ID) {
+    return;
+  }
+  // Already accessible (e.g. granted in an earlier browser profile/session
+  // via a previous Picker selection) - skip prompting again.
+  const probe = await fetch(`${DRIVE_FILES_API}/${CAMPAIGN_IMPORTS_ROOT_FOLDER_ID}?fields=id`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (probe.ok) {
+    localStorage.setItem(CAMPAIGN_IMPORTS_ACCESS_CACHE_KEY, CAMPAIGN_IMPORTS_ROOT_FOLDER_ID);
+    return;
+  }
+
+  await ensurePickerApiLoaded();
+  const google = window.google;
+  if (!API_KEY) {
+    throw new Error("Google Drive isn't configured (missing VITE_GOOGLE_API_KEY).");
+  }
+  const granted = await new Promise<boolean>((resolve, reject) => {
+    try {
+      const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+        .setSelectFolderEnabled(true)
+        .setParent(CAMPAIGN_IMPORTS_ROOT_FOLDER_ID);
+      const picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(token)
+        .setDeveloperKey(API_KEY)
+        .setTitle("Select this folder to allow Cross Way Ledger to save import files here")
+        .setCallback((data: any) => {
+          if (data.action === google.picker.Action.PICKED) resolve(true);
+          else if (data.action === google.picker.Action.CANCEL) resolve(false);
+        })
+        .build();
+      picker.setVisible(true);
+    } catch (err) {
+      reject(err as Error);
+    }
+  });
+  if (!granted) {
+    throw new Error(
+      "Google Drive access to the campaign imports folder wasn't granted - select the folder to continue."
+    );
+  }
+  localStorage.setItem(CAMPAIGN_IMPORTS_ACCESS_CACHE_KEY, CAMPAIGN_IMPORTS_ROOT_FOLDER_ID);
+}
+
+async function getCampaignImportFolder(campaignName: string, token: string): Promise<string> {
+  await ensureCampaignImportsRootAccess(token);
+  const campaignsFolder = await getOrCreateFolder("Campaign", CAMPAIGN_IMPORTS_ROOT_FOLDER_ID, token);
+  return getOrCreateFolder(campaignName, campaignsFolder, token);
+}
+
+async function uploadFileDirect(file: File, folderId: string, token: string, name: string): Promise<PickedFile> {
+  const metadata = { name, parents: [folderId] };
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+  form.append("file", file);
+  const res = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink",
+    { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form }
+  );
+  if (!res.ok) throw new Error("Failed to upload the file to Google Drive.");
+  const data = await res.json();
+  return { id: data.id, name: data.name, url: data.webViewLink };
+}
+
+/** Archives an already-in-hand File (from a plain <input type="file">, not
+ * the Picker - the import wizard needs the file's own content to import,
+ * so it can't be picked from Drive first) to
+ * "<shared imports folder>/Campaign/<campaign name>/<date>_<original name>".
+ * Prefixed with today's date so re-uploading the same filename for a
+ * correction doesn't silently overwrite the original in the audit trail. */
+export async function uploadCampaignImportFile(campaignName: string, file: File): Promise<PickedFile> {
+  const token = await getAccessToken();
+  const folderId = await getCampaignImportFolder(campaignName, token);
+  const datePrefix = new Date().toISOString().slice(0, 10);
+  return uploadFileDirect(file, folderId, token, `${datePrefix}_${file.name}`);
+}
+
 function openPicker(accessToken: string, uploadFolderId: string | null): Promise<PickedFile | null> {
   if (!API_KEY) {
     return Promise.reject(new Error("Google Drive isn't configured (missing VITE_GOOGLE_API_KEY)."));

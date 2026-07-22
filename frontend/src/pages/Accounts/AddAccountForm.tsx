@@ -13,6 +13,7 @@ export default function AddAccountForm(props: {
   const [statementCategoryId, setStatementCategoryId] = useState<number | "">("");
   const [statementItemId, setStatementItemId] = useState<number | "">("");
   const [statementDetail, setStatementDetail] = useState("");
+  const [grouping, setGrouping] = useState("");
   const [isTaxDeductible, setIsTaxDeductible] = useState(false);
   const [isMandatory, setIsMandatory] = useState(false);
   const [preview, setPreview] = useState("");
@@ -24,6 +25,15 @@ export default function AddAccountForm(props: {
   const categoriesInScope = props.statementCategories.filter((c) => c.category === category);
   const itemsInScope = props.statementItems.filter(
     (i) => i.statement_category_id === statementCategoryId
+  );
+
+  // Every distinct grouping already in use, offered as a "pick or type your
+  // own" combobox via a native <datalist> - lighter than a custom picker
+  // for a simple free-text field, and this is the only place in the app
+  // that reads/writes it.
+  const groupingOptions = useMemo(
+    () => Array.from(new Set(props.accounts.map((a) => a.grouping).filter(Boolean))).sort(),
+    [props.accounts]
   );
 
   const trimmedDetail = statementDetail.trim();
@@ -66,11 +76,13 @@ export default function AddAccountForm(props: {
       const created = await accountsApi.createAccount({
         statement_item_id: statementItemId,
         statement_detail: statementDetail,
+        grouping,
         is_tax_deductible: isTaxDeductible ? "Yes" : "",
         is_mandatory: isMandatory ? "Yes" : "",
       });
       setMsg(`Created ${created.account_no}.`);
       setStatementDetail("");
+      setGrouping("");
       props.onCreated();
     } catch (e) {
       setError((e as Error).message);
@@ -155,6 +167,21 @@ export default function AddAccountForm(props: {
         </div>
       )}
       <div className="row">
+        <label className="field">
+          <span>Grouping (optional)</span>
+          <input
+            type="text"
+            list="grouping-options"
+            value={grouping}
+            placeholder="Choose existing or type a new one"
+            onChange={(e) => setGrouping(e.target.value)}
+          />
+          <datalist id="grouping-options">
+            {groupingOptions.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+        </label>
         <label className="field field-checkbox">
           <input
             type="checkbox"

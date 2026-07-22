@@ -1,21 +1,31 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Donor } from "../../api/donors";
 
-function labelFor(d: Donor) {
-  return `${d.first_name} ${d.last_name}`.trim() || d.donor_id;
+export interface PledgeOption {
+  pledgeId: number;
+  label: string;
+  email: string;
+  pledgedAmount: number;
+  matchedDonorId: string | null;
+  jointGiverName: string;
 }
 
-/** Type-to-filter donor picker for manually linking a pledge to a donor -
- * same shape as the Chart of Accounts AccountPicker (filters as you type,
- * portaled dropdown so it isn't clipped by a scrollable table). Committed
- * value is always donor_id; empty clears the match back to unmatched. */
-export default function DonorPicker(props: {
-  value: string | null;
-  donors: Donor[];
-  onChange: (donorId: string | null) => void;
+function fmtMoney(n: number): string {
+  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+}
+
+/** Type-to-filter picker for linking a "gave without pledging" row to an
+ * existing pledge - the reverse direction of DonorPicker (which links a
+ * pledge to a donor). One-shot action, not an editable persisted value:
+ * choosing an option fires onChange immediately and the caller closes/
+ * refetches, same as DonorPicker's combobox shape otherwise. */
+export default function PledgePicker({
+  options,
+  onChange,
+}: {
+  options: PledgeOption[];
+  onChange: (pledgeId: number) => void;
 }) {
-  const selected = props.donors.find((d) => d.donor_id === props.value) || null;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
@@ -60,16 +70,13 @@ export default function DonorPicker(props: {
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     const pool = !q
-      ? props.donors
-      : props.donors.filter(
-          (d) =>
-            labelFor(d).toLowerCase().includes(q) || (d.email && d.email.toLowerCase().includes(q))
-        );
+      ? options
+      : options.filter((o) => o.label.toLowerCase().includes(q) || o.email.toLowerCase().includes(q));
     return pool.slice(0, 50);
-  }, [props.donors, query]);
+  }, [options, query]);
 
-  function choose(donorId: string | null) {
-    props.onChange(donorId);
+  function choose(pledgeId: number) {
+    onChange(pledgeId);
     setOpen(false);
     setQuery("");
   }
@@ -85,17 +92,14 @@ export default function DonorPicker(props: {
     }
     if (ev.key === "ArrowDown") {
       ev.preventDefault();
-      setHighlight((h) => Math.min(h + 1, matches.length));
+      setHighlight((h) => Math.min(h + 1, matches.length - 1));
     } else if (ev.key === "ArrowUp") {
       ev.preventDefault();
       setHighlight((h) => Math.max(h - 1, 0));
     } else if (ev.key === "Enter") {
       ev.preventDefault();
-      if (highlight === 0) choose(null);
-      else {
-        const d = matches[highlight - 1];
-        if (d) choose(d.donor_id);
-      }
+      const m = matches[highlight];
+      if (m) choose(m.pledgeId);
     } else if (ev.key === "Escape") {
       ev.stopPropagation();
       setOpen(false);
@@ -107,12 +111,10 @@ export default function DonorPicker(props: {
     <div ref={boxRef} className="autocomplete">
       <input
         type="text"
-        placeholder="— no gift yet —"
-        value={open ? query : selected ? labelFor(selected) : ""}
-        title={!open && selected ? `${labelFor(selected)} (${selected.email})` : undefined}
+        placeholder="Search pledges by name or email…"
+        value={query}
         onFocus={() => {
           setOpen(true);
-          setQuery("");
           setHighlight(0);
         }}
         onChange={(ev) => {
@@ -128,36 +130,24 @@ export default function DonorPicker(props: {
             className="autocomplete-list"
             style={{ position: "fixed", top: coords.top, left: coords.left, width: coords.width }}
           >
-            <div
-              className={"autocomplete-option" + (highlight === 0 ? " active" : "")}
-              onMouseDown={(ev) => {
-                ev.preventDefault();
-                choose(null);
-              }}
-              onMouseEnter={() => setHighlight(0)}
-            >
-              — no gift yet —
-            </div>
-            {matches.map((d, i) => (
+            {matches.map((m, i) => (
               <div
-                key={d.donor_id}
-                className={"autocomplete-option" + (highlight === i + 1 ? " active" : "")}
+                key={m.pledgeId}
+                className={"autocomplete-option" + (highlight === i ? " active" : "")}
                 onMouseDown={(ev) => {
                   ev.preventDefault();
-                  choose(d.donor_id);
+                  choose(m.pledgeId);
                 }}
-                onMouseEnter={() => setHighlight(i + 1)}
+                onMouseEnter={() => setHighlight(i)}
               >
-                {labelFor(d)} · {d.email}
-                {d.joint_giver_id && (
-                  <span className="subtitle">
-                    {" "}
-                    · joint giver: {`${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim() || d.joint_giver_id}
-                  </span>
+                {m.label} · {m.email} · {fmtMoney(m.pledgedAmount)} pledged
+                {m.matchedDonorId && (
+                  <span className="subtitle"> (currently matched to another donor)</span>
                 )}
+                {m.jointGiverName && <span className="subtitle"> · joint giver: {m.jointGiverName}</span>}
               </div>
             ))}
-            {matches.length === 0 && <div className="autocomplete-empty">No matches</div>}
+            {matches.length === 0 && <div className="autocomplete-empty">No matching pledges</div>}
           </div>,
           document.body
         )}

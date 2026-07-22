@@ -166,6 +166,7 @@ def update_permissions(
         raise HTTPException(status_code=400, detail=f"Unknown permission(s): {', '.join(unknown)}")
     user.is_admin = payload.is_admin
     user.permissions = list(dict.fromkeys(payload.permissions))  # de-dup, keep order
+    user.hide_donor_names = payload.hide_donor_names
     db.commit()
     db.refresh(user)
     return user

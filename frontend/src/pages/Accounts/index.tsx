@@ -4,6 +4,7 @@ import AddStatementCategoryForm from "./AddStatementCategoryForm";
 import AddStatementItemForm from "./AddStatementItemForm";
 import AddAccountForm from "./AddAccountForm";
 import AccountRow from "./AccountRow";
+import AccountDetailModal from "./AccountDetailModal";
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
@@ -12,6 +13,7 @@ export default function Accounts() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [error, setError] = useState("");
+  const [openAccount, setOpenAccount] = useState<ChartAccount | null>(null);
 
   async function load() {
     try {
@@ -105,16 +107,15 @@ export default function Accounts() {
                 <th>Statement Description</th>
                 <th>Tax Deductible</th>
                 <th>Mandatory</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((a) => (
-                <AccountRow key={a.account_no} account={a} onChanged={load} />
+                <AccountRow key={a.account_no} account={a} onClick={() => setOpenAccount(a)} />
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ color: "var(--muted)" }}>
+                  <td colSpan={5} style={{ color: "var(--muted)" }}>
                     No accounts yet.
                   </td>
                 </tr>
@@ -123,6 +124,14 @@ export default function Accounts() {
           </table>
         </div>
       </div>
+
+      {openAccount && (
+        <AccountDetailModal
+          account={openAccount}
+          onClose={() => setOpenAccount(null)}
+          onChanged={load}
+        />
+      )}
     </div>
   );
 }

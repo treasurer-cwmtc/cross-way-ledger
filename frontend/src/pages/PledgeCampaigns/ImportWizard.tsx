@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { pledgeCampaignsApi, PledgeDashboard } from "../../api/pledgeCampaigns";
+import { pledgeCampaignsApi, PledgeCampaign, PledgeDashboard, Pledge } from "../../api/pledgeCampaigns";
 import { donationsApi, FundSummary } from "../../api/donations";
-import { useCampaign } from "./useCampaign";
+import { uploadCampaignImportFile, PickedFile } from "../../lib/googleDrive";
 
 const STEPS = [
-  { key: 1, label: "Donations" },
-  { key: 2, label: "Pledges" },
-  { key: 3, label: "Donors" },
-  { key: 4, label: "Summary" },
+  { key: 1, label: "Campaign" },
+  { key: 2, label: "Donations" },
+  { key: 3, label: "Pledges" },
+  { key: 4, label: "Donors" },
+  { key: 5, label: "Summary" },
 ] as const;
 
 function fmtMoney(n: number): string {
@@ -45,31 +46,92 @@ function Stepper(props: { step: number; maxStepReached: number; onJump: (s: numb
   );
 }
 
-/** The Pledge Campaign import wizard. Donations are the Giving App's own
- * source of truth - imported first, independent of any campaign - so step
- * 2 picks a campaign's fund from what's actually in that data instead of
+/** Table of the pledges an import created or touched, with their resulting
+ * values - "a number of pledges were updated" isn't enough to spot-check an
+ * import; seeing exactly which rows and what they now say is. */
+function PledgeResultsTable({ title, pledges }: { title: string; pledges: Pledge[] }) {
+  if (pledges.length === 0) return null;
+  return (
+    <>
+      <h4>{title}</h4>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Pledged Amount</th>
+              <th>Delivery by Date</th>
+              <th>Matched Donor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pledges.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  {p.first_name} {p.last_name}
+                </td>
+                <td>{p.email}</td>
+                <td>{fmtMoney(p.initial_amount)}</td>
+                <td>{p.due_date || ""}</td>
+                <td>{p.donor_id || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+/** The Pledge Campaign import wizard. Campaign comes first (step 1) since
+ * everything after it needs one chosen - creating a new one here selects it
+ * immediately (no refresh needed: the new campaign is appended to local
+ * state instead of waiting on a re-fetch). Donations are the Giving App's
+ * own source of truth - imported independent of any campaign - so step 3
+ * picks a campaign's fund from what's actually in that data instead of
  * someone typing a name that has to match exactly. Donors come last since
  * matching against them can run (and re-run) at any point once they exist -
- * step 3 re-matches automatically. Landing on the summary (step 4) after
+ * step 4 re-matches automatically. Landing on the summary (step 5) after
  * finishing gives a quick "did this load correctly" check. */
 export default function ImportWizard() {
-  const { campaigns, campaign, campaignId, setCampaignId, error: campaignError } = useCampaign();
+  const [campaigns, setCampaigns] = useState<PledgeCampaign[] | null>(null);
+  const [campaignId, setCampaignId] = useState<number | null>(null);
   const [step, setStep] = useState(1);
   const [maxStepReached, setMaxStepReached] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const campaign = campaigns?.find((c) => c.id === campaignId) ?? null;
+
+  useEffect(() => {
+    pledgeCampaignsApi
+      .list()
+      .then((list) => {
+        setCampaigns(list);
+        const active = list.find((c) => c.is_active) ?? list[0];
+        if (active) setCampaignId(active.id);
+      })
+      .catch((err) => setError((err as Error).message));
+  }, []);
 
   function advance(to: number) {
     setStep(to);
     setMaxStepReached((m) => Math.max(m, to));
   }
 
-  // --- Step 0: campaign picker (not part of the numbered steps - donations
-  // don't need a campaign chosen yet, but pledges/donors do) ---
+  // --- Step 1: choose or create a campaign, edit starting balance ---
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newGoal, setNewGoal] = useState("");
   const [newStarting, setNewStarting] = useState("");
+  const [startingEdit, setStartingEdit] = useState("");
+  const [startingSaved, setStartingSaved] = useState(false);
+
+  useEffect(() => {
+    setStartingEdit(campaign ? String(campaign.starting_balance) : "");
+    setStartingSaved(false);
+  }, [campaign?.id]);
 
   async function createCampaign() {
     setBusy(true);
@@ -80,8 +142,14 @@ export default function ImportWizard() {
         goal_amount: parseFloat(newGoal) || 0,
         starting_balance: parseFloat(newStarting) || 0,
       });
+      // Appended locally rather than re-fetched, so it's selectable right
+      // away instead of only after a page refresh.
+      setCampaigns((prev) => [created, ...(prev ?? [])]);
       setCampaignId(created.id);
       setCreating(false);
+      setNewName("");
+      setNewGoal("");
+      setNewStarting("");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -89,7 +157,24 @@ export default function ImportWizard() {
     }
   }
 
-  // --- Step 1: donations ---
+  async function saveStartingBalance() {
+    if (!campaignId) return;
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await pledgeCampaignsApi.update(campaignId, {
+        starting_balance: parseFloat(startingEdit) || 0,
+      });
+      setCampaigns((prev) => prev?.map((c) => (c.id === updated.id ? updated : c)) ?? prev);
+      setStartingSaved(true);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // --- Step 2: donations ---
   const [donationFile, setDonationFile] = useState<File | null>(null);
   const [funds, setFunds] = useState<FundSummary[] | null>(null);
   const [donationsImported, setDonationsImported] = useState<number | null>(null);
@@ -98,12 +183,38 @@ export default function ImportWizard() {
     donationsApi.funds().then(setFunds).catch(() => setFunds([]));
   }, []);
 
+  // Every upload in this wizard is also archived to Google Drive (Campaign
+  // Imports folder / Campaign / <campaign name> / <file>) so a row can
+  // always be traced back to the exact file it came from. A Drive failure
+  // (not configured, popup blocked, network hiccup) never blocks the
+  // actual data import - it just means that one import's rows won't have
+  // a source file reference, surfaced as a dismissable warning instead.
+  const [driveWarning, setDriveWarning] = useState("");
+
+  async function archiveToDrive(file: File): Promise<PickedFile | null> {
+    if (!campaign) return null;
+    try {
+      setDriveWarning("");
+      return await uploadCampaignImportFile(campaign.name, file);
+    } catch (err) {
+      setDriveWarning(
+        `Couldn't save a copy to Google Drive (${(err as Error).message}) - the import will still proceed, ` +
+          `but this file won't be referenced for audit.`
+      );
+      return null;
+    }
+  }
+
   async function runDonationsImport() {
     if (!donationFile) return;
     setBusy(true);
     setError("");
     try {
-      const result = await donationsApi.import(donationFile);
+      const drive = await archiveToDrive(donationFile);
+      const result = await donationsApi.import(
+        donationFile,
+        drive ? { name: drive.name, url: drive.url } : undefined
+      );
       setFunds(result.funds);
       setDonationsImported(result.donations_imported);
     } catch (err) {
@@ -113,13 +224,32 @@ export default function ImportWizard() {
     }
   }
 
-  // --- Step 2: pledges + fund choice ---
+  async function removeFund(fundName: string) {
+    if (
+      !confirm(
+        `Delete every donation on file for "${fundName}"? This permanently deletes that data - it can't be undone except by restoring a backup.`
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    try {
+      setFunds(await donationsApi.deleteFund(fundName));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // --- Step 3: pledges + fund choice ---
   const [fundName, setFundName] = useState("");
   const [pledgeFile, setPledgeFile] = useState<File | null>(null);
   const [pledgeSummary, setPledgeSummary] = useState<{
-    pledges_imported: number;
     pledges_matched: number;
     pledges_unmatched: number;
+    new_pledges: Pledge[];
+    updated_pledges: Pledge[];
   } | null>(null);
 
   async function runPledgeImport() {
@@ -127,7 +257,13 @@ export default function ImportWizard() {
     setBusy(true);
     setError("");
     try {
-      const result = await pledgeCampaignsApi.importPledges(campaignId, fundName, pledgeFile);
+      const drive = await archiveToDrive(pledgeFile);
+      const result = await pledgeCampaignsApi.importPledges(
+        campaignId,
+        fundName,
+        pledgeFile,
+        drive ? { name: drive.name, url: drive.url } : undefined
+      );
       setPledgeSummary(result);
     } catch (err) {
       setError((err as Error).message);
@@ -136,7 +272,7 @@ export default function ImportWizard() {
     }
   }
 
-  // --- Step 3: donors ---
+  // --- Step 4: donors ---
   const [donorFile, setDonorFile] = useState<File | null>(null);
   const [donorSummary, setDonorSummary] = useState<{
     donors_imported: number;
@@ -149,9 +285,14 @@ export default function ImportWizard() {
     setBusy(true);
     setError("");
     try {
-      const result = await pledgeCampaignsApi.importDonors(campaignId, donorFile);
+      const drive = await archiveToDrive(donorFile);
+      const result = await pledgeCampaignsApi.importDonors(
+        campaignId,
+        donorFile,
+        drive ? { name: drive.name, url: drive.url } : undefined
+      );
       setDonorSummary(result);
-      advance(4);
+      advance(5);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -159,10 +300,10 @@ export default function ImportWizard() {
     }
   }
 
-  // --- Step 4: summary ---
+  // --- Step 5: summary ---
   const [dashboard, setDashboard] = useState<PledgeDashboard | null>(null);
   useEffect(() => {
-    if (step === 4 && campaignId != null) {
+    if (step === 5 && campaignId != null) {
       pledgeCampaignsApi
         .dashboard(campaignId)
         .then(setDashboard)
@@ -170,11 +311,11 @@ export default function ImportWizard() {
     }
   }, [step, campaignId]);
 
-  if (campaignError) return <div className="error">{campaignError}</div>;
+  if (!campaigns) return <p className="subtitle">Loading…</p>;
 
   return (
     <div>
-      <h2 className="page-title">Import Pledge Campaign Data</h2>
+      <h2 className="page-title">Import Campaign Data</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
         Safe to re-run any step - donations and donors are upserted, pledges are matched by
         email automatically (and re-matched here if a donor import resolves one).
@@ -183,69 +324,11 @@ export default function ImportWizard() {
       <Stepper step={step} maxStepReached={maxStepReached} onJump={setStep} />
 
       {error && <div className="error">{error}</div>}
+      {driveWarning && <div className="error">{driveWarning}</div>}
 
       {step === 1 && (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>1. Upload Donations</h3>
-          <p className="subtitle">
-            The Giving App's own donation export - the source of truth. No fund needs to be
-            chosen here; every fund present in the file is imported.
-          </p>
-          <label className="field">
-            <span>Donations export</span>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(ev) => setDonationFile(ev.target.files?.[0] ?? null)}
-            />
-          </label>
-          <button className="btn" disabled={busy || !donationFile} onClick={runDonationsImport}>
-            {busy ? "Importing…" : "Import donations"}
-          </button>
-
-          {donationsImported !== null && (
-            <p className="subtitle" style={{ marginTop: 10 }}>
-              {donationsImported} new donations imported.
-            </p>
-          )}
-
-          {funds && funds.length > 0 && (
-            <>
-              <h4>Funds on file</h4>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Fund</th>
-                      <th># Gifts</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {funds.map((f) => (
-                      <tr key={f.name}>
-                        <td>{f.name}</td>
-                        <td>{f.count}</td>
-                        <td>{fmtMoney(f.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-
-          <div style={{ marginTop: 16 }}>
-            <button className="btn secondary" onClick={() => advance(2)} disabled={!funds || funds.length === 0}>
-              Next: Pledges →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>2. Upload Pledges</h3>
+          <h3 style={{ marginTop: 0 }}>1. Choose or create a campaign</h3>
 
           <label className="field">
             <span>Campaign</span>
@@ -253,7 +336,7 @@ export default function ImportWizard() {
               <>
                 <select value={campaignId ?? ""} onChange={(ev) => setCampaignId(Number(ev.target.value))}>
                   <option value="">— choose —</option>
-                  {(campaigns || []).map((c) => (
+                  {campaigns.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -290,6 +373,106 @@ export default function ImportWizard() {
             )}
           </label>
 
+          {campaign && (
+            <label className="field" style={{ maxWidth: 260 }}>
+              <span>Starting balance</span>
+              <input
+                type="number"
+                value={startingEdit}
+                onChange={(ev) => {
+                  setStartingEdit(ev.target.value);
+                  setStartingSaved(false);
+                }}
+              />
+              <button
+                className="btn secondary"
+                disabled={busy || startingEdit === String(campaign.starting_balance)}
+                onClick={saveStartingBalance}
+                style={{ marginTop: 8 }}
+              >
+                Save
+              </button>
+              {startingSaved && <span className="ok" style={{ marginLeft: 8 }}>Saved.</span>}
+            </label>
+          )}
+
+          <div style={{ marginTop: 16 }}>
+            <button className="btn secondary" onClick={() => advance(2)} disabled={!campaign}>
+              Next: Donations →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>2. Upload Donations</h3>
+          <p className="subtitle">
+            The Giving App's own donation export - the source of truth. No fund needs to be
+            chosen here; every fund present in the file is imported.
+          </p>
+          <label className="field">
+            <span>Donations export</span>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={(ev) => setDonationFile(ev.target.files?.[0] ?? null)}
+            />
+          </label>
+          <button className="btn" disabled={busy || !donationFile} onClick={runDonationsImport}>
+            {busy ? "Importing…" : "Import donations"}
+          </button>
+
+          {donationsImported !== null && (
+            <p className="subtitle" style={{ marginTop: 10 }}>
+              {donationsImported} new donations imported.
+            </p>
+          )}
+
+          {funds && funds.length > 0 && (
+            <>
+              <h4>Funds on file</h4>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fund</th>
+                      <th># Gifts</th>
+                      <th>Total</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {funds.map((f) => (
+                      <tr key={f.name}>
+                        <td>{f.name}</td>
+                        <td>{f.count}</td>
+                        <td>{fmtMoney(f.total)}</td>
+                        <td>
+                          <button className="link" disabled={busy} onClick={() => removeFund(f.name)}>
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          <div style={{ marginTop: 16 }}>
+            <button className="btn secondary" onClick={() => advance(3)} disabled={!funds || funds.length === 0}>
+              Next: Pledges →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>3. Upload Pledges</h3>
+
           <label className="field">
             <span>Which fund is this campaign tracking?</span>
             <select value={fundName} onChange={(ev) => setFundName(ev.target.value)}>
@@ -316,37 +499,45 @@ export default function ImportWizard() {
           </button>
 
           {pledgeSummary && (
-            <div className="stats" style={{ marginTop: 14 }}>
-              <div className="stat">
-                <b>{pledgeSummary.pledges_imported}</b>
-                <span>Pledges updated</span>
+            <>
+              <div className="stats" style={{ marginTop: 14 }}>
+                <div className="stat">
+                  <b>{pledgeSummary.new_pledges.length}</b>
+                  <span>New pledges</span>
+                </div>
+                <div className="stat">
+                  <b>{pledgeSummary.updated_pledges.length}</b>
+                  <span>Updated pledges</span>
+                </div>
+                <div className="stat">
+                  <b>{pledgeSummary.pledges_matched}</b>
+                  <span>Matched to a donor</span>
+                </div>
+                <div className="stat">
+                  <b>{pledgeSummary.pledges_unmatched}</b>
+                  <span>No gift yet</span>
+                </div>
               </div>
-              <div className="stat">
-                <b>{pledgeSummary.pledges_matched}</b>
-                <span>Matched to a donor</span>
-              </div>
-              <div className="stat">
-                <b>{pledgeSummary.pledges_unmatched}</b>
-                <span>No gift yet</span>
-              </div>
-            </div>
+              <PledgeResultsTable title="New records" pledges={pledgeSummary.new_pledges} />
+              <PledgeResultsTable title="Updated records" pledges={pledgeSummary.updated_pledges} />
+            </>
           )}
 
           <div style={{ marginTop: 16 }}>
-            <button className="btn secondary" onClick={() => advance(3)} disabled={!pledgeSummary}>
+            <button className="btn secondary" onClick={() => advance(4)} disabled={!pledgeSummary}>
               Next: Donors →
             </button>
           </div>
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>3. Upload Donors</h3>
+          <h3 style={{ marginTop: 0 }}>4. Upload Donors</h3>
           <p className="subtitle">
             The Giving App donor list - shared across every campaign. Uploading here re-matches
             this campaign's pledges automatically, so anyone who gave for the first time since
-            step 2 gets linked without re-uploading pledges.
+            step 3 gets linked without re-uploading pledges.
           </p>
           <label className="field">
             <span>Donors export</span>
@@ -375,9 +566,9 @@ export default function ImportWizard() {
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>4. Summary - quick validation</h3>
+          <h3 style={{ marginTop: 0 }}>5. Summary - quick validation</h3>
           {!dashboard && <p className="subtitle">Loading…</p>}
           {dashboard && (
             <>
@@ -403,7 +594,7 @@ export default function ImportWizard() {
                 </div>
               </div>
               <p className="subtitle" style={{ marginTop: 14 }}>
-                If these numbers don't look right, check the fund you chose in step 2 matches
+                If these numbers don't look right, check the fund you chose in step 3 matches
                 what you expected, or revisit any step above.
               </p>
             </>
