@@ -47,7 +47,12 @@ export default function EntryPicker(props: {
     const left = Math.min(rect.left, window.innerWidth - width - 12);
     setCoords({ top: rect.bottom + 4, left: Math.max(left, 8), width });
 
-    function onScroll() {
+    function onScroll(ev: Event) {
+      // Scrolling the dropdown's own (portaled) list fires a capture-phase
+      // scroll event on this same listener - only close for scrolls
+      // elsewhere on the page, not for scrolling within the list itself.
+      const target = ev.target as Node;
+      if (target instanceof Element && target.closest(".autocomplete-list")) return;
       setOpen(false);
       setQuery("");
     }

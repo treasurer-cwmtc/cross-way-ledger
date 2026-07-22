@@ -41,7 +41,12 @@ function useAnchoredPopover(open: boolean, onClose: () => void) {
     const left = Math.min(rect.left, window.innerWidth - width - 12);
     setCoords({ top: rect.bottom + 4, left: Math.max(left, 8) });
 
-    function onScroll() {
+    function onScroll(ev: Event) {
+      // Scrolling the popover's own (portaled) panel fires a capture-phase
+      // scroll event on this same listener - only close for scrolls
+      // elsewhere on the page, not for scrolling within the panel itself.
+      const target = ev.target as Node;
+      if (target instanceof Element && target.closest(".column-filter-panel")) return;
       onClose();
     }
     window.addEventListener("scroll", onScroll, true);
