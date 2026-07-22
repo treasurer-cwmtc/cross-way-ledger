@@ -16,8 +16,9 @@ function RegisterRow(props: {
   showBankDescription?: boolean;
   // Reconciliation's register needs the full Bank Description readable (the
   // raw bank line is often the only way to identify a transaction) rather
-  // than truncated to a fixed width - the table already scrolls
-  // horizontally (.table-wrap), so letting this cell run wide is fine.
+  // than truncated to a fixed width. Wraps onto multiple lines within a
+  // wide-but-bounded cell instead of forcing the whole table to scroll
+  // horizontally - the row just gets taller.
   wideBankDescription?: boolean;
 }) {
   const e = props.entry;
@@ -51,7 +52,7 @@ function RegisterRow(props: {
         <td
           style={
             props.wideBankDescription
-              ? { minWidth: 420, whiteSpace: "nowrap" }
+              ? { width: 420, whiteSpace: "normal", wordBreak: "break-word" }
               : { maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
           }
         >

@@ -232,9 +232,9 @@ export default function Reconciliation() {
         always whatever the linked Chart of Accounts account currently says.
         Click a chip below to filter down to just the rows missing that column.
         Every column header sorts and filters — Bank Description shows the raw
-        bank line in full, so the table scrolls horizontally rather than
-        truncating it. The Txn/Posted CY/PY columns are driven by the fiscal
-        year date set on the Config tab (shared with Accrual).
+        bank line in full, wrapping onto extra lines rather than truncating
+        it. The Txn/Posted CY/PY columns are driven by the fiscal year date
+        set on the Config tab (shared with Accrual).
       </p>
       {error && <div className="error">{error}</div>}
 
