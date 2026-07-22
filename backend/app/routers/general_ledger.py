@@ -43,6 +43,7 @@ def _entry_to_line(
         statement_item=coa.statement_item if coa else "",
         statement_detail=coa.statement_detail if coa else "",
         bank_account_name=bank_account.name if bank_account else "",
+        bank_description=entry.bank_description,
         method=entry.method,
         amount=entry.amount,
         check_invoice_name=entry.check_invoice_name,
@@ -65,6 +66,7 @@ def _budget_to_line(entry: BudgetEntry, coa_by_no: dict[str, ChartOfAccount]) ->
         statement_item=coa.statement_item if coa else "",
         statement_detail=coa.statement_detail if coa else "",
         bank_account_name="",
+        bank_description="",
         method="",
         amount=entry.amount,
         check_invoice_name="",
@@ -87,12 +89,12 @@ def list_general_ledger(
     for e in db.scalars(
         select(ReconciliationEntry).where(ReconciliationEntry.is_split == False)  # noqa: E712
     ):
-        if year is not None and (e.transaction_date is None or e.transaction_date.year != year):
+        if year is not None and (e.date_posted is None or e.date_posted.year != year):
             continue
         lines.append(_entry_to_line(e, "reconciliation", coa_by_no, bank_accounts_by_id))
 
     for e in db.scalars(select(AccrualEntry).where(AccrualEntry.is_split == False)):  # noqa: E712
-        if year is not None and (e.transaction_date is None or e.transaction_date.year != year):
+        if year is not None and (e.date_posted is None or e.date_posted.year != year):
             continue
         lines.append(_entry_to_line(e, "accrual", coa_by_no, bank_accounts_by_id))
 
@@ -101,5 +103,5 @@ def list_general_ledger(
             continue
         lines.append(_budget_to_line(e, coa_by_no))
 
-    lines.sort(key=lambda line: line.transaction_date or date.min, reverse=True)
+    lines.sort(key=lambda line: line.date_posted or date.min, reverse=True)
     return lines

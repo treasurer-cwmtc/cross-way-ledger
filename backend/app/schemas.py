@@ -453,6 +453,7 @@ class GeneralLedgerLineOut(BaseModel):
     statement_item: str
     statement_detail: str
     bank_account_name: str
+    bank_description: str
     method: str
     amount: float
     check_invoice_name: str
