@@ -47,43 +47,46 @@ export default function PledgeCampaigns({ user }: { user: User }) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <h2 className="page-title">{campaign ? campaign.name : "Campaign"} Status</h2>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-          <button
-            type="button"
-            className={"btn" + (hideDonorInfo ? "" : " secondary")}
-            onClick={() => setHideDonorInfo((v) => !v)}
-            title="Hides donor names and joint donor names, showing only Donor ID / Joint Donor ID"
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <label className="field" style={{ maxWidth: 220, marginBottom: 0 }}>
+          <span>Campaign</span>
+          <select
+            value={campaignId ?? ""}
+            onChange={(ev) => setCampaignId(Number(ev.target.value))}
           >
-            {hideDonorInfo ? "Donor info hidden" : "Donor info shown"}
-          </button>
-          <label className="field" style={{ maxWidth: 260 }}>
-            <span>Campaign</span>
-            <select
-              value={campaignId ?? ""}
-              onChange={(ev) => setCampaignId(Number(ev.target.value))}
-            >
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <div className="sub-tabs" style={{ display: "flex", gap: 4, marginBottom: 16 }}>
-        {visibleTabs.map((t) => (
-          <button
-            key={t.key}
-            className={"btn" + (activeTab === t.key ? "" : " secondary")}
-            onClick={() => setSubTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
+        <h2 className="page-title" style={{ margin: 0, whiteSpace: "nowrap" }}>
+          {campaign ? campaign.name : "Campaign"} Status
+        </h2>
+
+        <div className="sub-tabs" style={{ display: "flex", gap: 4 }}>
+          {visibleTabs.map((t) => (
+            <button
+              key={t.key}
+              className={"btn" + (activeTab === t.key ? "" : " secondary")}
+              onClick={() => setSubTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          className={"btn" + (hideDonorInfo ? "" : " secondary")}
+          onClick={() => setHideDonorInfo((v) => !v)}
+          title="Hides donor names and joint donor names, showing only Donor ID / Joint Donor ID"
+          style={{ marginLeft: "auto" }}
+        >
+          {hideDonorInfo ? "Donor info hidden" : "Donor info shown"}
+        </button>
       </div>
 
       {campaign && campaignId != null && (
