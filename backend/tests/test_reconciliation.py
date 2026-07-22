@@ -64,6 +64,20 @@ def test_import_run_dedups_on_reimport():
     assert first["imported"] > 0
     assert first["skipped_duplicates"] == 0
 
+    # sample_bank.csv's "TST*TAQUERIA NUEVO LEON" line has no matching
+    # keyword rule, so it stays uncategorized through the wizard - its
+    # ReconLine.notes is the auto-generated "Uncategorized - add a rule"
+    # review hint. That's useful in the wizard's own UI (Step 3's "What's
+    # wrong" column) but must not leak into the permanent ledger's Notes
+    # field once pushed to Actual. Checked here (rather than its own test)
+    # since this file shares one un-reset DB across tests - only the first
+    # import of this fixture is guaranteed not to be skipped as a duplicate.
+    entries = client.get("/api/reconciliation", headers=h).json()
+    imported_entries = [e for e in entries if e["source_run_id"] == run_id]
+    assert imported_entries
+    assert any(not e["account_no"] for e in imported_entries), "expected an uncategorized line in the fixture"
+    assert all(e["notes"] != "Uncategorized - add a rule" for e in imported_entries)
+
     # Re-importing the exact same run must skip everything - no duplicates.
     r2 = client.post(
         f"/api/reconciliation/import-run/{run_id}",

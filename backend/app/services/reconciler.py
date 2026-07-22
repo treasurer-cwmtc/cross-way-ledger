@@ -14,6 +14,11 @@ from datetime import date, datetime
 from .categorizer import Categorizer
 from .parsers import BankRow, StripeRow
 
+# A wizard-only review hint, not a real user note - reconciliation.py's
+# import_run strips this exact text back out so it never ends up
+# permanently on the Actual/Accrual ledger's Notes field.
+UNCATEGORIZED_NOTE = "Uncategorized - add a rule"
+
 
 @dataclass
 class OutputLine:
@@ -84,7 +89,7 @@ def _categorize_bank_row(bank: BankRow, categorizer: Categorizer) -> OutputLine:
         reference=bank.raw.get("Check or Slip #", "") or "",
         bank_description=bank.description,
         matched=bool(cat.account_no),
-        notes="" if cat.account_no else "Uncategorized - add a rule",
+        notes="" if cat.account_no else UNCATEGORIZED_NOTE,
     )
 
 

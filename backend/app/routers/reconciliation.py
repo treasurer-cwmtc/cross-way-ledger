@@ -14,6 +14,7 @@ from ..schemas import (
     SplitRequest,
 )
 from ..services.ledger import build_dedup_key, friendly_method, parse_date
+from ..services.reconciler import UNCATEGORIZED_NOTE
 
 router = APIRouter(
     prefix="/api/reconciliation",
@@ -229,7 +230,13 @@ def import_run(
                 amount=line.amount,
                 check_invoice_name=line.reference,
                 bank_description=line.bank_description,
-                notes=line.notes,
+                # UNCATEGORIZED_NOTE is a wizard-only review hint (surfaced
+                # in Step 3's "What's wrong" column) - not something that
+                # belongs permanently on the ledger, which already shows
+                # uncategorized rows via a red Statement Description
+                # instead. Only strip that exact auto-generated text, so a
+                # real note the user typed on the line is never lost.
+                notes="" if line.notes == UNCATEGORIZED_NOTE else line.notes,
                 dedup_key=key,
                 source_run_id=run.id,
             )
