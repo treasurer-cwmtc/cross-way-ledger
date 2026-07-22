@@ -170,7 +170,7 @@ function FiscalYearCard() {
       ) : (
         <>
           <div className="row">
-            <label className="field">
+            <label className="field" style={{ maxWidth: 180 }}>
               <span>Current Year Date</span>
               <input
                 type="date"
