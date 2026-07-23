@@ -4,7 +4,7 @@
 import { BASE, authHeaders, j } from "./client";
 
 export interface GeneralLedgerLine {
-  source: "reconciliation" | "accrual" | "budget";
+  source: "reconciliation" | "accrual" | "budget" | "restricted_transfer";
   id: number;
   transaction_date: string | null;
   date_posted: string | null;

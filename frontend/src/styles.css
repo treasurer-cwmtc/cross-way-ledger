@@ -366,6 +366,11 @@ table.resizable-cols th {
   padding-right: 14px;
 }
 
+table.resizable-cols td {
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+
 .col-resize-handle {
   position: absolute;
   top: 0;

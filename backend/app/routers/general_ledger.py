@@ -13,6 +13,7 @@ from ..models import (
     CategoryRule,
     ChartOfAccount,
     ReconciliationEntry,
+    RestrictedTransferEntry,
 )
 from ..schemas import GeneralLedgerLineOut
 from ..services.categorizer import Categorizer
@@ -93,6 +94,48 @@ def _budget_to_line(entry: BudgetEntry, coa_by_no: dict[str, ChartOfAccount]) ->
     )
 
 
+def _transfer_to_lines(
+    entry: RestrictedTransferEntry, coa_by_no: dict[str, ChartOfAccount]
+) -> list[GeneralLedgerLineOut]:
+    """A restricted-fund transfer is one permanent event with two legs - a
+    decrease on the from-account, an increase on the to-account - so it
+    synthesizes two General Ledger lines from the single stored row. The
+    "from" leg carries a negated id (-entry.id) purely to give the two
+    synthesized lines distinct React keys / table identities; clicking
+    either always opens the same underlying transfer (see
+    RestrictedNetAssets' onRowClick, which takes abs(id))."""
+    lines = []
+    for leg_id, account_no, signed_amount in (
+        (-entry.id, entry.from_account_no, -entry.amount),
+        (entry.id, entry.to_account_no, entry.amount),
+    ):
+        coa = coa_by_no.get(account_no)
+        lines.append(
+            GeneralLedgerLineOut(
+                source="restricted_transfer",
+                id=leg_id,
+                transaction_date=entry.transaction_date,
+                date_posted=entry.transaction_date,
+                description=entry.description,
+                account_no=account_no or "",
+                statement_description=coa.statement_description if coa else "",
+                category=coa.category if coa else "",
+                statement_category=coa.statement_category if coa else "",
+                statement_item=coa.statement_item if coa else "",
+                statement_detail=coa.statement_detail if coa else "",
+                bank_account_name="",
+                bank_description="",
+                method="",
+                amount=signed_amount,
+                check_invoice_name="",
+                notes=entry.notes,
+                source_file_name="",
+                source_file_link="",
+            )
+        )
+    return lines
+
+
 @router.get("", response_model=list[GeneralLedgerLineOut])
 def list_general_ledger(
     year: int | None = None, db: Session = Depends(get_db)
@@ -123,6 +166,11 @@ def list_general_ledger(
         if year is not None and (e.transaction_date is None or e.transaction_date.year != year):
             continue
         lines.append(_budget_to_line(e, coa_by_no))
+
+    for e in db.scalars(select(RestrictedTransferEntry)):
+        if year is not None and (e.transaction_date is None or e.transaction_date.year != year):
+            continue
+        lines.extend(_transfer_to_lines(e, coa_by_no))
 
     lines.sort(key=lambda line: line.date_posted or date.min, reverse=True)
     return lines

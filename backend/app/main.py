@@ -21,6 +21,7 @@ from .routers import (
     pledge_campaigns,
     reconcile,
     reconciliation,
+    restricted_transfers,
     rules,
 )
 from .routers import settings as settings_router
@@ -58,6 +59,7 @@ app.include_router(bank_accounts.router)
 app.include_router(reconciliation.router)
 app.include_router(accrual.router)
 app.include_router(budget.router)
+app.include_router(restricted_transfers.router)
 app.include_router(general_ledger.router)
 app.include_router(income_statement.router)
 app.include_router(dashboard.router)

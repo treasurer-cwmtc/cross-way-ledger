@@ -436,6 +436,36 @@ class BudgetCopyYearRequest(BaseModel):
     overwrite: bool = False
 
 
+class RestrictedTransferEntryOut(BaseModel):
+    id: int
+    transaction_date: date | None
+    from_account_no: str
+    from_statement_description: str
+    to_account_no: str
+    to_statement_description: str
+    amount: float
+    description: str
+    notes: str
+
+
+class RestrictedTransferEntryCreate(BaseModel):
+    transaction_date: date | None = None
+    from_account_no: str = ""
+    to_account_no: str = ""
+    amount: float = 0.0
+    description: str = ""
+    notes: str = ""
+
+
+class RestrictedTransferEntryUpdate(BaseModel):
+    transaction_date: date | None = None
+    from_account_no: str | None = None
+    to_account_no: str | None = None
+    amount: float | None = None
+    description: str | None = None
+    notes: str | None = None
+
+
 class BudgetCopyYearResult(BaseModel):
     copied: int
 
@@ -443,9 +473,11 @@ class BudgetCopyYearResult(BaseModel):
 class GeneralLedgerLineOut(BaseModel):
     """One row of the unioned General Ledger view - Reconciliation and
     Accrual entries plus Budget entries (rendered as a virtual line dated
-    Jan 1 of their year), all in the shape reports are built from."""
+    Jan 1 of their year) plus Restricted Net Assets transfers (each one
+    synthesizing two lines, one per leg), all in the shape reports are
+    built from."""
 
-    source: str  # "reconciliation" | "accrual" | "budget"
+    source: str  # "reconciliation" | "accrual" | "budget" | "restricted_transfer"
     id: int
     transaction_date: date | None
     date_posted: date | None

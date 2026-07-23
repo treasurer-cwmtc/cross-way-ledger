@@ -52,6 +52,7 @@ GRANTABLE_PERMISSIONS = {
     "reconciliation",
     "accrual",
     "budget",
+    "restricted-net-assets",
     "general-ledger",
     "income-statement",
     "rules",

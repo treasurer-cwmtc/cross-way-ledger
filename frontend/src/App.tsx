@@ -7,6 +7,7 @@ import Upload from "./pages/Upload";
 import Reconciliation from "./pages/Reconciliation";
 import Accrual from "./pages/Accrual";
 import Budget from "./pages/Budget";
+import RestrictedNetAssets from "./pages/RestrictedNetAssets";
 import GeneralLedger from "./pages/GeneralLedger";
 import IncomeStatement from "./pages/IncomeStatement";
 import LinkReceipts from "./pages/LinkReceipts";
@@ -25,6 +26,7 @@ type Tab =
   | "reconciliation"
   | "accrual"
   | "budget"
+  | "restricted-net-assets"
   | "general-ledger"
   | "income-statement"
   | "rules"
@@ -56,6 +58,7 @@ const NAV_GROUPS: NavGroup[] = [
       { tab: "reconciliation", label: "Actual" },
       { tab: "accrual", label: "Accrual" },
       { tab: "budget", label: "Budget" },
+      { tab: "restricted-net-assets", label: "Restricted Net Assets" },
     ],
   },
   {
@@ -195,6 +198,7 @@ export default function App() {
           {tab === "reconciliation" && <Reconciliation />}
           {tab === "accrual" && <Accrual />}
           {tab === "budget" && <Budget />}
+          {tab === "restricted-net-assets" && <RestrictedNetAssets />}
           {tab === "general-ledger" && <GeneralLedger />}
           {tab === "income-statement" && <IncomeStatement />}
           {tab === "rules" && <Rules />}

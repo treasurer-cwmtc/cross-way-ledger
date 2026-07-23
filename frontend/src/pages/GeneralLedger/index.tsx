@@ -5,6 +5,7 @@ import { generalLedgerApi, GeneralLedgerLine } from "../../api/generalLedger";
 import { ledgerApi, ReconciliationEntry } from "../../api/ledger";
 import { accrualApi, AccrualEntry } from "../../api/accrual";
 import { budgetApi, BudgetEntry } from "../../api/budget";
+import { restrictedTransfersApi, RestrictedTransferEntry } from "../../api/restrictedTransfers";
 import {
   DateColumnFilter,
   DateFilterValue,
@@ -14,6 +15,7 @@ import {
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 import TransactionModal from "../ledger/TransactionModal";
 import BudgetDetailModal from "../Budget/DetailModal";
+import RestrictedTransferDetailModal from "../RestrictedNetAssets/DetailModal";
 
 type SortKey =
   | "transaction_date"
@@ -68,6 +70,7 @@ export default function GeneralLedger() {
   const [reconEntries, setReconEntries] = useState<ReconciliationEntry[]>([]);
   const [accrualEntries, setAccrualEntries] = useState<AccrualEntry[]>([]);
   const [budgetEntries, setBudgetEntries] = useState<BudgetEntry[]>([]);
+  const [transferEntries, setTransferEntries] = useState<RestrictedTransferEntry[]>([]);
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [error, setError] = useState("");
@@ -92,15 +95,17 @@ export default function GeneralLedger() {
   const [openReconId, setOpenReconId] = useState<number | null>(null);
   const [openAccrualId, setOpenAccrualId] = useState<number | null>(null);
   const [openBudgetId, setOpenBudgetId] = useState<number | null>(null);
+  const [openTransferId, setOpenTransferId] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const [gl, recon, accrual, budget, a, b] = await Promise.all([
+      const [gl, recon, accrual, budget, transfers, a, b] = await Promise.all([
         generalLedgerApi.list(),
         ledgerApi.list(),
         accrualApi.list(),
         budgetApi.list(),
+        restrictedTransfersApi.list(),
         accountsApi.listAccounts(),
         bankAccountsApi.list(),
       ]);
@@ -108,6 +113,7 @@ export default function GeneralLedger() {
       setReconEntries(recon);
       setAccrualEntries(accrual);
       setBudgetEntries(budget);
+      setTransferEntries(transfers);
       setAccounts(a);
       setBankAccounts(b);
     } catch (err) {
@@ -231,12 +237,16 @@ export default function GeneralLedger() {
   function onRowClick(l: GeneralLedgerLine) {
     if (l.source === "reconciliation") setOpenReconId(l.id);
     else if (l.source === "accrual") setOpenAccrualId(l.id);
+    else if (l.source === "restricted_transfer") setOpenTransferId(Math.abs(l.id));
     else setOpenBudgetId(l.id);
   }
 
   const openRecon = openReconId ? reconEntries.find((e) => e.id === openReconId) || null : null;
   const openAccrual = openAccrualId ? accrualEntries.find((e) => e.id === openAccrualId) || null : null;
   const openBudget = openBudgetId ? budgetEntries.find((e) => e.id === openBudgetId) || null : null;
+  const openTransfer = openTransferId
+    ? transferEntries.find((e) => e.id === openTransferId) || null
+    : null;
 
   async function onUpdateRecon(id: number, patch: Parameters<typeof ledgerApi.update>[1]) {
     const updated = await ledgerApi.update(id, patch);
@@ -266,6 +276,16 @@ export default function GeneralLedger() {
   async function onDeleteBudget(id: number) {
     await budgetApi.delete(id);
     setOpenBudgetId(null);
+    await load();
+  }
+  async function onUpdateTransfer(id: number, patch: Parameters<typeof restrictedTransfersApi.update>[1]) {
+    const updated = await restrictedTransfersApi.update(id, patch);
+    setTransferEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
+    await load();
+  }
+  async function onDeleteTransfer(id: number) {
+    await restrictedTransfersApi.delete(id);
+    setOpenTransferId(null);
     await load();
   }
 
@@ -502,6 +522,15 @@ export default function GeneralLedger() {
           onUpdate={onUpdateBudget}
           onDelete={onDeleteBudget}
           onClose={() => setOpenBudgetId(null)}
+        />
+      )}
+      {openTransfer && (
+        <RestrictedTransferDetailModal
+          entry={openTransfer}
+          accounts={accounts}
+          onUpdate={onUpdateTransfer}
+          onDelete={onDeleteTransfer}
+          onClose={() => setOpenTransferId(null)}
         />
       )}
     </div>
