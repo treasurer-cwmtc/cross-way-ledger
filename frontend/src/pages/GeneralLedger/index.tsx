@@ -7,6 +7,8 @@ import { ledgerApi, ReconciliationEntry } from "../../api/ledger";
 import { accrualApi, AccrualEntry } from "../../api/accrual";
 import { budgetApi, BudgetEntry } from "../../api/budget";
 import { restrictedTransfersApi, RestrictedTransferEntry } from "../../api/restrictedTransfers";
+import { settingsApi } from "../../api/settings";
+import { dateParts, setPriorYearEndDate } from "../ledger/columns";
 import {
   DateColumnFilter,
   DateFilterValue,
@@ -111,7 +113,7 @@ export default function GeneralLedger() {
   async function load() {
     setLoading(true);
     try {
-      const [gl, recon, accrual, budget, transfers, a, b] = await Promise.all([
+      const [gl, recon, accrual, budget, transfers, a, b, cutoff] = await Promise.all([
         generalLedgerApi.list(),
         ledgerApi.list(),
         accrualApi.list(),
@@ -119,7 +121,9 @@ export default function GeneralLedger() {
         restrictedTransfersApi.list(),
         accountsApi.listAccounts(),
         bankAccountsApi.list(),
+        settingsApi.get("prior_year_end_date"),
       ]);
+      setPriorYearEndDate(cutoff.value); // affects dateParts()'s CY/PY derivation below
       setLines(gl);
       setReconEntries(recon);
       setAccrualEntries(accrual);
@@ -317,18 +321,40 @@ export default function GeneralLedger() {
   }
 
   function exportToExcel() {
-    const rows = visible.map((l) => ({
-      "Transaction Date": l.transaction_date || "",
-      "Date Posted": l.posted_date || "",
-      Reconciled: l.reconciled ? "Yes" : "No",
-      "Statement Description": l.statement_description,
-      Description: l.description,
-      "Bank Account": l.bank_account_name,
-      Method: l.method,
-      Amount: l.amount,
-      "Check/Invoice Name": l.check_invoice_name,
-      "Bank Description": l.bank_description,
-    }));
+    const rows = visible.map((l) => {
+      const txn = dateParts(l.transaction_date);
+      const posted = dateParts(l.posted_date);
+      return {
+        "Transaction Date": l.transaction_date || "",
+        "Date Posted": l.posted_date || "",
+        Reconciled: l.reconciled ? "Yes" : "No",
+        "Statement Description": l.statement_description,
+        Description: l.description,
+        "Bank Account": l.bank_account_name,
+        Method: l.method,
+        Amount: l.amount,
+        "Check/Invoice Name": l.check_invoice_name,
+        "Bank Description": l.bank_description,
+        Notes: l.notes,
+        IsReimbursement: l.is_reimbursement ? "Yes" : "No",
+        Category: l.category,
+        Statement: l.statement_category,
+        Item: l.statement_item,
+        ItemDetail: l.statement_detail,
+        TransactionDateMonthName: txn.monthName,
+        TransactionDateMonthYear: txn.monthYear,
+        TransactionDateYear: txn.year,
+        TransactionDateCYPY: txn.cyPy,
+        PostedDateMonthName: posted.monthName,
+        PostedDateMonthYear: posted.monthYear,
+        PostedDateYear: posted.year,
+        PostedDateCYPY: posted.cyPy,
+        Grouping: l.grouping,
+        IsYouthChaplainShare: l.is_youth_chaplain_share,
+        IsMissions: l.is_missions,
+        Type: l.category === "Budget" ? "Income" : l.category,
+      };
+    });
     const sheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "General Ledger");

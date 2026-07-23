@@ -16,12 +16,16 @@ export interface GeneralLedgerLine {
   statement_category: string;
   statement_item: string;
   statement_detail: string;
+  grouping: string;
+  is_youth_chaplain_share: string;
+  is_missions: string;
   bank_account_name: string;
   bank_description: string;
   method: string;
   amount: number;
   check_invoice_name: string;
   notes: string;
+  is_reimbursement: boolean;
   source_file_name: string;
   source_file_link: string;
 }

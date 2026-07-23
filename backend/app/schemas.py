@@ -489,12 +489,16 @@ class GeneralLedgerLineOut(BaseModel):
     statement_category: str
     statement_item: str
     statement_detail: str
+    grouping: str
+    is_youth_chaplain_share: str
+    is_missions: str
     bank_account_name: str
     bank_description: str
     method: str
     amount: float
     check_invoice_name: str
     notes: str
+    is_reimbursement: bool
     source_file_name: str
     source_file_link: str
 

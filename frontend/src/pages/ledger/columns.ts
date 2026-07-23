@@ -33,7 +33,7 @@ export function setPriorYearEndDate(iso: string) {
   priorYearEndDate = iso;
 }
 
-function dateParts(iso: string | null): { monthName: string; monthYear: string; year: string; cyPy: string } {
+export function dateParts(iso: string | null): { monthName: string; monthYear: string; year: string; cyPy: string } {
   if (!iso) return { monthName: "", monthYear: "", year: "", cyPy: "" };
   const [y, m] = iso.split("-").map(Number);
   return {
