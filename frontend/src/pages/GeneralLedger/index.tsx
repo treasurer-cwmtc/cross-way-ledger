@@ -319,7 +319,7 @@ export default function GeneralLedger() {
   function exportToExcel() {
     const rows = visible.map((l) => ({
       "Transaction Date": l.transaction_date || "",
-      "Posted Date": l.posted_date || "",
+      "Date Posted": l.posted_date || "",
       Reconciled: l.reconciled ? "Yes" : "No",
       "Statement Description": l.statement_description,
       Description: l.description,
