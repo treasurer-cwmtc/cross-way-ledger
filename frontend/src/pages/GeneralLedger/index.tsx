@@ -358,8 +358,11 @@ export default function GeneralLedger() {
     const sheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "General Ledger");
-    const stamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `general-ledger-${stamp}.xlsx`);
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    XLSX.writeFile(workbook, `${datePart}_GeneralLedger_${timePart}.xlsx`);
   }
 
   return (
