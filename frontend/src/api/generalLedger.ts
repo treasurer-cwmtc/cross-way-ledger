@@ -7,7 +7,7 @@ export interface GeneralLedgerLine {
   source: "reconciliation" | "accrual" | "budget" | "restricted_transfer";
   id: number;
   transaction_date: string | null;
-  date_posted: string | null;
+  posted_date: string | null;
   description: string;
   account_no: string;
   statement_description: string;

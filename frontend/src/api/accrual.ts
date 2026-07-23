@@ -10,7 +10,7 @@ export type { SplitLine };
 
 export interface AccrualEntryCreate {
   transaction_date?: string | null;
-  date_posted?: string | null;
+  posted_date?: string | null;
   reconciled?: boolean;
   is_reimbursement?: boolean;
   account_no?: string;

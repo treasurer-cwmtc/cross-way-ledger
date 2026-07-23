@@ -42,7 +42,7 @@ def _to_out(
     return ReconciliationEntryOut(
         id=entry.id,
         transaction_date=entry.transaction_date,
-        date_posted=entry.date_posted,
+        posted_date=entry.posted_date,
         reconciled=entry.reconciled,
         is_reimbursement=entry.is_reimbursement,
         account_no=entry.account_no or "",
@@ -150,7 +150,7 @@ def split_entry(
     for i, line in enumerate(payload.lines):
         child = ReconciliationEntry(
             transaction_date=parent.transaction_date,
-            date_posted=parent.date_posted,
+            posted_date=parent.posted_date,
             account_no=line.account_no,
             description=line.description,
             bank_account_id=parent.bank_account_id,
@@ -240,7 +240,7 @@ def import_run(
         db.add(
             ReconciliationEntry(
                 transaction_date=txn_date,
-                date_posted=parse_date(line.date_posted),
+                posted_date=parse_date(line.posted_date),
                 account_no=line.account_no,
                 description=line.description,
                 bank_account_id=bank_account.id,

@@ -19,7 +19,7 @@ import RestrictedTransferDetailModal from "../RestrictedNetAssets/DetailModal";
 
 type SortKey =
   | "transaction_date"
-  | "date_posted"
+  | "posted_date"
   | "statement_description"
   | "description"
   | "method"
@@ -79,7 +79,7 @@ export default function GeneralLedger() {
   const [year, setYear] = useState<string>("");
   const [sourceFilter, setSourceFilter] = useState<string>("");
   const [sort, setSort] = useState<{ key: SortKey | null; dir: "asc" | "desc" }>({
-    key: "date_posted",
+    key: "posted_date",
     dir: "desc",
   });
   const [transactionDateFilter, setTransactionDateFilter] = useState<DateFilterValue | null>(null);
@@ -137,8 +137,8 @@ export default function GeneralLedger() {
     switch (key) {
       case "transaction_date":
         return l.transaction_date || "";
-      case "date_posted":
-        return l.date_posted || "";
+      case "posted_date":
+        return l.posted_date || "";
       case "statement_description":
         return l.statement_description;
       case "description":
@@ -155,7 +155,7 @@ export default function GeneralLedger() {
   }
 
   const yearOptions = useMemo(
-    () => Array.from(new Set(lines.flatMap((l) => (l.date_posted ? [l.date_posted.slice(0, 4)] : [])))).sort(
+    () => Array.from(new Set(lines.flatMap((l) => (l.posted_date ? [l.posted_date.slice(0, 4)] : [])))).sort(
       (a, b) => Number(b) - Number(a)
     ),
     [lines]
@@ -165,7 +165,7 @@ export default function GeneralLedger() {
     [lines]
   );
   const datePostedMonthOptions = useMemo(
-    () => Array.from(new Set(lines.flatMap((l) => (l.date_posted ? [l.date_posted.slice(0, 7)] : [])))).sort(),
+    () => Array.from(new Set(lines.flatMap((l) => (l.posted_date ? [l.posted_date.slice(0, 7)] : [])))).sort(),
     [lines]
   );
   const descriptionOptions = useMemo(
@@ -191,10 +191,10 @@ export default function GeneralLedger() {
 
   const visible = useMemo(() => {
     let out = lines.filter((l) => {
-      if (year && l.date_posted?.slice(0, 4) !== year) return false;
+      if (year && l.posted_date?.slice(0, 4) !== year) return false;
       if (sourceFilter && l.source !== sourceFilter) return false;
       if (!dateMatchesFilter(l.transaction_date, transactionDateFilter)) return false;
-      if (!dateMatchesFilter(l.date_posted, datePostedFilter)) return false;
+      if (!dateMatchesFilter(l.posted_date, datePostedFilter)) return false;
       if (descriptionFilter && !descriptionFilter.has(l.description || "—")) return false;
       if (
         statementDescriptionFilter &&
@@ -330,7 +330,7 @@ export default function GeneralLedger() {
             <ColGroup
               columns={[
                 "transaction_date",
-                "date_posted",
+                "posted_date",
                 "statement_description",
                 "description",
                 "method",
@@ -359,7 +359,7 @@ export default function GeneralLedger() {
                 />
                 <SortableHeader
                   label="Posted Date"
-                  sortKey="date_posted"
+                  sortKey="posted_date"
                   activeSort={sort}
                   onSort={onSort}
                   filter={
@@ -370,7 +370,7 @@ export default function GeneralLedger() {
                       onChange={setDatePostedFilter}
                     />
                   }
-                  resizeHandle={<ColResizeHandle col="date_posted" startResize={startResize} />}
+                  resizeHandle={<ColResizeHandle col="posted_date" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Statement Description"
@@ -465,7 +465,7 @@ export default function GeneralLedger() {
                     style={{ cursor: "pointer" }}
                   >
                     <td style={{ whiteSpace: "nowrap" }}>{l.transaction_date || "—"}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>{l.date_posted || "—"}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{l.posted_date || "—"}</td>
                     <td>{l.statement_description || "— uncategorized —"}</td>
                     <td>{l.description || "—"}</td>
                     <td>{l.method || "—"}</td>

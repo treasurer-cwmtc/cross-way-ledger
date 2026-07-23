@@ -47,7 +47,7 @@ def _entry_to_line(
         source=source,
         id=entry.id,
         transaction_date=entry.transaction_date,
-        date_posted=entry.date_posted,
+        posted_date=entry.posted_date,
         description=description,
         account_no=entry.account_no or "",
         statement_description=coa.statement_description if coa else "",
@@ -75,7 +75,7 @@ def _budget_to_line(entry: BudgetEntry, coa_by_no: dict[str, ChartOfAccount]) ->
         source="budget",
         id=entry.id,
         transaction_date=entry.transaction_date,
-        date_posted=entry.transaction_date,
+        posted_date=entry.transaction_date,
         description=entry.description or "Budget",
         account_no=entry.account_no or "",
         statement_description=coa.statement_description if coa else "",
@@ -115,7 +115,7 @@ def _transfer_to_lines(
                 source="restricted_transfer",
                 id=leg_id,
                 transaction_date=entry.transaction_date,
-                date_posted=entry.transaction_date,
+                posted_date=entry.transaction_date,
                 description=entry.description,
                 account_no=account_no or "",
                 statement_description=coa.statement_description if coa else "",
@@ -153,12 +153,12 @@ def list_general_ledger(
     for e in db.scalars(
         select(ReconciliationEntry).where(ReconciliationEntry.is_split == False)  # noqa: E712
     ):
-        if year is not None and (e.date_posted is None or e.date_posted.year != year):
+        if year is not None and (e.posted_date is None or e.posted_date.year != year):
             continue
         lines.append(_entry_to_line(e, "reconciliation", coa_by_no, bank_accounts_by_id, categorizer))
 
     for e in db.scalars(select(AccrualEntry).where(AccrualEntry.is_split == False)):  # noqa: E712
-        if year is not None and (e.date_posted is None or e.date_posted.year != year):
+        if year is not None and (e.posted_date is None or e.posted_date.year != year):
             continue
         lines.append(_entry_to_line(e, "accrual", coa_by_no, bank_accounts_by_id, categorizer))
 
@@ -172,5 +172,5 @@ def list_general_ledger(
             continue
         lines.extend(_transfer_to_lines(e, coa_by_no))
 
-    lines.sort(key=lambda line: line.date_posted or date.min, reverse=True)
+    lines.sort(key=lambda line: line.posted_date or date.min, reverse=True)
     return lines

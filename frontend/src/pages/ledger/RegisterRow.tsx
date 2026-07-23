@@ -43,7 +43,7 @@ function RegisterRow(props: {
         />
       </td>
       {props.showPostedDate && (
-        <td style={{ whiteSpace: "nowrap" }}>{e.date_posted || "—"}</td>
+        <td style={{ whiteSpace: "nowrap" }}>{e.posted_date || "—"}</td>
       )}
       <td style={{ whiteSpace: "nowrap" }}>{e.transaction_date || "—"}</td>
       <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

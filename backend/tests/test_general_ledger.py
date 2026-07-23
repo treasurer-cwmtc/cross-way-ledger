@@ -36,7 +36,7 @@ def test_reconciliation_description_matches_actual_tabs_live_rule_join():
         db.add(rule)
         entry = ReconciliationEntry(
             transaction_date=None,
-            date_posted=date(2027, 6, 1),
+            posted_date=date(2027, 6, 1),
             account_no="E151910",
             description="",
             bank_description="ACH GL DESC TEST KEYWORD 06/01",
@@ -67,7 +67,7 @@ def test_union_includes_accrual_and_budget_rows():
         headers=h,
         json={
             "transaction_date": "2027-03-01",
-            "date_posted": "2027-03-01",
+            "posted_date": "2027-03-01",
             "account_no": "I101210",
             "description": "GL union test entry",
             "bank_account_id": _bank_account_id(),
@@ -111,7 +111,7 @@ def test_year_filter_excludes_other_years():
         headers=h,
         json={
             "transaction_date": "2019-05-01",
-            "date_posted": "2019-05-01",
+            "posted_date": "2019-05-01",
             "account_no": "I101210",
             "description": "Old year entry",
             "bank_account_id": _bank_account_id(),

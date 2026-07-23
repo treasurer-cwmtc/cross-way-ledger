@@ -220,8 +220,8 @@ class ReconRun(Base):
     # doesn't need the original file re-uploaded or re-parsed later.
     raw_bank_income_total: Mapped[float] = mapped_column(Float, default=0.0)
     raw_bank_expense_total: Mapped[float] = mapped_column(Float, default=0.0)
-    # Sum of the ORIGINAL bank-payout-placeholder amounts per date_posted,
-    # captured once at merge-stripe time (keyed by date_posted string) - an
+    # Sum of the ORIGINAL bank-payout-placeholder amounts per posted_date,
+    # captured once at merge-stripe time (keyed by posted_date string) - an
     # independent reference so the wizard's by-day check compares against
     # the bank's own number, not just re-summing the same lines it's
     # displaying. Diverges from the live Stripe total only if a line gets
@@ -244,7 +244,7 @@ class ReconLine(Base):
 
     source: Mapped[str] = mapped_column(String(20))  # 'stripe' | 'bank'
     transaction_date: Mapped[str] = mapped_column(String(20), default="")
-    date_posted: Mapped[str] = mapped_column(String(20), default="")
+    posted_date: Mapped[str] = mapped_column(String(20), default="")
     description: Mapped[str] = mapped_column(String(300), default="")  # donor / payee
     statement_description: Mapped[str] = mapped_column(String(300), default="")  # COA
     account_no: Mapped[str] = mapped_column(String(20), default="")
@@ -293,7 +293,7 @@ class ReconciliationEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    date_posted: Mapped[date | None] = mapped_column(Date, nullable=True)
+    posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
     account_no: Mapped[str | None] = mapped_column(
@@ -363,7 +363,7 @@ class AccrualEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    date_posted: Mapped[date | None] = mapped_column(Date, nullable=True)
+    posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
     account_no: Mapped[str | None] = mapped_column(

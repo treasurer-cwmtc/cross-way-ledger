@@ -8,7 +8,7 @@
 export interface LedgerEntry {
   id: number;
   transaction_date: string | null; // YYYY-MM-DD
-  date_posted: string | null;
+  posted_date: string | null;
   reconciled: boolean;
   is_reimbursement: boolean;
   account_no: string;
@@ -42,7 +42,7 @@ export interface LedgerEntry {
 
 export interface LedgerEntryUpdate {
   transaction_date?: string | null;
-  date_posted?: string | null;
+  posted_date?: string | null;
   reconciled?: boolean;
   is_reimbursement?: boolean;
   account_no?: string;

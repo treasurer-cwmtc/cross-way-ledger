@@ -16,7 +16,7 @@ def test_accrual_create_rejects_unknown_account_no():
     h = auth_header()
     payload = {
         "transaction_date": "2026-01-15",
-        "date_posted": "2026-01-15",
+        "posted_date": "2026-01-15",
         "account_no": "Z999999",  # not a real Chart of Accounts row
         "description": "Bad account",
         "bank_account_id": _bank_account_id(),
@@ -45,7 +45,7 @@ def test_accrual_create_allows_blank_account_no():
     h = auth_header()
     payload = {
         "transaction_date": "2026-01-15",
-        "date_posted": "2026-01-15",
+        "posted_date": "2026-01-15",
         "account_no": "",
         "description": "Uncategorized",
         "bank_account_id": _bank_account_id(),
@@ -83,7 +83,7 @@ def test_delete_account_blocked_by_accrual_entry():
         headers=h,
         json={
             "transaction_date": "2026-01-15",
-            "date_posted": "2026-01-15",
+            "posted_date": "2026-01-15",
             "account_no": account_no,
             "description": "In-use accrual entry",
             "bank_account_id": _bank_account_id(),

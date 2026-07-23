@@ -101,7 +101,7 @@ def test_update_line_edit_survives_merge_stripe():
     # independent of the exploded lines - both should agree here since
     # nothing's been edited post-merge.
     stripe_total_by_day = sum(l["amount"] for l in stripe_lines)
-    day = stripe_lines[0]["date_posted"]
+    day = stripe_lines[0]["posted_date"]
     assert merged["bank_totals_by_day"][day] == round(stripe_total_by_day, 2)
 
 

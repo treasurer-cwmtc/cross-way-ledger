@@ -53,7 +53,7 @@ export default function TransactionModal(props: {
     setError("");
     setAttachingReceipt(true);
     try {
-      const dateForYear = e.date_posted || e.transaction_date;
+      const dateForYear = e.posted_date || e.transaction_date;
       const year = dateForYear ? Number(dateForYear.slice(0, 4)) : new Date().getFullYear();
       const file = await pickReceiptFile({ year });
       if (file) {
@@ -134,8 +134,8 @@ export default function TransactionModal(props: {
             <DateCell value={e.transaction_date} onChange={(v) => set({ transaction_date: v })} />
           </label>
           <label className="field">
-            <span>Date Posted</span>
-            <DateCell value={e.date_posted} onChange={(v) => set({ date_posted: v })} />
+            <span>Posted Date</span>
+            <DateCell value={e.posted_date} onChange={(v) => set({ posted_date: v })} />
           </label>
         </div>
 

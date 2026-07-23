@@ -16,7 +16,7 @@ import TransactionModal from "../ledger/TransactionModal";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 type SortKey =
-  | "date_posted"
+  | "posted_date"
   | "transaction_date"
   | "description"
   | "statement_description"
@@ -67,7 +67,7 @@ export default function Reconciliation() {
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
 
   const [sort, setSort] = useState<{ key: SortKey | null; dir: "asc" | "desc" }>({
-    key: "date_posted",
+    key: "posted_date",
     dir: "desc",
   });
   const [datePostedFilter, setDatePostedFilter] = useState<DateFilterValue | null>(null);
@@ -106,8 +106,8 @@ export default function Reconciliation() {
 
   function sortValue(e: ReconciliationEntry, key: SortKey): string | number {
     switch (key) {
-      case "date_posted":
-        return e.date_posted || "";
+      case "posted_date":
+        return e.posted_date || "";
       case "transaction_date":
         return e.transaction_date || "";
       case "description":
@@ -141,7 +141,7 @@ export default function Reconciliation() {
   }, [entries]);
 
   const datePostedMonthOptions = useMemo(
-    () => Array.from(new Set(entries.flatMap((e) => (e.date_posted ? [e.date_posted.slice(0, 7)] : [])))).sort(),
+    () => Array.from(new Set(entries.flatMap((e) => (e.posted_date ? [e.posted_date.slice(0, 7)] : [])))).sort(),
     [entries]
   );
   const transactionDateMonthOptions = useMemo(
@@ -175,7 +175,7 @@ export default function Reconciliation() {
   const visibleEntries = useMemo(() => {
     let out = activeColumn ? entries.filter((e) => !activeColumn.isPopulated(e)) : entries;
     out = out.filter((e) => {
-      if (!dateMatchesFilter(e.date_posted, datePostedFilter)) return false;
+      if (!dateMatchesFilter(e.posted_date, datePostedFilter)) return false;
       if (!dateMatchesFilter(e.transaction_date, transactionDateFilter)) return false;
       if (descriptionFilter && !descriptionFilter.has(e.description || "(no description)")) return false;
       if (
@@ -277,7 +277,7 @@ export default function Reconciliation() {
             <ColGroup
               columns={[
                 "expand",
-                "date_posted",
+                "posted_date",
                 "transaction_date",
                 "description",
                 "statement_description",
@@ -293,7 +293,7 @@ export default function Reconciliation() {
                 <th></th>
                 <SortableHeader
                   label="Posted Date"
-                  sortKey="date_posted"
+                  sortKey="posted_date"
                   activeSort={sort}
                   onSort={onSort}
                   filter={
@@ -304,7 +304,7 @@ export default function Reconciliation() {
                       onChange={setDatePostedFilter}
                     />
                   }
-                  resizeHandle={<ColResizeHandle col="date_posted" startResize={startResize} />}
+                  resizeHandle={<ColResizeHandle col="posted_date" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Transaction Date"

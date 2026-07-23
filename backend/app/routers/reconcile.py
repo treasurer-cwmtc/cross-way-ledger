@@ -29,7 +29,7 @@ router = APIRouter(
 
 EXPORT_COLUMNS = [
     ("transaction_date", "Transaction Date"),
-    ("date_posted", "Date Posted"),
+    ("posted_date", "Posted Date"),
     ("description", "Description"),
     ("statement_description", "Statement Description"),
     ("account_no", "Account No"),
@@ -156,7 +156,7 @@ async def merge_stripe_endpoint(
     placeholder_bank_rows = [
         BankRow(
             details="",
-            posting_date=line.date_posted,
+            posting_date=line.posted_date,
             description=line.bank_description,
             amount=line.amount,
             type=line.method,

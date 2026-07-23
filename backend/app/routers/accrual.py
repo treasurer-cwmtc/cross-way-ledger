@@ -28,7 +28,7 @@ def _to_out(
     return AccrualEntryOut(
         id=entry.id,
         transaction_date=entry.transaction_date,
-        date_posted=entry.date_posted,
+        posted_date=entry.posted_date,
         reconciled=entry.reconciled,
         is_reimbursement=entry.is_reimbursement,
         account_no=entry.account_no or "",
@@ -138,7 +138,7 @@ def split_entry(
     for line in payload.lines:
         child = AccrualEntry(
             transaction_date=parent.transaction_date,
-            date_posted=parent.date_posted,
+            posted_date=parent.posted_date,
             account_no=line.account_no,
             description=line.description,
             bank_account_id=parent.bank_account_id,

@@ -61,7 +61,7 @@ export default function Step3Reconcile(props: {
     >();
     for (const l of run.lines) {
       if (l.source !== "stripe") continue;
-      const day = l.date_posted || "unknown";
+      const day = l.posted_date || "unknown";
       const row = map.get(day) || {
         stripeTotal: 0,
         count: 0,
@@ -145,14 +145,14 @@ export default function Step3Reconcile(props: {
             <h3 style={{ marginTop: 0 }}>By day</h3>
             <table className="resizable-cols">
               <ColGroup
-                columns={["date_posted", "bank_total", "stripe_total", "variance", "lines", "status"]}
+                columns={["posted_date", "bank_total", "stripe_total", "variance", "lines", "status"]}
                 widths={widths}
               />
               <thead>
                 <tr>
                   <th>
                     Date posted
-                    <ColResizeHandle col="date_posted" startResize={startResize} />
+                    <ColResizeHandle col="posted_date" startResize={startResize} />
                   </th>
                   <th className="num">
                     Bank total

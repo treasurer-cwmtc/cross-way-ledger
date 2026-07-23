@@ -117,7 +117,7 @@ class ReconLineOut(BaseModel):
     id: int
     source: str
     transaction_date: str
-    date_posted: str
+    posted_date: str
     description: str
     statement_description: str
     account_no: str
@@ -255,7 +255,7 @@ class ReconciliationEntryOut(BaseModel):
 
     id: int
     transaction_date: date | None
-    date_posted: date | None
+    posted_date: date | None
     reconciled: bool
     is_reimbursement: bool
     account_no: str
@@ -288,7 +288,7 @@ class ReconciliationEntryOut(BaseModel):
 
 class ReconciliationEntryUpdate(BaseModel):
     transaction_date: date | None = None
-    date_posted: date | None = None
+    posted_date: date | None = None
     reconciled: bool | None = None
     is_reimbursement: bool | None = None
     account_no: str | None = None
@@ -336,7 +336,7 @@ class AccrualEntryOut(BaseModel):
 
     id: int
     transaction_date: date | None
-    date_posted: date | None
+    posted_date: date | None
     reconciled: bool
     is_reimbursement: bool
     account_no: str
@@ -364,7 +364,7 @@ class AccrualEntryOut(BaseModel):
 
 class AccrualEntryCreate(BaseModel):
     transaction_date: date | None = None
-    date_posted: date | None = None
+    posted_date: date | None = None
     reconciled: bool = False
     is_reimbursement: bool = False
     account_no: str = ""
@@ -379,7 +379,7 @@ class AccrualEntryCreate(BaseModel):
 
 class AccrualEntryUpdate(BaseModel):
     transaction_date: date | None = None
-    date_posted: date | None = None
+    posted_date: date | None = None
     reconciled: bool | None = None
     is_reimbursement: bool | None = None
     account_no: str | None = None
@@ -480,7 +480,7 @@ class GeneralLedgerLineOut(BaseModel):
     source: str  # "reconciliation" | "accrual" | "budget" | "restricted_transfer"
     id: int
     transaction_date: date | None
-    date_posted: date | None
+    posted_date: date | None
     description: str
     account_no: str
     statement_description: str

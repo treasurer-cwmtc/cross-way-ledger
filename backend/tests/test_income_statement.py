@@ -28,7 +28,7 @@ def _add_accrual(account_no: str, amount: float, txn_date: str) -> None:
         headers=h,
         json={
             "transaction_date": txn_date,
-            "date_posted": txn_date,
+            "posted_date": txn_date,
             "account_no": account_no,
             "description": "Income statement test entry",
             "bank_account_id": _bank_account_id(),

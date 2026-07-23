@@ -24,7 +24,7 @@ UNCATEGORIZED_NOTE = "Uncategorized - add a rule"
 class OutputLine:
     source: str
     transaction_date: str = ""
-    date_posted: str = ""
+    posted_date: str = ""
     description: str = ""
     statement_description: str = ""
     account_no: str = ""
@@ -75,7 +75,7 @@ def _categorize_bank_row(bank: BankRow, categorizer: Categorizer) -> OutputLine:
     return OutputLine(
         source="bank",
         transaction_date=bank.posting_date,
-        date_posted=bank.posting_date,
+        posted_date=bank.posting_date,
         # Description is a human-entered name (who/what), not the
         # raw bank statement text - leave it blank when we don't
         # know it rather than dumping the full ACH/CO NAME string.
@@ -111,7 +111,7 @@ def _categorize_stripe_payout_row(
                 OutputLine(
                     source="stripe",
                     transaction_date=bank.posting_date,
-                    date_posted=bank.posting_date,
+                    posted_date=bank.posting_date,
                     description="UNMATCHED STRIPE PAYOUT",
                     method="Stripe",
                     amount=bank.amount,
@@ -131,7 +131,7 @@ def _categorize_stripe_payout_row(
                 OutputLine(
                     source="stripe",
                     transaction_date=bank.posting_date,
-                    date_posted=bank.posting_date,
+                    posted_date=bank.posting_date,
                     description="STRIPE PAYOUT (no donation detail)",
                     method="Stripe",
                     amount=bank.amount,
@@ -153,7 +153,7 @@ def _categorize_stripe_payout_row(
             OutputLine(
                 source="stripe",
                 transaction_date=d.created,
-                date_posted=bank.posting_date,
+                posted_date=bank.posting_date,
                 description=d.donor or d.description,
                 statement_description=cat.statement_description,
                 account_no=cat.account_no,
@@ -172,7 +172,7 @@ def _categorize_stripe_payout_row(
             OutputLine(
                 source="stripe",
                 transaction_date=bank.posting_date,
-                date_posted=bank.posting_date,
+                posted_date=bank.posting_date,
                 description="STRIPE PAYOUT ADJUSTMENT",
                 method="Stripe",
                 amount=delta,
@@ -234,7 +234,7 @@ def categorize_bank_only(
                 OutputLine(
                     source="bank",
                     transaction_date=bank.posting_date,
-                    date_posted=bank.posting_date,
+                    posted_date=bank.posting_date,
                     category="Pending Stripe match",
                     method=bank.type,
                     amount=bank.amount,

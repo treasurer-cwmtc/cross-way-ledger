@@ -20,14 +20,14 @@ export default function QuickAddModal(props: {
   const today = new Date().toISOString().slice(0, 10);
   const [sticky, setSticky] = useState<{
     transaction_date: string;
-    date_posted: string;
+    posted_date: string;
     account_no: string;
     bank_account_id: number | null;
     method: string;
     is_reimbursement: boolean;
   }>({
     transaction_date: today,
-    date_posted: today,
+    posted_date: today,
     account_no: "",
     bank_account_id: props.bankAccounts[0]?.id ?? null,
     method: "",
@@ -99,11 +99,11 @@ export default function QuickAddModal(props: {
               />
             </label>
             <label className="field">
-              <span>Date Posted</span>
+              <span>Posted Date</span>
               <input
                 type="date"
-                value={sticky.date_posted}
-                onChange={(e) => setSticky((s) => ({ ...s, date_posted: e.target.value }))}
+                value={sticky.posted_date}
+                onChange={(e) => setSticky((s) => ({ ...s, posted_date: e.target.value }))}
               />
             </label>
           </div>

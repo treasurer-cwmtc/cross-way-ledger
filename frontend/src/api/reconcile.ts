@@ -5,7 +5,7 @@ export interface ReconLine {
   id: number;
   source: "stripe" | "bank";
   transaction_date: string;
-  date_posted: string;
+  posted_date: string;
   description: string;
   statement_description: string;
   account_no: string;

@@ -16,7 +16,7 @@ def _create_entry(**overrides) -> dict:
     h = auth_header()
     payload = {
         "transaction_date": "2026-01-15",
-        "date_posted": "2026-01-15",
+        "posted_date": "2026-01-15",
         "account_no": "I101010",
         "description": "Test reimbursement",
         "bank_account_id": _bank_account_id(),
