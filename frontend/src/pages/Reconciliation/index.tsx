@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { accountsApi, ChartAccount } from "../../api/accounts";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 import { ledgerApi, ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
-import { settingsApi } from "../../api/settings";
+import { getCurrentFiscalYear, settingsApi } from "../../api/settings";
 import {
   DateColumnFilter,
   DateFilterValue,
@@ -21,8 +21,6 @@ type SortKey =
   | "description"
   | "statement_description"
   | "bank_description"
-  | "bank_account"
-  | "file_name"
   | "amount";
 
 function SortableHeader({
@@ -58,6 +56,8 @@ function SortableHeader({
   );
 }
 
+const YEAR_OPTION_SPAN = 5; // current year and the 4 before it
+
 export default function Reconciliation() {
   const [entries, setEntries] = useState<ReconciliationEntry[]>([]);
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
@@ -65,6 +65,7 @@ export default function Reconciliation() {
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
+  const [year, setYear] = useState<number | null>(null);
 
   const [sort, setSort] = useState<{ key: SortKey | null; dir: "asc" | "desc" }>({
     key: "posted_date",
@@ -75,14 +76,12 @@ export default function Reconciliation() {
   const [descriptionFilter, setDescriptionFilter] = useState<Set<string> | null>(null);
   const [statementDescriptionFilter, setStatementDescriptionFilter] = useState<Set<string> | null>(null);
   const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
-  const [bankAccountFilter, setBankAccountFilter] = useState<Set<string> | null>(null);
-  const [fileNameFilter, setFileNameFilter] = useState<Set<string> | null>(null);
   const { widths, startResize } = useColumnWidths("actual-ledger");
 
-  async function load() {
+  async function load(forYear: number) {
     try {
       const [e, a, b, cutoff] = await Promise.all([
-        ledgerApi.list(),
+        ledgerApi.list(forYear),
         accountsApi.listAccounts(),
         bankAccountsApi.list(),
         settingsApi.get("prior_year_end_date"),
@@ -97,12 +96,20 @@ export default function Reconciliation() {
   }
 
   useEffect(() => {
-    load();
+    getCurrentFiscalYear()
+      .then(setYear)
+      .catch((err) => setError((err as Error).message));
   }, []);
 
-  function bankAccountName(e: ReconciliationEntry): string {
-    return bankAccounts.find((b) => b.id === e.bank_account_id)?.name || e.bank_account_name;
-  }
+  useEffect(() => {
+    if (year != null) load(year);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year]);
+
+  const yearOptions = useMemo(() => {
+    const base = year ?? new Date().getUTCFullYear();
+    return Array.from({ length: YEAR_OPTION_SPAN }, (_, i) => base - i);
+  }, [year]);
 
   function sortValue(e: ReconciliationEntry, key: SortKey): string | number {
     switch (key) {
@@ -116,10 +123,6 @@ export default function Reconciliation() {
         return e.statement_description;
       case "bank_description":
         return e.bank_description;
-      case "bank_account":
-        return bankAccountName(e);
-      case "file_name":
-        return e.source_file_name;
       case "amount":
         return e.amount;
     }
@@ -160,15 +163,6 @@ export default function Reconciliation() {
     () => Array.from(new Set(entries.map((e) => e.bank_description || "—"))).sort(),
     [entries]
   );
-  const bankAccountOptions = useMemo(
-    () => Array.from(new Set(entries.map((e) => bankAccountName(e) || "—"))).sort(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries, bankAccounts]
-  );
-  const fileNameOptions = useMemo(
-    () => Array.from(new Set(entries.map((e) => e.source_file_name || "—"))).sort(),
-    [entries]
-  );
 
   const activeColumn = filterColumn ? COLUMNS.find((c) => c.key === filterColumn) : null;
 
@@ -184,8 +178,6 @@ export default function Reconciliation() {
       )
         return false;
       if (bankDescriptionFilter && !bankDescriptionFilter.has(e.bank_description || "—")) return false;
-      if (bankAccountFilter && !bankAccountFilter.has(bankAccountName(e) || "—")) return false;
-      if (fileNameFilter && !fileNameFilter.has(e.source_file_name || "—")) return false;
       return true;
     });
     if (sort.key) {
@@ -202,15 +194,12 @@ export default function Reconciliation() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     entries,
-    bankAccounts,
     activeColumn,
     datePostedFilter,
     transactionDateFilter,
     descriptionFilter,
     statementDescriptionFilter,
     bankDescriptionFilter,
-    bankAccountFilter,
-    fileNameFilter,
     sort,
   ]);
 
@@ -222,7 +211,7 @@ export default function Reconciliation() {
       setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
     } catch (err) {
       setError((err as Error).message);
-      await load(); // roll back to server state on failure
+      if (year != null) await load(year); // roll back to server state on failure
     }
   }
 
@@ -240,17 +229,35 @@ export default function Reconciliation() {
 
   return (
     <div>
-      <h2 className="page-title">Actual</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+        <h2 className="page-title" style={{ margin: 0 }}>
+          Actual
+        </h2>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginLeft: "auto" }}>
+          <span>Posted Year:</span>
+          <select
+            value={year ?? ""}
+            onChange={(e) => setYear(e.target.value ? Number(e.target.value) : null)}
+          >
+            {year != null && !yearOptions.includes(year) && <option value={year}>{year}</option>}
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <p className="subtitle" style={{ marginTop: 0 }}>
         The permanent, editable ledger — push rows here from the Upload tab.
-        Click a row to open every field for editing. Statement Description is
-        always whatever the linked Chart of Accounts account currently says.
-        Click a chip below to filter down to just the rows missing that column.
-        Every column header sorts and filters — Bank Description shows the raw
-        bank line in full, wrapping onto extra lines rather than truncating
-        it, and File Name links back to the exact upload it came from in
-        Google Drive. The Txn/Posted CY/PY columns are driven by the fiscal
-        year date set on the Config tab (shared with Accrual).
+        Click a row to open every field for editing, including Bank Account
+        and the source file it came from. Statement Description is always
+        whatever the linked Chart of Accounts account currently says. Click a
+        chip below to filter down to just the rows missing that column. Every
+        column header sorts and filters — Bank Description shows the raw bank
+        line in full, wrapping onto extra lines rather than truncating it.
+        The Txn/Posted CY/PY columns are driven by the fiscal year date set on
+        the Config tab (shared with Accrual).
       </p>
       {error && <div className="error">{error}</div>}
 
@@ -282,8 +289,6 @@ export default function Reconciliation() {
                 "description",
                 "statement_description",
                 "bank_description",
-                "bank_account",
-                "file_name",
                 "amount",
               ]}
               widths={widths}
@@ -367,36 +372,6 @@ export default function Reconciliation() {
                   resizeHandle={<ColResizeHandle col="bank_description" startResize={startResize} />}
                 />
                 <SortableHeader
-                  label="Bank Account"
-                  sortKey="bank_account"
-                  activeSort={sort}
-                  onSort={onSort}
-                  filter={
-                    <TextColumnFilter
-                      label="Bank Account"
-                      options={bankAccountOptions}
-                      selected={bankAccountFilter}
-                      onChange={setBankAccountFilter}
-                    />
-                  }
-                  resizeHandle={<ColResizeHandle col="bank_account" startResize={startResize} />}
-                />
-                <SortableHeader
-                  label="File Name"
-                  sortKey="file_name"
-                  activeSort={sort}
-                  onSort={onSort}
-                  filter={
-                    <TextColumnFilter
-                      label="File Name"
-                      options={fileNameOptions}
-                      selected={fileNameFilter}
-                      onChange={setFileNameFilter}
-                    />
-                  }
-                  resizeHandle={<ColResizeHandle col="file_name" startResize={startResize} />}
-                />
-                <SortableHeader
                   label="Amount"
                   sortKey="amount"
                   activeSort={sort}
@@ -417,12 +392,11 @@ export default function Reconciliation() {
                   wideBankDescription
                   showPostedDate
                   hideMethod
-                  showFileName
                 />
               ))}
               {visibleEntries.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ color: "var(--muted)" }}>
+                  <td colSpan={7} style={{ color: "var(--muted)" }}>
                     {entries.length === 0
                       ? "No entries yet — push a completed run from the Upload tab."
                       : "No rows match this filter."}
@@ -442,7 +416,7 @@ export default function Reconciliation() {
           onUpdate={onUpdate}
           onDelete={onDelete}
           onClose={() => setOpenEntryId(null)}
-          onReload={load}
+          onReload={() => year != null && load(year)}
           onSplit={(id, lines) => ledgerApi.split(id, lines)}
           onUnsplit={(parentId) => ledgerApi.unsplit(parentId)}
           splitHint="For an aggregated bank line (e.g. a deposit slip covering several checks)."

@@ -206,6 +206,19 @@ export default function TransactionModal(props: {
           <TextCell value={e.notes} onCommit={(v) => set({ notes: v })} />
         </label>
 
+        {e.source_file_name && (
+          <label className="field">
+            <span>Source file</span>
+            {e.source_file_link ? (
+              <a href={e.source_file_link} target="_blank" rel="noreferrer">
+                {e.source_file_name}
+              </a>
+            ) : (
+              <span>{e.source_file_name}</span>
+            )}
+          </label>
+        )}
+
         <label className="field">
           <span>Receipt</span>
           {e.receipt_file_id ? (

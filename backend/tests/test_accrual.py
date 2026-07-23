@@ -43,6 +43,20 @@ def test_create_and_list_entry():
     assert entry["id"] in ids
 
 
+def test_list_filters_by_posted_year():
+    entry_2026 = _create_entry(description="2026 posted year test", posted_date="2026-05-01")
+    entry_2027 = _create_entry(description="2027 posted year test", posted_date="2027-05-01")
+    h = auth_header()
+
+    ids_2026 = [e["id"] for e in client.get("/api/accrual", headers=h, params={"year": 2026}).json()]
+    assert entry_2026["id"] in ids_2026
+    assert entry_2027["id"] not in ids_2026
+
+    ids_2027 = [e["id"] for e in client.get("/api/accrual", headers=h, params={"year": 2027}).json()]
+    assert entry_2027["id"] in ids_2027
+    assert entry_2026["id"] not in ids_2027
+
+
 def test_update_entry():
     entry = _create_entry()
     h = auth_header()

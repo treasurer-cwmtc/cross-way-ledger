@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { accountsApi, ChartAccount } from "../../api/accounts";
 import { accrualApi, AccrualEntry, AccrualEntryUpdate } from "../../api/accrual";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
-import { settingsApi } from "../../api/settings";
+import { getCurrentFiscalYear, settingsApi } from "../../api/settings";
 import { COLUMNS, setPriorYearEndDate } from "../ledger/columns";
 import ColumnHealthStrip from "../ledger/ColumnHealthStrip";
 import RegisterRow from "../ledger/RegisterRow";
 import TransactionModal from "../ledger/TransactionModal";
 import QuickAddModal from "./QuickAddModal";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
+
+const YEAR_OPTION_SPAN = 5; // current year and the 4 before it
 
 export default function Accrual() {
   const [entries, setEntries] = useState<AccrualEntry[]>([]);
@@ -18,12 +20,13 @@ export default function Accrual() {
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [year, setYear] = useState<number | null>(null);
   const { widths, startResize } = useColumnWidths("accrual-list");
 
-  async function load() {
+  async function load(forYear: number) {
     try {
       const [e, a, b, cutoff] = await Promise.all([
-        accrualApi.list(),
+        accrualApi.list(forYear),
         accountsApi.listAccounts(),
         bankAccountsApi.list(),
         settingsApi.get("prior_year_end_date"),
@@ -38,8 +41,20 @@ export default function Accrual() {
   }
 
   useEffect(() => {
-    load();
+    getCurrentFiscalYear()
+      .then(setYear)
+      .catch((err) => setError((err as Error).message));
   }, []);
+
+  useEffect(() => {
+    if (year != null) load(year);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year]);
+
+  const yearOptions = useMemo(() => {
+    const base = year ?? new Date().getUTCFullYear();
+    return Array.from({ length: YEAR_OPTION_SPAN }, (_, i) => base - i);
+  }, [year]);
 
   const completeness = useMemo(() => {
     const map = new Map<string, { complete: boolean; missingCount: number }>();
@@ -62,7 +77,7 @@ export default function Accrual() {
       setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
     } catch (err) {
       setError((err as Error).message);
-      await load();
+      if (year != null) await load(year);
     }
   }
 
@@ -80,12 +95,31 @@ export default function Accrual() {
 
   return (
     <div>
-      <h2 className="page-title">Accrual</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+        <h2 className="page-title" style={{ margin: 0 }}>
+          Accrual
+        </h2>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginLeft: "auto" }}>
+          <span>Posted Year:</span>
+          <select
+            value={year ?? ""}
+            onChange={(e) => setYear(e.target.value ? Number(e.target.value) : null)}
+          >
+            {year != null && !yearOptions.includes(year) && <option value={year}>{year}</option>}
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <p className="subtitle" style={{ marginTop: 0 }}>
         Manually-entered ledger for recording an expense or reimbursement as
         incurred, before the actual payment clears the bank and shows up in
-        Actual. Same fields, same Chart of Accounts lookup, same
-        split/undo-split as Actual.
+        Actual. Same fields (including Bank Account, editable in the detail
+        popup), same Chart of Accounts lookup, same split/undo-split as
+        Actual.
       </p>
       <div className="toolbar">
         <button className="btn" onClick={() => setShowQuickAdd(true)}>
@@ -124,7 +158,6 @@ export default function Accrual() {
                 "description",
                 "statement_description",
                 "bank_description",
-                "bank_account",
                 "method",
                 "amount",
               ]}
@@ -152,10 +185,6 @@ export default function Accrual() {
                   <ColResizeHandle col="bank_description" startResize={startResize} />
                 </th>
                 <th>
-                  Bank Account
-                  <ColResizeHandle col="bank_account" startResize={startResize} />
-                </th>
-                <th>
                   Method
                   <ColResizeHandle col="method" startResize={startResize} />
                 </th>
@@ -178,7 +207,7 @@ export default function Accrual() {
               ))}
               {visibleEntries.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ color: "var(--muted)" }}>
+                  <td colSpan={7} style={{ color: "var(--muted)" }}>
                     {entries.length === 0
                       ? "No entries yet — click Quick Add to enter one."
                       : "No rows match this filter."}
@@ -198,7 +227,7 @@ export default function Accrual() {
           onUpdate={onUpdate}
           onDelete={onDelete}
           onClose={() => setOpenEntryId(null)}
-          onReload={load}
+          onReload={() => year != null && load(year)}
           onSplit={(id, lines) => accrualApi.split(id, lines)}
           onUnsplit={(parentId) => accrualApi.unsplit(parentId)}
           splitHint="For one lump entry that actually covers several people or purchases."

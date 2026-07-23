@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { accountsApi, ChartAccount } from "../../api/accounts";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 import { generalLedgerApi, GeneralLedgerLine } from "../../api/generalLedger";
@@ -20,8 +21,10 @@ import RestrictedTransferDetailModal from "../RestrictedNetAssets/DetailModal";
 type SortKey =
   | "transaction_date"
   | "posted_date"
+  | "reconciled"
   | "statement_description"
   | "description"
+  | "bank_account"
   | "method"
   | "amount"
   | "check_invoice_name"
@@ -84,11 +87,19 @@ export default function GeneralLedger() {
   });
   const [transactionDateFilter, setTransactionDateFilter] = useState<DateFilterValue | null>(null);
   const [datePostedFilter, setDatePostedFilter] = useState<DateFilterValue | null>(null);
+  const [reconciledFilter, setReconciledFilter] = useState<Set<string> | null>(null);
   const [descriptionFilter, setDescriptionFilter] = useState<Set<string> | null>(null);
   const [statementDescriptionFilter, setStatementDescriptionFilter] = useState<Set<string> | null>(null);
+  const [bankAccountFilter, setBankAccountFilter] = useState<Set<string> | null>(null);
   const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
   const [methodFilter, setMethodFilter] = useState<Set<string> | null>(null);
   const [checkInvoiceNameFilter, setCheckInvoiceNameFilter] = useState<Set<string> | null>(null);
+  // A prominent, always-visible Posted Date range in the toolbar - separate
+  // from the per-column filter icon (which already supports a range mode,
+  // but is easy to miss) since reports are usually pulled for a specific
+  // stretch of time rather than a whole year.
+  const [postedFrom, setPostedFrom] = useState("");
+  const [postedTo, setPostedTo] = useState("");
 
   const { widths, startResize } = useColumnWidths("general-ledger");
 
@@ -139,10 +150,14 @@ export default function GeneralLedger() {
         return l.transaction_date || "";
       case "posted_date":
         return l.posted_date || "";
+      case "reconciled":
+        return l.reconciled ? "Yes" : "No";
       case "statement_description":
         return l.statement_description;
       case "description":
         return l.description;
+      case "bank_account":
+        return l.bank_account_name;
       case "method":
         return l.method;
       case "amount":
@@ -176,6 +191,10 @@ export default function GeneralLedger() {
     () => Array.from(new Set(lines.map((l) => l.statement_description || "— uncategorized —"))).sort(),
     [lines]
   );
+  const bankAccountOptions = useMemo(
+    () => Array.from(new Set(lines.map((l) => l.bank_account_name || "—"))).sort(),
+    [lines]
+  );
   const bankDescriptionOptions = useMemo(
     () => Array.from(new Set(lines.map((l) => l.bank_description || "—"))).sort(),
     [lines]
@@ -195,12 +214,16 @@ export default function GeneralLedger() {
       if (sourceFilter && l.source !== sourceFilter) return false;
       if (!dateMatchesFilter(l.transaction_date, transactionDateFilter)) return false;
       if (!dateMatchesFilter(l.posted_date, datePostedFilter)) return false;
+      if (postedFrom && (!l.posted_date || l.posted_date < postedFrom)) return false;
+      if (postedTo && (!l.posted_date || l.posted_date > postedTo)) return false;
+      if (reconciledFilter && !reconciledFilter.has(l.reconciled ? "Yes" : "No")) return false;
       if (descriptionFilter && !descriptionFilter.has(l.description || "—")) return false;
       if (
         statementDescriptionFilter &&
         !statementDescriptionFilter.has(l.statement_description || "— uncategorized —")
       )
         return false;
+      if (bankAccountFilter && !bankAccountFilter.has(l.bank_account_name || "—")) return false;
       if (bankDescriptionFilter && !bankDescriptionFilter.has(l.bank_description || "—")) return false;
       if (methodFilter && !methodFilter.has(l.method || "—")) return false;
       if (checkInvoiceNameFilter && !checkInvoiceNameFilter.has(l.check_invoice_name || "—")) return false;
@@ -224,8 +247,12 @@ export default function GeneralLedger() {
     sourceFilter,
     transactionDateFilter,
     datePostedFilter,
+    postedFrom,
+    postedTo,
+    reconciledFilter,
     descriptionFilter,
     statementDescriptionFilter,
+    bankAccountFilter,
     bankDescriptionFilter,
     methodFilter,
     checkInvoiceNameFilter,
@@ -289,13 +316,34 @@ export default function GeneralLedger() {
     await load();
   }
 
+  function exportToExcel() {
+    const rows = visible.map((l) => ({
+      "Transaction Date": l.transaction_date || "",
+      "Posted Date": l.posted_date || "",
+      Reconciled: l.reconciled ? "Yes" : "No",
+      "Statement Description": l.statement_description,
+      Description: l.description,
+      "Bank Account": l.bank_account_name,
+      Method: l.method,
+      Amount: l.amount,
+      "Check/Invoice Name": l.check_invoice_name,
+      "Bank Description": l.bank_description,
+    }));
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "General Ledger");
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `general-ledger-${stamp}.xlsx`);
+  }
+
   return (
     <div>
       <h2 className="page-title">General Ledger</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        Every Actual, Accrual, and Budget line in one place - the
-        base every financial report is built from. Click a row to open its detail popup and edit
-        it right here. Scroll right for Bank Description.
+        Every Actual, Accrual, Budget, and Restricted Net Assets line in one
+        place - the base every financial report is built from. Click a row to
+        open its detail popup and edit it right here. Every column sorts and
+        filters. Scroll right for Bank Description.
       </p>
       <div className="toolbar">
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
@@ -316,9 +364,30 @@ export default function GeneralLedger() {
             <option value="reconciliation">Actual</option>
             <option value="accrual">Accrual</option>
             <option value="budget">Budget</option>
+            <option value="restricted_transfer">Restricted Net Assets</option>
           </select>
         </label>
-        <span className="pill">
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <span>Posted Date:</span>
+          <input type="date" value={postedFrom} onChange={(e) => setPostedFrom(e.target.value)} />
+          <span>to</span>
+          <input type="date" value={postedTo} onChange={(e) => setPostedTo(e.target.value)} />
+          {(postedFrom || postedTo) && (
+            <button
+              className="link"
+              onClick={() => {
+                setPostedFrom("");
+                setPostedTo("");
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </label>
+        <button className="btn secondary" onClick={exportToExcel} disabled={visible.length === 0}>
+          Export to Excel
+        </button>
+        <span className="pill" style={{ marginLeft: "auto" }}>
           {visible.length} lines · ${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
         </span>
       </div>
@@ -331,8 +400,10 @@ export default function GeneralLedger() {
               columns={[
                 "transaction_date",
                 "posted_date",
+                "reconciled",
                 "statement_description",
                 "description",
+                "bank_account",
                 "method",
                 "amount",
                 "check_invoice_name",
@@ -373,6 +444,21 @@ export default function GeneralLedger() {
                   resizeHandle={<ColResizeHandle col="posted_date" startResize={startResize} />}
                 />
                 <SortableHeader
+                  label="Reconciled"
+                  sortKey="reconciled"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Reconciled"
+                      options={["Yes", "No"]}
+                      selected={reconciledFilter}
+                      onChange={setReconciledFilter}
+                    />
+                  }
+                  resizeHandle={<ColResizeHandle col="reconciled" startResize={startResize} />}
+                />
+                <SortableHeader
                   label="Statement Description"
                   sortKey="statement_description"
                   activeSort={sort}
@@ -401,6 +487,21 @@ export default function GeneralLedger() {
                     />
                   }
                   resizeHandle={<ColResizeHandle col="description" startResize={startResize} />}
+                />
+                <SortableHeader
+                  label="Bank Account"
+                  sortKey="bank_account"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Bank Account"
+                      options={bankAccountOptions}
+                      selected={bankAccountFilter}
+                      onChange={setBankAccountFilter}
+                    />
+                  }
+                  resizeHandle={<ColResizeHandle col="bank_account" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Method"
@@ -466,8 +567,10 @@ export default function GeneralLedger() {
                   >
                     <td style={{ whiteSpace: "nowrap" }}>{l.transaction_date || "—"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{l.posted_date || "—"}</td>
+                    <td>{l.reconciled ? "Yes" : "No"}</td>
                     <td>{l.statement_description || "— uncategorized —"}</td>
                     <td>{l.description || "—"}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{l.bank_account_name || "—"}</td>
                     <td>{l.method || "—"}</td>
                     <td className="num" style={{ whiteSpace: "nowrap" }}>
                       ${l.amount.toFixed(2)}
@@ -478,7 +581,7 @@ export default function GeneralLedger() {
                 ))}
               {!loading && visible.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ color: "var(--muted)" }}>
+                  <td colSpan={10} style={{ color: "var(--muted)" }}>
                     No lines match this filter.
                   </td>
                 </tr>

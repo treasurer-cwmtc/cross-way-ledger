@@ -8,6 +8,7 @@ export interface GeneralLedgerLine {
   id: number;
   transaction_date: string | null;
   posted_date: string | null;
+  reconciled: boolean;
   description: string;
   account_no: string;
   statement_description: string;

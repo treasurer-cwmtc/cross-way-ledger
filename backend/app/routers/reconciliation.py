@@ -84,14 +84,20 @@ def _lookups(
 
 
 @router.get("", response_model=list[ReconciliationEntryOut])
-def list_entries(db: Session = Depends(get_db)) -> list[ReconciliationEntryOut]:
+def list_entries(
+    year: int | None = None, db: Session = Depends(get_db)
+) -> list[ReconciliationEntryOut]:
     coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
     entries = db.scalars(
         select(ReconciliationEntry)
         .where(ReconciliationEntry.is_split == False)  # noqa: E712 - hidden once split
         .order_by(ReconciliationEntry.transaction_date.desc())
     )
-    return [_to_out(e, coa_by_no, bank_accounts_by_id, categorizer) for e in entries]
+    return [
+        _to_out(e, coa_by_no, bank_accounts_by_id, categorizer)
+        for e in entries
+        if year is None or (e.posted_date is not None and e.posted_date.year == year)
+    ]
 
 
 @router.put("/{entry_id}", response_model=ReconciliationEntryOut)

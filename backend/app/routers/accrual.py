@@ -62,14 +62,20 @@ def _lookups(db: Session) -> tuple[dict[str, ChartOfAccount], dict[int, BankAcco
 
 
 @router.get("", response_model=list[AccrualEntryOut])
-def list_entries(db: Session = Depends(get_db)) -> list[AccrualEntryOut]:
+def list_entries(
+    year: int | None = None, db: Session = Depends(get_db)
+) -> list[AccrualEntryOut]:
     coa_by_no, bank_accounts_by_id = _lookups(db)
     entries = db.scalars(
         select(AccrualEntry)
         .where(AccrualEntry.is_split == False)  # noqa: E712 - hidden once split
         .order_by(AccrualEntry.transaction_date.desc(), AccrualEntry.id.desc())
     )
-    return [_to_out(e, coa_by_no, bank_accounts_by_id) for e in entries]
+    return [
+        _to_out(e, coa_by_no, bank_accounts_by_id)
+        for e in entries
+        if year is None or (e.posted_date is not None and e.posted_date.year == year)
+    ]
 
 
 @router.post("", response_model=AccrualEntryOut, status_code=201)

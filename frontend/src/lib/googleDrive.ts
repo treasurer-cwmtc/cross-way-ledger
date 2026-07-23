@@ -148,7 +148,7 @@ async function getOrCreateFolder(name: string, parentId: string | null, token: s
 // --------------------------------------------------------------------------
 // Everything this app files in Drive - receipts, archived Bank/Stripe
 // upload CSVs, and archived pledge-campaign import CSVs - lives under one
-// shared root folder ("Cross Way Ledger Receipts" in the treasurer's Drive),
+// shared root folder ("Cross Way Ledger" in the treasurer's Drive),
 // organized by the app's own Current Year (Config's Fiscal Year card, not
 // the real device date): <ROOT>/<year>/<file>, with campaign imports
 // additionally nested under <ROOT>/<year>/Campaign/<campaign name>/<file>.
@@ -358,7 +358,7 @@ export async function pickMultipleReceiptFiles(): Promise<PickedFile[]> {
  * (prompting for consent on first use), open the Picker (upload new or pick
  * existing), and resolve with the chosen file - or null if the user
  * cancelled. When `year` is given, a new upload is filed under
- * "Cross Way Ledger Receipts/<year>" instead of Drive's root - if that setup
+ * "Cross Way Ledger/<year>" instead of Drive's root - if that setup
  * step fails for any reason, the upload still proceeds, just into the root,
  * rather than blocking the whole attach flow. */
 export async function pickReceiptFile(opts?: { year?: number }): Promise<PickedFile | null> {

@@ -20,8 +20,8 @@ export interface SplitGroup {
 }
 
 export const ledgerApi = {
-  list: () =>
-    fetch(`${BASE}/api/reconciliation`, { headers: authHeaders() }).then(
+  list: (year?: number) =>
+    fetch(`${BASE}/api/reconciliation${year ? `?year=${year}` : ""}`, { headers: authHeaders() }).then(
       j<ReconciliationEntry[]>
     ),
 

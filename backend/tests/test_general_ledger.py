@@ -103,6 +103,11 @@ def test_union_includes_accrual_and_budget_rows():
     assert budget_lines[0]["amount"] == 5000.0
     assert budget_lines[0]["transaction_date"] == "2027-01-01"
 
+    # Reconciled mirrors the entry's own tab - Accrual isn't reconciled by
+    # default; Budget/Transfer rows have no such concept so always False.
+    assert accrual_lines[0]["reconciled"] is False
+    assert budget_lines[0]["reconciled"] is False
+
 
 def test_year_filter_excludes_other_years():
     h = auth_header()

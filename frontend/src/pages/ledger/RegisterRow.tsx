@@ -25,8 +25,12 @@ function RegisterRow(props: {
   // is opt-in rather than always-on.
   showPostedDate?: boolean;
   hideMethod?: boolean;
-  // Reconciliation-only audit trail: the raw bank/Stripe file this entry
-  // came from, linked out to its archived copy in Google Drive.
+  // Bank Account and File Name are still real fields (editable/viewable in
+  // the detail popup), just not worth a dedicated register column for
+  // Actual/Accrual - both are single-bank-account-at-a-time working ledgers
+  // day to day, and the file name is an audit-trail detail, not something
+  // scanned row to row.
+  showBankAccount?: boolean;
   showFileName?: boolean;
 }) {
   const e = props.entry;
@@ -70,7 +74,7 @@ function RegisterRow(props: {
           {e.bank_description || <span style={{ color: "var(--muted)" }}>—</span>}
         </td>
       )}
-      <td style={{ whiteSpace: "nowrap" }}>{bankAccountName || "—"}</td>
+      {props.showBankAccount && <td style={{ whiteSpace: "nowrap" }}>{bankAccountName || "—"}</td>}
       {!props.hideMethod && <td>{e.method || "—"}</td>}
       {props.showFileName && (
         <td

@@ -481,6 +481,7 @@ class GeneralLedgerLineOut(BaseModel):
     id: int
     transaction_date: date | None
     posted_date: date | None
+    reconciled: bool
     description: str
     account_no: str
     statement_description: str

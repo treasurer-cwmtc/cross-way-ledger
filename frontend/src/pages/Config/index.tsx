@@ -165,7 +165,7 @@ function FiscalYearCard() {
       setError((err as Error).message);
       return;
     }
-    // Best-effort: creates <Cross Way Ledger Receipts>/<year> in Drive right
+    // Best-effort: creates <Cross Way Ledger>/<year> in Drive right
     // away, so it's there before anything needs to upload into it. Never
     // blocks the Current Year Date save itself.
     try {

@@ -29,8 +29,8 @@ export interface SplitGroup {
 }
 
 export const accrualApi = {
-  list: () =>
-    fetch(`${BASE}/api/accrual`, { headers: authHeaders() }).then(j<AccrualEntry[]>),
+  list: (year?: number) =>
+    fetch(`${BASE}/api/accrual${year ? `?year=${year}` : ""}`, { headers: authHeaders() }).then(j<AccrualEntry[]>),
 
   create: (payload: AccrualEntryCreate) =>
     fetch(`${BASE}/api/accrual`, {
