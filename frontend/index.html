@@ -7,6 +7,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Populated at container startup from the API_BASE env var (see
+         docker-entrypoint.d/40-env-config.sh) - lets the same built image
+         be promoted across environments (dev/prod) without a rebuild. -->
+    <script src="/env-config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -2,7 +2,18 @@
 // changes rarely - domain modules (accounts.ts, rules.ts, etc.) are where
 // day-to-day work happens, so parallel sessions rarely collide here.
 
-export const BASE = import.meta.env.VITE_API_BASE || "";
+// Runtime env-config.js (set per-environment at container startup, see
+// docker-entrypoint.d/40-env-config.sh) takes priority over the build-time
+// VITE_API_BASE, so the same built image can be promoted from dev to prod
+// without a rebuild - only `npm run dev` (no env-config.js present) falls
+// back to the build-time value.
+declare global {
+  interface Window {
+    __ENV__?: { API_BASE?: string };
+  }
+}
+
+export const BASE = window.__ENV__?.API_BASE || import.meta.env.VITE_API_BASE || "";
 
 const TOKEN_KEY = "recon_token";
 

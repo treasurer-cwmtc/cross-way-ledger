@@ -2,15 +2,16 @@ name: Deploy
 
 # Build once, promote the same image: every push to main builds backend +
 # frontend images tagged with the commit SHA, pushes them to Artifact
-# Registry, then deploys that exact tag to the dev Cloud Run services.
+# Registry, deploys that exact tag to dev automatically, then (pending a
+# required reviewer on the "production" GitHub Environment) promotes that
+# same untouched image to prod. The frontend's backend URL is set at deploy
+# time via the API_BASE Cloud Run env var (see
+# frontend/docker/40-env-config.sh) rather than baked in at build time, so
+# the identical image genuinely works in both environments.
 #
 # Auth to GCP uses Workload Identity Federation (keyless - no long-lived
 # service account key stored in GitHub). See docs/DEPLOYMENT.md for the
 # one-time GCP setup (service account, WIF pool/provider, IAM bindings).
-#
-# A prod deploy job (gated behind a "production" GitHub Environment with a
-# required reviewer, mirroring dev) will be added once ledger-backend-prod /
-# ledger-frontend-prod exist.
 
 on:
   push:
@@ -55,7 +56,7 @@ jobs:
           push: true
           tags: |
             ${{ env.ARTIFACT_REGISTRY }}/backend:${{ steps.tag.outputs.tag }}
-            ${{ env.ARTIFACT_REGISTRY }}/backend:dev-latest
+            ${{ env.ARTIFACT_REGISTRY }}/backend:latest
 
       - name: Build and push frontend
         uses: docker/build-push-action@v6
@@ -64,14 +65,15 @@ jobs:
           push: true
           build-args: |
             VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
-            VITE_API_BASE=https://ledger-backend-dev-${{ vars.GCP_PROJECT_NUMBER }}.us-south1.run.app
           tags: |
             ${{ env.ARTIFACT_REGISTRY }}/frontend:${{ steps.tag.outputs.tag }}
-            ${{ env.ARTIFACT_REGISTRY }}/frontend:dev-latest
+            ${{ env.ARTIFACT_REGISTRY }}/frontend:latest
 
   deploy-dev:
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      backend_url: ${{ steps.backend.outputs.url }}
     steps:
       - id: auth
         uses: google-github-actions/auth@v2
@@ -81,13 +83,16 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy backend to Cloud Run (dev)
+      - id: backend
+        name: Deploy backend to Cloud Run (dev)
         run: |
           gcloud run deploy ledger-backend-dev \
             --image ${{ env.ARTIFACT_REGISTRY }}/backend:${{ needs.build.outputs.image_tag }} \
             --region ${{ env.BACKEND_REGION }} \
             --project ${{ env.GCP_PROJECT_ID }} \
             --quiet
+          url=$(gcloud run services describe ledger-backend-dev --region ${{ env.BACKEND_REGION }} --project ${{ env.GCP_PROJECT_ID }} --format="value(status.url)")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Deploy frontend to Cloud Run (dev)
         run: |
@@ -95,4 +100,42 @@ jobs:
             --image ${{ env.ARTIFACT_REGISTRY }}/frontend:${{ needs.build.outputs.image_tag }} \
             --region ${{ env.FRONTEND_REGION }} \
             --project ${{ env.GCP_PROJECT_ID }} \
+            --set-env-vars="API_BASE=${{ steps.backend.outputs.url }}" \
+            --quiet
+
+  # Promotes the exact same image dev just verified - no rebuild - to prod.
+  # Requires a "production" Environment (Settings -> Environments) with a
+  # required reviewer configured, so the workflow pauses here until someone
+  # approves.
+  deploy-prod:
+    needs: [build, deploy-dev]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - id: backend
+        name: Deploy backend to Cloud Run (prod)
+        run: |
+          gcloud run deploy ledger-backend-prod \
+            --image ${{ env.ARTIFACT_REGISTRY }}/backend:${{ needs.build.outputs.image_tag }} \
+            --region ${{ env.BACKEND_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }} \
+            --quiet
+          url=$(gcloud run services describe ledger-backend-prod --region ${{ env.BACKEND_REGION }} --project ${{ env.GCP_PROJECT_ID }} --format="value(status.url)")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy frontend to Cloud Run (prod)
+        run: |
+          gcloud run deploy ledger-frontend-prod \
+            --image ${{ env.ARTIFACT_REGISTRY }}/frontend:${{ needs.build.outputs.image_tag }} \
+            --region ${{ env.FRONTEND_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }} \
+            --set-env-vars="API_BASE=${{ steps.backend.outputs.url }}" \
             --quiet
