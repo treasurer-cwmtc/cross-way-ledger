@@ -7,7 +7,7 @@ os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "admin-password")
 
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from app import database  # noqa: E402
@@ -28,6 +28,18 @@ if not database_url:
 # Use a single shared Postgres DB for the app under test, reset fresh below.
 engine = create_engine(database_url, future=True)
 TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+# Base.metadata only knows ORM-mapped tables - reporting views (see the
+# "add standardized reporting views" migration) are plain SQL, invisible to
+# it, so drop_all() would fail with a dependency error against any DB that
+# already has them (e.g. a scratch DB migrated via alembic for manual
+# verification before running tests). Drop every view up front, generically,
+# so this stays correct no matter what views future migrations add.
+with engine.begin() as conn:
+    view_names = conn.execute(
+        text("SELECT viewname FROM pg_views WHERE schemaname = 'public'")
+    ).scalars().all()
+    for view_name in view_names:
+        conn.execute(text(f'DROP VIEW IF EXISTS "{view_name}" CASCADE'))
 Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 
