@@ -242,18 +242,22 @@ started:
 
 ## Next steps (GitHub issues)
 
-- **Actually create the DigitalOcean droplets and deploy** — everything above
-  is built and tested but nothing is live yet. Needs a DO API token (see
-  `docs/DEPLOYMENT.md` § 1-5). Once created: run `provision-vps.sh` on both,
-  set DNS, wire up GitHub Actions secrets + the `production` environment
-  approval gate, push to `main`, watch it deploy.
-- **Add a smoke-test job to `deploy.yml`** between `deploy-staging` and the
-  prod approval gate — hit staging's `/api/health` (and ideally a real
-  login) before a human is even asked to approve promoting to prod. Would
-  have caught the dev crash-loop bug automatically instead of needing a
-  manual log check.
-- **#7 CI/CD auto-deploy to VPS** — done, see this session's work above.
-  Close this issue once staging/prod are actually live.
+> The DigitalOcean droplet plan below (creating droplets, `provision-vps.sh`,
+> a staging environment) was **abandoned** in favor of the GCP Cloud Run +
+> Cloud SQL migration - see "Current state" at the top of this file. Both
+> items are left here for historical continuity with the issue tracker, not
+> as live todos.
+
+- ~~**Actually create the DigitalOcean droplets and deploy**~~ — superseded;
+  GCP dev and prod are live instead (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+- ~~**Add a smoke-test job to `deploy.yml`** between `deploy-staging` and the
+  prod approval gate~~ — the actual pipeline that shipped is
+  `build → deploy-dev → deploy-prod` (manual approval gate), with no
+  separate staging environment; a smoke-test job here would be genuinely
+  useful to add to today's pipeline, but framed against `deploy-dev`, not
+  the retired `deploy-staging`.
+- **#7 CI/CD auto-deploy** — done, but via GCP Cloud Run, not a VPS. Close
+  this issue.
 - **Auditor-specific screens** (phase 4 of the finance-UI push) — a
   read-only, audit-focused view.
 - **#2 Saved run history UI**, **#3 Roster-based donor normalization**,
@@ -288,15 +292,15 @@ docker compose up -d --build
 # http://localhost:8080
 ```
 
-**Dev on the home Portainer instance** (stack `cross-way-ledger-dev`,
-already running): `https://dev.ledger.crosswaymtc.org/` (needs the
-hosts-file entry, see above), `admin` / `dev-changeme-2026`. To rebuild it
-after code changes, see `docs/DEPLOYMENT.md` — or ask a future Claude
-session, which can drive the Portainer API directly given the access token
-(rotate it periodically; it's a long-lived credential).
-
 Default local-dev login: `admin` / `changeme` (or whatever `ADMIN_USERNAME`/
 `ADMIN_PASSWORD` you set in `.env`).
+
+**To see a change running against real cloud infrastructure**, push to
+`main` and let CI/CD deploy it - `https://ledger-dev.crosswaymtc.org` is
+the live GCP dev environment (see [DEPLOYMENT.md](DEPLOYMENT.md)). The
+home Portainer instance described in the historical section above has been
+**fully retired** - it's no longer used for anything, and none of its
+setup details (IPs, Caddy config, access tokens) apply anymore.
 
 **Tests** (real Postgres required, no default):
 
@@ -320,16 +324,10 @@ DATABASE_URL=postgresql+psycopg://ledger_user:recon@localhost:5432/ledger_db pyt
 - **Google OAuth origins**: no raw IPs, ever — must be `https://` + a real
   public-TLD hostname, or `localhost`. Costs real time if you forget this
   and try to register a droplet's bare IP or a `.local`/`.internal` name.
-- **DigitalOcean billing**: powering off a droplet does **not** stop
-  billing — compute/disk/IP stay reserved either way. Only *destroying* it
-  (optionally after a snapshot) stops the charge. Don't design any
-  cost-saving plan around "just turn it off."
-- **The home Portainer instance is shared** with unrelated personal
-  services (Jellyfin, Plex, Sonarr, etc.) on a `10.10.10.0/24` macvlan
-  network (`nvncloud`, gateway `.1`) — `.108`-`.111` are reserved for
-  `cross-way-ledger-dev`. Treat this box as dev-only, never as a substitute
-  for staging/prod.
-- **Backups are not optional** — see `docs/DEPLOYMENT.md` § 6. If you ever
+- **The home Portainer instance is fully retired** — GCP dev now serves the
+  role it used to. Don't reference its old IPs, Caddy config, or access
+  token in any new work; they no longer apply to anything.
+- **Backups are not optional** — see `docs/DEPLOYMENT.md` § 8. If you ever
   find yourself about to run something destructive (`DROP SCHEMA`,
   `docker compose down -v`, a stack redeploy that wipes a volume) against
   anything other than the dev environment, stop and confirm a recent,

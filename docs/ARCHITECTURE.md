@@ -335,7 +335,7 @@ cloud prod environment - each with a distinct job. See
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "18px"}}}%%
 flowchart TB
-    Local["Local iteration\nPortainer / docker-compose\n(your own feature-branch work)"]
+    Local["Local iteration\ndocker-compose, on your own machine\n(your own feature-branch work)"]
 
     subgraph CI["GitHub Actions - on every push to main"]
         direction LR
@@ -358,7 +358,7 @@ flowchart TB
 
 | Environment | Runs on | Purpose | Who/what updates it |
 | --- | --- | --- | --- |
-| **Local** | Your own Portainer/docker-compose stack | Iterate on a feature branch before it's reviewed or merged | You, on demand, from your local checkout |
+| **Local** | `docker compose up`, on your own machine | Iterate on a feature branch before it's reviewed or merged | You, on demand, from your local checkout |
 | **CI tests** | GitHub Actions (ephemeral) | Gate every push/PR - not a running environment | GitHub, automatically |
 | **GCP Dev** | Cloud Run + Cloud SQL, `ledger-dev.crosswaymtc.org` | Verify a real build against real cloud infra before it touches church data | GitHub Actions, automatically, on every push to `main` |
 | **GCP Prod** | Cloud Run + Cloud SQL, `ledger.crosswaymtc.org` | The real app the church uses | GitHub Actions, only after a human approves the `production` deployment gate |
