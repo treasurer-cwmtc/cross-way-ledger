@@ -87,6 +87,29 @@ This full connection string is what's stored in Secret Manager (see [§7](#7-sec
 
 The backend's container `CMD` runs `alembic upgrade head` before starting `uvicorn`, every time a new revision deploys — in both dev and prod. There is no separate manual migration step; deploying a new image *is* the migration step.
 
+### Auto-stopping dev when idle (cost optimization)
+
+Cloud SQL instances bill 24/7 regardless of usage — unlike Cloud Run, they don't scale to zero on their own. Since `ledger-db-dev` is only needed during active development, a small Cloud Function (`infra/dev-db-idle-stopper/`) checks its CPU utilization over the trailing 12 hours, on an hourly Cloud Scheduler trigger, and stops it (`activation-policy=NEVER`) if nothing happened in that window. `ledger-db-prod` is never touched by this - it's hardcoded to `ledger-db-dev` only.
+
+**There is no automatic wake-up.** Cloud SQL has no way to detect "someone is about to connect" and start itself back up the way a serverless database can. If you find `ledger-db-dev` stopped, start it manually:
+
+```bash
+gcloud sql instances patch ledger-db-dev --activation-policy=ALWAYS
+```
+
+> **Before pushing to `main`**, make sure dev is running - the CI/CD pipeline auto-deploys to dev on every push and will fail if it's stopped mid-deploy.
+
+The pieces, if you need to rebuild or adjust this:
+
+- **Service account**: `dev-db-idle-stopper@cross-way-ledger.iam.gserviceaccount.com`, with `roles/cloudsql.editor` (to stop the instance) and `roles/monitoring.viewer` (to read its CPU metric), plus `roles/run.invoker` on the function's own underlying Cloud Run service (required for Scheduler to call it).
+- **Cloud Function** (`dev-db-idle-stopper`, gen2, `us-south1`, HTTP-triggered, no unauthenticated access): source in `infra/dev-db-idle-stopper/`.
+- **Cloud Scheduler job** (`dev-db-idle-check`, `us-south1` is not a supported Scheduler region - this runs from `us-central1` instead, calling the function's URL cross-region): fires hourly (`0 * * * *`), authenticated via an OIDC token minted for the service account above.
+- To change the idle threshold, edit `IDLE_HOURS` in `infra/dev-db-idle-stopper/main.py` and redeploy:
+  ```bash
+  cd infra/dev-db-idle-stopper
+  gcloud functions deploy dev-db-idle-stopper --gen2 --region=us-south1 --source=.
+  ```
+
 ## 4. Cloud Run (the application)
 
 Both backend and frontend are deployed via the CI/CD pipeline (see [§6](#6-cicd-pipeline)), not manually — but for reference, a manual deploy looks like:
