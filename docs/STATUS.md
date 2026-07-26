@@ -3,11 +3,56 @@
 _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/cross-way-ledger
-**Last updated:** 2026-07-20 (database normalization, issue #23, redone and committed)
+**Last updated:** 2026-07-26 (table rename to standardized names, IAM database
+access, automated backups, and a full documentation overhaul)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack), **[ARCHITECTURE.md](ARCHITECTURE.md)**
 > (how it's put together, including the environment topology), and this file.
+
+---
+
+## Current state (read this before anything below)
+
+The infrastructure is **Google Cloud Run + Cloud SQL**, live in both `dev` and
+`prod`, not the DigitalOcean droplet plan described further down this file.
+The droplet-based staging/prod plan documented in *"This session:
+dev/test/staging/prod environment build-out"* (below) was the plan **as of
+2026-07-20** - it was superseded by an actual migration to Google Cloud in a
+later session, and the droplets described there were never created. Treat
+everything below this section as **historical engineering narrative**, not
+a description of what's running today. For the current, accurate picture:
+
+- **[Architecture](ARCHITECTURE.md)** - system diagrams and the real
+  deployment pipeline (§5).
+- **[Deployment Guide](DEPLOYMENT.md)** - the actual GCP setup: Cloud Run,
+  Cloud SQL, CI/CD, secrets, backups, and access control.
+- **[Data Dictionary](DATA_DICTIONARY.md)** - current table names (all 16
+  app tables were renamed to a standardized scheme on 2026-07-26 - e.g.
+  `reconciliation_entries` is now `ledger_actual`) and the `reporting`
+  schema.
+
+Recent milestones, most recent first:
+
+- ✅ **Full documentation overhaul** - user-facing runbooks added under
+  `docs/guides/` for every page and wizard, `docs/README.md` added as a
+  navigation hub, `DEPLOYMENT.md` rewritten for GCP, root `README.md`
+  rewritten, `ARCHITECTURE.md`'s diagrams brought current.
+- ✅ **IAM database authentication** enabled on both Cloud SQL instances -
+  `treasurer@crosswaymtc.org` and `admin@crosswaymtc.org` can connect via
+  Cloud SQL Studio with their Google identity, no database password needed.
+- ✅ **Automated backups + point-in-time recovery** enabled on both
+  instances (were previously disabled entirely, including on prod).
+- ✅ **All 16 app tables renamed** to a standardized naming scheme
+  (`ledger_*`, `chartofaccounts*`, `upload_*`, `campaign*`), verified with
+  zero data loss on both dev and prod, migration committed as a single
+  reversible Alembic revision.
+- ✅ **Reporting views** consolidated from 9 down to 1
+  (`reporting.vw_ledger_generalledger`) - the other 8 were redundant
+  single-table joins once the underlying tables had clean names.
+- ✅ **Migrated from the DigitalOcean droplet plan to Google Cloud Run +
+  Cloud SQL**, with a GitHub Actions pipeline that builds once and promotes
+  the same image from dev to prod behind a manual approval gate.
 
 ---
 

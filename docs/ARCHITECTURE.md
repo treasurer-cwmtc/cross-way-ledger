@@ -34,8 +34,8 @@ flowchart LR
   Picker UI directly.
 - **Backend** - one FastAPI process. Every route sits behind an auth check
   before it touches the database.
-- **Database** - SQLite locally, PostgreSQL in production - same code either
-  way.
+- **Database** - PostgreSQL everywhere: local development, automated tests,
+  and both cloud environments run the identical engine.
 - **Google** - verifies who's signing in, and stores receipt files (the app
   never sees a Google password or keeps a copy of the file itself).
 
@@ -47,13 +47,14 @@ flowchart LR
 - The **backend** is one FastAPI process. Every route is grouped into a
   router file (`app/routers/*.py`), each guarded by an auth dependency
   before it touches the database.
-- The **database** is PostgreSQL everywhere - dev, CI tests, staging, and
-  prod all run the identical engine (`docker-compose.yml` provisions it as
-  the `db` service). There is no SQLite fallback anywhere: an earlier
-  version of this app allowed one for zero-setup local dev, but a real
-  schema bug once hid behind that gap (it only surfaced once tested against
-  real Postgres) - see [DEPLOYMENT.md](DEPLOYMENT.md) for why environment
-  parity is treated as a hard requirement, not a nice-to-have.
+- The **database** is PostgreSQL everywhere - local development
+  (`docker-compose.yml` provisions it as the `db` service), automated
+  tests, and both cloud environments (Cloud SQL) all run the identical
+  engine. There is no SQLite fallback anywhere: an earlier version of this
+  app allowed one for zero-setup local dev, but a real schema bug once hid
+  behind that gap (it only surfaced once tested against real Postgres) -
+  see [DEPLOYMENT.md](DEPLOYMENT.md) for why environment parity is treated
+  as a hard requirement, not a nice-to-have.
 - **Google** is only ever talked to directly by the browser (Sign-In button,
   Drive file picker) or by the backend for two narrow purposes: verifying a
   Google Sign-In token really came from Google, and creating/finding the
@@ -156,157 +157,242 @@ granted. Only *editing* those two is permission-gated.
 
 ## 4. Data model
 
-Split into two diagrams - one crowded diagram with all 12 tables rendered
-too small to read, so this is the Chart of Accounts hierarchy on its own,
-then the ledgers that categorize against it. Each box shows only its most
-important fields, not every column - see `backend/app/models.py` for the
-complete field list.
+Split into three diagrams rather than one crowded 18-table diagram: the
+Chart of Accounts hierarchy, the ledgers that categorize against it, and
+the Pledge Campaigns domain (which shares no foreign keys with the other
+two - it's linked only by a `fund` name match, see 4c). Each box shows only
+its most important fields, not every column - see `backend/app/models.py`
+for the complete field list. Table names below are the real, current
+Postgres table names (see the "rename tables to standardized names"
+migration and [DATA_DICTIONARY.md](DATA_DICTIONARY.md) for the full
+before/after mapping).
 
 ### 4a. Chart of Accounts hierarchy
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "18px"}}}%%
 erDiagram
-    STATEMENT_CATEGORIES {
+    CHARTOFACCOUNTS_STATEMENT_CATEGORIES {
         int id PK
         string category "Budget, Expense, or Income"
         string name
     }
-    STATEMENT_ITEMS {
+    CHARTOFACCOUNTS_STATEMENT_ITEMS {
         int id PK
         string name
     }
-    CHART_OF_ACCOUNTS {
+    CHARTOFACCOUNTS {
         string account_no PK "derived, never hand-typed"
         string statement_detail
         string statement_description
     }
-    CATEGORY_RULES {
+    UPLOAD_RULES {
         int id PK
         string pattern "matches a bank line or Stripe fund"
         string account_no FK "assigns this account"
     }
 
-    STATEMENT_CATEGORIES ||--o{ STATEMENT_ITEMS : has
-    STATEMENT_ITEMS ||--o{ CHART_OF_ACCOUNTS : has
-    CHART_OF_ACCOUNTS ||--o{ CATEGORY_RULES : "assigned by"
+    CHARTOFACCOUNTS_STATEMENT_CATEGORIES ||--o{ CHARTOFACCOUNTS_STATEMENT_ITEMS : has
+    CHARTOFACCOUNTS_STATEMENT_ITEMS ||--o{ CHARTOFACCOUNTS : has
+    CHARTOFACCOUNTS ||--o{ UPLOAD_RULES : "assigned by"
 ```
 
 3 levels: Category → Item → Account (the leaf/"Detail" level). `account_no`
-is always built from the chain (never typed by hand). Rules assign an
-account automatically during Upload based on a bank keyword or Stripe fund
-name match.
+is always built from the chain (never typed by hand). `UPLOAD_RULES`
+assigns an account automatically during Upload based on a bank keyword or
+Stripe fund name match.
 
 ### 4b. Ledgers
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "18px"}}}%%
 erDiagram
-    CHART_OF_ACCOUNTS {
+    CHARTOFACCOUNTS {
         string account_no PK
     }
-    BANK_ACCOUNTS {
+    LEDGER_BANK_ACCOUNTS {
         int id PK
         string name "e.g. Chase Operating"
     }
-    RECON_RUNS {
+    UPLOAD_RUNS {
         int id PK
         string bank_filename
     }
-    RECONCILIATION_ENTRIES {
+    LEDGER_ACTUAL {
         int id PK
         string account_no FK
         float amount
         string dedup_key UK
     }
-    ACCRUAL_ENTRIES {
+    LEDGER_ACCRUAL {
         int id PK
         string account_no FK
         float amount
     }
-    BUDGET_ENTRIES {
+    LEDGER_BUDGET {
         int id PK
         string account_no FK
+        float amount
+    }
+    LEDGER_RESTRICTEDNETASSETS {
+        int id PK
+        string from_account_no FK
+        string to_account_no FK
         float amount
     }
 
-    CHART_OF_ACCOUNTS ||--o{ RECONCILIATION_ENTRIES : categorizes
-    CHART_OF_ACCOUNTS ||--o{ ACCRUAL_ENTRIES : categorizes
-    CHART_OF_ACCOUNTS ||--o{ BUDGET_ENTRIES : categorizes
-    BANK_ACCOUNTS ||--o{ RECONCILIATION_ENTRIES : "posted to"
-    BANK_ACCOUNTS ||--o{ ACCRUAL_ENTRIES : "posted to"
-    RECON_RUNS ||--o{ RECONCILIATION_ENTRIES : "imported from"
+    CHARTOFACCOUNTS ||--o{ LEDGER_ACTUAL : categorizes
+    CHARTOFACCOUNTS ||--o{ LEDGER_ACCRUAL : categorizes
+    CHARTOFACCOUNTS ||--o{ LEDGER_BUDGET : categorizes
+    CHARTOFACCOUNTS ||--o{ LEDGER_RESTRICTEDNETASSETS : "from/to leg"
+    LEDGER_BANK_ACCOUNTS ||--o{ LEDGER_ACTUAL : "posted to"
+    LEDGER_BANK_ACCOUNTS ||--o{ LEDGER_ACCRUAL : "posted to"
+    UPLOAD_RUNS ||--o{ LEDGER_ACTUAL : "imported from"
 ```
 
-- **Actual** (`RECONCILIATION_ENTRIES`), **Accrual**, and **Budget** are
-  three separate ledgers, all categorized against the same Chart of
-  Accounts. Actual and Accrual also carry a `bank_account_id`, a receipt
-  (Google Drive file id/link), and split/undo-split support (a child row
-  points back at its original via `split_parent_id`, not shown above to
-  keep this readable).
-- `RECON_RUNS` is the *preview* output of one Upload wizard run - pushing it
-  into Actual is what creates the persistent `RECONCILIATION_ENTRIES` rows.
+- **Actual** (`LEDGER_ACTUAL`), **Accrual**, and **Budget** are three
+  separate ledgers, all categorized against the same Chart of Accounts.
+  Actual and Accrual also carry a `bank_account_id`, a receipt (Google
+  Drive file id/link), and split/undo-split support (a child row points
+  back at its original via `split_parent_id`, not shown above to keep this
+  readable).
+- **Restricted Net Assets** (`LEDGER_RESTRICTEDNETASSETS`) is a permanent
+  reclassification between two Chart-of-Accounts lines, stored as a single
+  row with both legs (`from_account_no`/`to_account_no`) - General Ledger
+  synthesizes the two per-account lines from this one row at read time.
+- `UPLOAD_RUNS` is the *preview* output of one Upload wizard run - pushing
+  it into Actual is what creates the persistent `LEDGER_ACTUAL` rows.
+- General Ledger itself isn't a table - it's a Postgres view
+  (`reporting.vw_ledger_generalledger`) that unions all four ledgers above.
 - The `account_no` links in both diagrams are real, enforced foreign key
-  constraints (nullable on the three ledgers - `NULL` means uncategorized).
+  constraints (nullable on the ledgers - `NULL` means uncategorized).
   Schema changes go through Alembic migrations now, not hand-written
   `ALTER TABLE` statements - see
   [DEPLOYMENT.md](DEPLOYMENT.md#7-database-migrations).
 - Not pictured: `USERS` and `APP_SETTINGS` - standalone tables that
   configure the app itself, not tied to any of the above.
 
+### 4c. Pledge Campaigns
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}}}%%
+erDiagram
+    CAMPAIGN {
+        int id PK
+        string name
+        string fund_name "which donation fund this campaign tracks"
+        float goal_amount
+    }
+    CAMPAIGN_PLEDGE_SUBMISSIONS {
+        int id PK
+        int campaign_id FK
+        string submission_id UK
+        float initial_amount
+    }
+    CAMPAIGN_PLEDGE_MATCHES {
+        int id PK
+        int pledge_id FK
+        string donor_id FK "nullable - unmatched until a gift arrives"
+    }
+    CAMPAIGN_DONORS {
+        string donor_id PK
+        string joint_giver_id
+    }
+    CAMPAIGN_DONATIONS {
+        int id PK
+        string donor_id "matched by string equality, not a real FK"
+        string fund "matched to CAMPAIGN.fund_name by string equality"
+        float net_amount
+    }
+
+    CAMPAIGN ||--o{ CAMPAIGN_PLEDGE_SUBMISSIONS : has
+    CAMPAIGN_PLEDGE_SUBMISSIONS ||--o| CAMPAIGN_PLEDGE_MATCHES : "auto/manually matched via"
+    CAMPAIGN_PLEDGE_MATCHES }o--|| CAMPAIGN_DONORS : "resolves to"
+```
+
+- This domain shares no foreign keys with the Chart of Accounts/ledgers
+  above - a campaign only cares about donations whose `fund` value matches
+  its own `fund_name`, checked by plain string equality at read time (see
+  `routers/pledge_campaigns.py`), not a database constraint.
+- `CAMPAIGN_DONATIONS` is the Giving App's full donation export, imported
+  in full and not scoped to any one campaign - a campaign just declares
+  which `fund` value it cares about after the fact.
+- `CAMPAIGN_PLEDGE_MATCHES` is nullable by design: most pledges start
+  unmatched (no gift yet, so no donor row exists), and auto-matching (by
+  email) fills it in later without ever overwriting a manual match.
+- Reporting: `reporting` schema also exposes `vw_ledger_generalledger` for
+  the ledgers above - the campaign tables have no equivalent view, since
+  their own table names are already clean/direct to query.
+
 ---
 
 ## 5. Environments & deployment pipeline
 
-Four environments, each with a distinct job - see
+Local iteration, automated tests, a real cloud dev environment, then a real
+cloud prod environment - each with a distinct job. See
 [DEPLOYMENT.md](DEPLOYMENT.md) for the full setup instructions for each.
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "18px"}}}%%
 flowchart TB
-    Dev["Dev\nhome Portainer (LAN only)\nbuilt from whatever you're\ncurrently working on"]
+    Local["Local iteration\nPortainer / docker-compose\n(your own feature-branch work)"]
 
-    subgraph CI["GitHub Actions - every push to main"]
+    subgraph CI["GitHub Actions - on every push to main"]
         direction LR
-        Test["Run tests\n(real Postgres)"] --> Build["Build backend +\nfrontend images"]
+        Test["Run tests\n(real Postgres)"] --> Build["Build backend + frontend\nimages, tag :commit-sha"]
     end
 
-    GHCR[("GHCR\nimage registry")]
-    Staging["Staging droplet\nDigitalOcean - auto-deployed"]
-    Smoke{"Smoke test\npasses?"}
-    Approve{{"Manual\napproval"}}
-    Prod["Prod droplet\nDigitalOcean - real church data"]
-    Backup[("Nightly backup\npulled to Synology")]
+    AR[("Artifact Registry\nimage registry")]
+    DevEnv["GCP Dev\nCloud Run + Cloud SQL\nledger-dev.crosswaymtc.org\nauto-deployed"]
+    Approve{{"Manual approval\nGitHub Environment gate"}}
+    ProdEnv["GCP Prod\nCloud Run + Cloud SQL\nledger.crosswaymtc.org\nreal church data"]
+    Backup[("Automated Cloud SQL backups\n+ point-in-time recovery")]
 
-    Dev -.->|"you push when ready"| CI
-    Build --> GHCR
-    GHCR --> Staging
-    Staging --> Smoke
-    Smoke -->|yes| Approve
-    Approve -->|click| Prod
-    Prod --> Backup
+    Local -.->|"feature branch, PR, merge"| CI
+    Build --> AR
+    AR --> DevEnv
+    DevEnv -.->|"looks good?"| Approve
+    Approve -->|click| ProdEnv
+    ProdEnv --> Backup
 ```
 
 | Environment | Runs on | Purpose | Who/what updates it |
 | --- | --- | --- | --- |
-| **Dev** | Your home Portainer instance | Try out in-progress code before it's committed | You, on demand, from your local checkout |
+| **Local** | Your own Portainer/docker-compose stack | Iterate on a feature branch before it's reviewed or merged | You, on demand, from your local checkout |
 | **CI tests** | GitHub Actions (ephemeral) | Gate every push/PR - not a running environment | GitHub, automatically |
-| **Staging** | DigitalOcean droplet | Verify a real build against a real domain/HTTPS/Postgres before it touches church data | CI, automatically, on every push to `main` |
-| **Prod** | DigitalOcean droplet | The real app the church uses | CI, only after a human clicks Approve |
+| **GCP Dev** | Cloud Run + Cloud SQL, `ledger-dev.crosswaymtc.org` | Verify a real build against real cloud infra before it touches church data | GitHub Actions, automatically, on every push to `main` |
+| **GCP Prod** | Cloud Run + Cloud SQL, `ledger.crosswaymtc.org` | The real app the church uses | GitHub Actions, only after a human approves the `production` deployment gate |
 
-**Why dev can't just be "whatever's on staging"**: staging's job is to show
-*exactly* what's about to go to prod, so someone can trust it as a pre-prod
-checkpoint. If dev work (unmerged, unreviewed) could land there too, staging
-would stop meaning anything. Keeping dev on separate, LAN-only hardware
-means an in-progress mistake there can never be mistaken for "what's about
-to ship."
+Both Cloud SQL instances (`ledger-db-dev`, `ledger-db-prod`) run identical
+Postgres, with automated daily backups and point-in-time recovery enabled
+on both.
 
-**Why every environment runs identical Postgres + Caddy + Docker Compose**:
-mismatched environments hide bugs until the worst possible moment. This
-project hit exactly that once already - a schema bug only surfaced when
-tests started running against real Postgres instead of SQLite (see
-[STATUS.md](STATUS.md)). Same stack everywhere means "worked in dev" is
-actually predictive of "will work in prod."
+**"Build once, promote to prod"**: the same backend/frontend container
+images built for a commit are deployed to dev first, then - unchanged - to
+prod after approval. The frontend doesn't bake its API URL in at build
+time (an earlier build-time approach broke this exact promotion model,
+since dev's built image would forever point at dev): instead, a
+container-startup script generates a small `window.__ENV__` config from a
+per-environment `API_BASE` variable, so the identical image works
+correctly in both environments.
+
+**Migrations run automatically**: each backend container runs
+`alembic upgrade head` before starting the server, in every environment -
+there's no separate manual migration step.
+
+**Why dev can't just be "whatever's on my machine"**: GCP Dev's job is to
+show *exactly* what's about to go to prod - the same container image,
+the same cloud infrastructure, the same migration path - so a human can
+trust it as a genuine pre-prod checkpoint. Local iteration stays on
+separate, unpublished infrastructure so an in-progress mistake there can
+never be mistaken for "what's about to ship."
+
+**Why every environment runs identical Postgres**: mismatched environments
+hide bugs until the worst possible moment. This project hit exactly that
+once already - a schema bug only surfaced when tests started running
+against real Postgres instead of SQLite (see [STATUS.md](STATUS.md)). Same
+database engine everywhere means "worked in dev" is actually predictive of
+"will work in prod."
 
 ---
 
