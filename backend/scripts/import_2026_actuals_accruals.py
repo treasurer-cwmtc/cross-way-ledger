@@ -83,7 +83,7 @@ def step1_backup_and_delete_existing_2026(conn):
         "select id, transaction_date, posted_date, reconciled, is_reimbursement, account_no, "
         "description, bank_account_id, method, amount, check_invoice_name, bank_description, "
         "notes, dedup_key, source_run_id, source_file_name, source_file_link "
-        "from reconciliation_entries where extract(year from posted_date) = 2026"
+        "from ledger_actual where extract(year from posted_date) = 2026"
     )
     cols = [d.name for d in cur.description]
     rows = [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -92,7 +92,7 @@ def step1_backup_and_delete_existing_2026(conn):
         json.dump(rows, f, default=str)
     print(f"Backed up {len(rows)} existing 2026 Reconciliation rows to {backup_path}")
 
-    cur.execute("delete from reconciliation_entries where extract(year from posted_date) = 2026")
+    cur.execute("delete from ledger_actual where extract(year from posted_date) = 2026")
     conn.commit()
     print(f"Deleted {cur.rowcount} existing 2026 Reconciliation rows")
 
@@ -105,7 +105,7 @@ def step2_insert_reconciliation(conn):
     for r in rows:
         cur.execute(
             """
-            insert into reconciliation_entries
+            insert into ledger_actual
               (transaction_date, posted_date, reconciled, is_reimbursement, account_no,
                description, bank_account_id, method, amount, check_invoice_name,
                bank_description, notes, dedup_key, is_split, receipt_file_id,

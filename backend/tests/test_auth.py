@@ -29,17 +29,22 @@ if not database_url:
 engine = create_engine(database_url, future=True)
 TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 # Base.metadata only knows ORM-mapped tables - reporting views (see the
-# "add standardized reporting views" migration) are plain SQL, invisible to
-# it, so drop_all() would fail with a dependency error against any DB that
-# already has them (e.g. a scratch DB migrated via alembic for manual
-# verification before running tests). Drop every view up front, generically,
-# so this stays correct no matter what views future migrations add.
+# "add standardized reporting views" / "rename tables to standardized names"
+# migrations) are plain SQL, invisible to it, so drop_all() would fail with a
+# dependency error against any DB that already has them (e.g. a scratch DB
+# migrated via alembic for manual verification before running tests). Drop
+# every view up front, generically, across every non-system schema (the
+# reporting views live in their own `reporting` schema, not `public`) so
+# this stays correct no matter what views/schemas future migrations add.
 with engine.begin() as conn:
-    view_names = conn.execute(
-        text("SELECT viewname FROM pg_views WHERE schemaname = 'public'")
-    ).scalars().all()
-    for view_name in view_names:
-        conn.execute(text(f'DROP VIEW IF EXISTS "{view_name}" CASCADE'))
+    views = conn.execute(
+        text(
+            "SELECT schemaname, viewname FROM pg_views "
+            "WHERE schemaname NOT IN ('pg_catalog', 'information_schema')"
+        )
+    ).all()
+    for schema_name, view_name in views:
+        conn.execute(text(f'DROP VIEW IF EXISTS "{schema_name}"."{view_name}" CASCADE'))
 Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 

@@ -74,7 +74,7 @@ class StatementCategory(Base):
     (Budget/Expense/Income). `no` auto-increments within that Type and is
     never reused, even if a category is later deleted."""
 
-    __tablename__ = "statement_categories"
+    __tablename__ = "chartofaccounts_statement_categories"
     __table_args__ = (UniqueConstraint("category", "no", name="uq_statement_category_no"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -91,13 +91,15 @@ class StatementItem(Base):
     """Second level of the hierarchy. `no` auto-increments within its parent
     StatementCategory and is never reused."""
 
-    __tablename__ = "statement_items"
+    __tablename__ = "chartofaccounts_statement_items"
     __table_args__ = (
         UniqueConstraint("statement_category_id", "no", name="uq_statement_item_no"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    statement_category_id: Mapped[int] = mapped_column(ForeignKey("statement_categories.id"))
+    statement_category_id: Mapped[int] = mapped_column(
+        ForeignKey("chartofaccounts_statement_categories.id")
+    )
     no: Mapped[str] = mapped_column(String(2))
     name: Mapped[str] = mapped_column(String(120))
 
@@ -132,9 +134,11 @@ class ChartOfAccount(Base):
     already loaded this row.
     """
 
-    __tablename__ = "chart_of_accounts"
+    __tablename__ = "chartofaccounts"
     account_no: Mapped[str] = mapped_column(String(20), primary_key=True)
-    statement_item_id: Mapped[int] = mapped_column(ForeignKey("statement_items.id"))
+    statement_item_id: Mapped[int] = mapped_column(
+        ForeignKey("chartofaccounts_statement_items.id")
+    )
     category: Mapped[str] = mapped_column(String(50))  # Budget | Expense | Income
     statement_detail: Mapped[str] = mapped_column(String(120), default="")
     statement_detail_no: Mapped[str] = mapped_column(String(2), default="")
@@ -177,12 +181,12 @@ class CategoryRule(Base):
     priority: lower number wins when multiple rules match.
     """
 
-    __tablename__ = "category_rules"
+    __tablename__ = "upload_rules"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rule_type: Mapped[str] = mapped_column(String(20), index=True)
     pattern: Mapped[str] = mapped_column(String(200))
-    account_no: Mapped[str] = mapped_column(ForeignKey("chart_of_accounts.account_no"))
+    account_no: Mapped[str] = mapped_column(ForeignKey("chartofaccounts.account_no"))
     # Optional friendly "who/what" name to also stamp onto a matched bank
     # line's Description field (e.g. "Sams Club", "Direct Energy") - mirrors
     # the payee-name column on the treasurer's own upload-template
@@ -197,7 +201,7 @@ class CategoryRule(Base):
 
 
 class ReconRun(Base):
-    __tablename__ = "recon_runs"
+    __tablename__ = "upload_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -237,10 +241,10 @@ class ReconLine(Base):
     """One output line of the reconciliation (a per-donation breakout line or a
     categorized non-Stripe bank line)."""
 
-    __tablename__ = "recon_lines"
+    __tablename__ = "upload_lines"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("recon_runs.id"), index=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("upload_runs.id"), index=True)
 
     source: Mapped[str] = mapped_column(String(20))  # 'stripe' | 'bank'
     transaction_date: Mapped[str] = mapped_column(String(20), default="")
@@ -268,7 +272,7 @@ class BankAccount(Base):
     picked once per Upload run and carried onto every ReconciliationEntry
     created from that run; editable per-row afterward."""
 
-    __tablename__ = "bank_accounts"
+    __tablename__ = "ledger_bank_accounts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(120), unique=True)
@@ -289,7 +293,7 @@ class ReconciliationEntry(Base):
     sync with the Chart of Accounts.
     """
 
-    __tablename__ = "reconciliation_entries"
+    __tablename__ = "ledger_actual"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -297,11 +301,11 @@ class ReconciliationEntry(Base):
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
     account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     description: Mapped[str] = mapped_column(String(300), default="")
     bank_account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("bank_accounts.id"), nullable=True
+        ForeignKey("ledger_bank_accounts.id"), nullable=True
     )
     method: Mapped[str] = mapped_column(String(40), default="")
     amount: Mapped[float] = mapped_column(Float, default=0.0)
@@ -313,7 +317,7 @@ class ReconciliationEntry(Base):
     # run past 300 characters on their own (see build_dedup_key).
     dedup_key: Mapped[str] = mapped_column(String(1500), unique=True, index=True)
     source_run_id: Mapped[int | None] = mapped_column(
-        ForeignKey("recon_runs.id"), nullable=True
+        ForeignKey("upload_runs.id"), nullable=True
     )
     # The raw bank/Stripe upload file this line came from - carried down from
     # the ReconRun's own bank_filename/bank_file_link (or stripe_ equivalent,
@@ -332,7 +336,7 @@ class ReconciliationEntry(Base):
     # a "new" duplicate. It's just hidden from the normal list; the visible,
     # editable rows are its children (split_parent_id -> this row's id).
     split_parent_id: Mapped[int | None] = mapped_column(
-        ForeignKey("reconciliation_entries.id"), nullable=True
+        ForeignKey("ledger_actual.id"), nullable=True
     )
     is_split: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -359,7 +363,7 @@ class AccrualEntry(Base):
     the bank and shows up in Reconciliation.
     """
 
-    __tablename__ = "accrual_entries"
+    __tablename__ = "ledger_accrual"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -367,11 +371,11 @@ class AccrualEntry(Base):
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
     account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     description: Mapped[str] = mapped_column(String(300), default="")
     bank_account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("bank_accounts.id"), nullable=True
+        ForeignKey("ledger_bank_accounts.id"), nullable=True
     )
     method: Mapped[str] = mapped_column(String(40), default="")
     amount: Mapped[float] = mapped_column(Float, default=0.0)
@@ -386,7 +390,7 @@ class AccrualEntry(Base):
     # the original row (hidden via is_split) and creates children
     # (split_parent_id) rather than deleting anything.
     split_parent_id: Mapped[int | None] = mapped_column(
-        ForeignKey("accrual_entries.id"), nullable=True
+        ForeignKey("ledger_accrual.id"), nullable=True
     )
     is_split: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -419,12 +423,12 @@ class BudgetEntry(Base):
     ledger in the app - no separate stored year column.
     """
 
-    __tablename__ = "budget_entries"
+    __tablename__ = "ledger_budget"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     description: Mapped[str] = mapped_column(String(300), default="")
     amount: Mapped[float] = mapped_column(Float, default=0.0)
@@ -449,15 +453,15 @@ class RestrictedTransferEntry(Base):
     two rows that only net out by convention - General Ledger synthesizes
     the two per-account lines from this one row at read time."""
 
-    __tablename__ = "restricted_transfer_entries"
+    __tablename__ = "ledger_restrictednetassets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     from_account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     to_account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     amount: Mapped[float] = mapped_column(Float, default=0.0)
     description: Mapped[str] = mapped_column(String(300), default="")
@@ -476,7 +480,7 @@ class PledgeCampaign(Base):
     Reusable for future campaigns - nothing here is hardcoded to Phase 2.
     """
 
-    __tablename__ = "pledge_campaigns"
+    __tablename__ = "campaign"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), unique=True)
@@ -504,7 +508,7 @@ class Donor(Base):
     refreshed via the pledge campaign wizard, upserted by donor_id.
     """
 
-    __tablename__ = "donors"
+    __tablename__ = "campaign_donors"
 
     donor_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     donor_number: Mapped[str] = mapped_column(String(40), default="")
@@ -538,13 +542,13 @@ class Pledge(Base):
     PledgeDonorMatch, since a submission may not resolve to any donor yet.
     """
 
-    __tablename__ = "pledges"
+    __tablename__ = "campaign_pledge_submissions"
     __table_args__ = (
         UniqueConstraint("campaign_id", "submission_id", name="uq_pledge_submission"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    campaign_id: Mapped[int] = mapped_column(ForeignKey("pledge_campaigns.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaign.id"), index=True)
     submission_id: Mapped[str] = mapped_column(String(60))
     first_name: Mapped[str] = mapped_column(String(120), default="")
     last_name: Mapped[str] = mapped_column(String(120), default="")
@@ -583,11 +587,15 @@ class PledgeDonorMatch(Base):
     give and shows up in a future Donor import.
     """
 
-    __tablename__ = "pledge_donor_matches"
+    __tablename__ = "campaign_pledge_matches"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    pledge_id: Mapped[int] = mapped_column(ForeignKey("pledges.id"), unique=True, index=True)
-    donor_id: Mapped[str | None] = mapped_column(ForeignKey("donors.donor_id"), nullable=True)
+    pledge_id: Mapped[int] = mapped_column(
+        ForeignKey("campaign_pledge_submissions.id"), unique=True, index=True
+    )
+    donor_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign_donors.donor_id"), nullable=True
+    )
     match_source: Mapped[str] = mapped_column(String(10), default="auto")  # auto | manual
     matched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -612,7 +620,7 @@ class Donation(Base):
     same donation twice, globally.
     """
 
-    __tablename__ = "donations"
+    __tablename__ = "campaign_donations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     dedup_key: Mapped[str] = mapped_column(String(60), unique=True, index=True)

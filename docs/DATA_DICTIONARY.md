@@ -42,7 +42,7 @@ Generic key/value store for app-wide settings the treasurer adjusts by hand
 
 ---
 
-## `statement_categories`
+## `chartofaccounts_statement_categories`
 
 Level 1 of the Chart of Accounts hierarchy, scoped to a Type.
 
@@ -55,20 +55,20 @@ Level 1 of the Chart of Accounts hierarchy, scoped to a Type.
 
 ---
 
-## `statement_items`
+## `chartofaccounts_statement_items`
 
 Level 2 - children of a Statement Category.
 
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
 | `id` | integer | PK, auto-increment | |
-| `statement_category_id` | integer | FK -> `statement_categories.id`, NOT NULL | |
+| `statement_category_id` | integer | FK -> `chartofaccounts_statement_categories.id`, NOT NULL | |
 | `no` | string(2) | UK with `statement_category_id` | Auto-increments within its parent category, never reused. |
 | `name` | string(120) | NOT NULL | e.g. "Storage Unit" under the "Property" category. |
 
 ---
 
-## `chart_of_accounts`
+## `chartofaccounts`
 
 Level 3 / the leaf - one row per actual account. This is what every ledger
 entry ultimately categorizes against.
@@ -76,7 +76,7 @@ entry ultimately categorizes against.
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
 | `account_no` | string(20) | PK | Derived, never hand-typed: `<TypePrefix><CategoryNo><ItemNo><DetailNo>` (Type prefix is B/E/I). See `backend/app/services/coa_numbering.py`. |
-| `statement_item_id` | integer | FK -> `statement_items.id`, NOT NULL | |
+| `statement_item_id` | integer | FK -> `chartofaccounts_statement_items.id`, NOT NULL | |
 | `category` | string(50) | NOT NULL | Copy of the Type (Budget/Expense/Income) for convenient reads. |
 | `statement_category` / `statement_category_no` | *(not a column)* | derived | Read-only Python properties, not stored - derived live from `parent_item.statement_category` on every read, so they can never drift out of sync with the Chart of Accounts hierarchy. |
 | `statement_item` / `statement_item_no` | *(not a column)* | derived | Same pattern, one level up - derived live from `parent_item`. |
@@ -91,7 +91,7 @@ entry ultimately categorizes against.
 
 ---
 
-## `category_rules`
+## `upload_rules`
 
 User-editable rules that auto-categorize a line during Upload.
 
@@ -100,14 +100,14 @@ User-editable rules that auto-categorize a line during Upload.
 | `id` | integer | PK, auto-increment | |
 | `rule_type` | string(20) | indexed, NOT NULL | `bank_keyword` (matches a bank line's Description) or `stripe_fund` (matches a Stripe donation's fund name). |
 | `pattern` | string(200) | NOT NULL | The text to match against. |
-| `account_no` | string(20) | FK -> `chart_of_accounts.account_no`, NOT NULL | The account to assign on a match. |
+| `account_no` | string(20) | FK -> `chartofaccounts.account_no`, NOT NULL | The account to assign on a match. |
 | `priority` | integer | default `100` | Lower number wins when multiple rules match the same line. |
 | `active` | boolean | default `true` | Inactive rules are ignored during categorization but kept for reference. |
 | `created_at` | datetime (tz-aware) | server default: now | |
 
 ---
 
-## `bank_accounts`
+## `ledger_bank_accounts`
 
 Named bank account lookup (e.g. "Chase Operating").
 
@@ -119,10 +119,10 @@ Named bank account lookup (e.g. "Chase Operating").
 
 ---
 
-## `recon_runs`
+## `upload_runs`
 
 One Upload wizard run - the *ephemeral preview*, not the persistent ledger.
-Pushing a run into Actual creates `reconciliation_entries` rows separately.
+Pushing a run into Actual creates `ledger_actual` rows separately.
 
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
@@ -138,7 +138,7 @@ Pushing a run into Actual creates `reconciliation_entries` rows separately.
 
 ---
 
-## `recon_lines`
+## `upload_lines`
 
 One output line of a run - a per-donation breakout line or a categorized
 non-Stripe bank line. Deleted along with its parent run (cascade).
@@ -146,7 +146,7 @@ non-Stripe bank line. Deleted along with its parent run (cascade).
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
 | `id` | integer | PK, auto-increment | |
-| `run_id` | integer | FK -> `recon_runs.id`, indexed, NOT NULL | |
+| `run_id` | integer | FK -> `upload_runs.id`, indexed, NOT NULL | |
 | `source` | string(20) | NOT NULL | `stripe` or `bank`. |
 | `transaction_date` / `date_posted` | string(20) | default `""` | Stored as plain strings here (unlike every persistent ledger table, which uses a real `Date` column) - this table is a preview, not the source of truth. |
 | `description` | string(300) | default `""` | Donor or payee name. |
@@ -163,7 +163,7 @@ non-Stripe bank line. Deleted along with its parent run (cascade).
 
 ---
 
-## `reconciliation_entries`
+## `ledger_actual`
 
 The persistent, editable **Actual** ledger. Created by importing a
 completed Upload run (deduped via `dedup_key`), then freely hand-edited.
@@ -171,21 +171,21 @@ completed Upload run (deduped via `dedup_key`), then freely hand-edited.
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
 | `id` | integer | PK, auto-increment | |
-| `transaction_date` / `date_posted` | date | nullable | Real `Date` columns (unlike `recon_lines`). |
+| `transaction_date` / `date_posted` | date | nullable | Real `Date` columns (unlike `upload_lines`). |
 | `reconciled` | boolean | default `false` | Manually checked off once verified against the bank statement. |
 | `is_reimbursement` | boolean | default `false` | |
-| `account_no` | string(20) | FK -> `chart_of_accounts.account_no`, nullable | The only source of truth for this entry's categorization - Statement Description and every Chart-of-Accounts-derived column shown in the UI are looked up live from this, never stored, so they can't drift. Nullable = uncategorized; the API still sends/accepts `""` for that state, normalized to `NULL` on write by a shared validator (`models.py::_normalize_account_no`) and coerced back to `""` on read. |
+| `account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | The only source of truth for this entry's categorization - Statement Description and every Chart-of-Accounts-derived column shown in the UI are looked up live from this, never stored, so they can't drift. Nullable = uncategorized; the API still sends/accepts `""` for that state, normalized to `NULL` on write by a shared validator (`models.py::_normalize_account_no`) and coerced back to `""` on read. |
 | `description` | string(300) | default `""` | |
-| `bank_account_id` | integer | FK -> `bank_accounts.id`, nullable | |
+| `bank_account_id` | integer | FK -> `ledger_bank_accounts.id`, nullable | |
 | `method` | string(40) | default `""` | |
 | `amount` | float | default `0.0` | |
 | `check_invoice_name` | string(200) | default `""` | Also auto-filled with a receipt's filename when one is attached. |
 | `bank_description` | text | default `""` | Original, unedited bank statement text. |
 | `notes` | string(300) | default `""` | |
 | `dedup_key` | string(300) | UK, indexed, NOT NULL | Built from date + amount + reference/description - blocks re-importing the same statement twice. |
-| `source_run_id` | integer | FK -> `recon_runs.id`, nullable | Which Upload run this entry was imported from, if any. |
+| `source_run_id` | integer | FK -> `upload_runs.id`, nullable | Which Upload run this entry was imported from, if any. |
 | `created_at` | datetime (tz-aware) | server default: now | |
-| `split_parent_id` | integer | FK -> `reconciliation_entries.id` (self), nullable | If this row is a child of a split, points at the original. |
+| `split_parent_id` | integer | FK -> `ledger_actual.id` (self), nullable | If this row is a child of a split, points at the original. |
 | `is_split` | boolean | default `false` | `true` on the *original* row once it's been split - hides it from the normal list (its `dedup_key` still blocks re-import) in favor of its visible child rows. |
 | `receipt_file_id` | string(200) | default `""` | Google Drive file id, if a receipt is attached. |
 | `receipt_file_name` | string(300) | default `""` | |
@@ -193,10 +193,10 @@ completed Upload run (deduped via `dedup_key`), then freely hand-edited.
 
 ---
 
-## `accrual_entries`
+## `ledger_accrual`
 
 The persistent, editable **Accrual** ledger - same shape as
-`reconciliation_entries` minus the fields that only make sense for an
+`ledger_actual` minus the fields that only make sense for an
 imported bank transaction.
 
 | Column | Type | Constraints | Description |
@@ -205,16 +205,16 @@ imported bank transaction.
 | `transaction_date` / `date_posted` | date | nullable | |
 | `reconciled` | boolean | default `false` | |
 | `is_reimbursement` | boolean | default `false` | |
-| `account_no` | string(20) | FK -> `chart_of_accounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as `reconciliation_entries`. |
+| `account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as `ledger_actual`. |
 | `description` | string(300) | default `""` | |
-| `bank_account_id` | integer | FK -> `bank_accounts.id`, nullable | |
+| `bank_account_id` | integer | FK -> `ledger_bank_accounts.id`, nullable | |
 | `method` | string(40) | default `""` | |
 | `amount` | float | default `0.0` | |
 | `check_invoice_name` | string(200) | default `""` | |
 | `bank_description` | text | default `""` | |
 | `notes` | string(300) | default `""` | |
 | `created_at` | datetime (tz-aware) | server default: now | |
-| `split_parent_id` | integer | FK -> `accrual_entries.id` (self), nullable | Same split/undo-split mechanics as Actual. |
+| `split_parent_id` | integer | FK -> `ledger_accrual.id` (self), nullable | Same split/undo-split mechanics as Actual. |
 | `is_split` | boolean | default `false` | |
 | `receipt_file_id` / `receipt_file_name` / `receipt_web_view_link` | string(200) / string(300) / text | default `""` | Same Google Drive receipt attachment as Actual. |
 
@@ -223,7 +223,7 @@ never imported from an Upload run._
 
 ---
 
-## `budget_entries`
+## `ledger_budget`
 
 One planned-amount line for a Budget-category account. A single account can
 carry multiple lines in the same year (e.g. separate "Salary" and "Health
@@ -234,7 +234,7 @@ reporting.
 | --- | --- | --- | --- |
 | `id` | integer | PK, auto-increment | |
 | `transaction_date` | date | nullable | Conventionally Jan 1 of the planned year - `year` is filtered from this, same as every other ledger, with no separate stored year column. |
-| `account_no` | string(20) | FK -> `chart_of_accounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as the other ledgers. |
+| `account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as the other ledgers. |
 | `description` | string(300) | default `""` | |
 | `amount` | float | default `0.0` | Always a plain positive number (no debit/credit sign) - Income Statement reporting takes `abs()` of actual transaction amounts to match. |
 | `notes` | string(300) | default `""` | |
@@ -242,6 +242,68 @@ reporting.
 
 _No `bank_account_id`, `method`, `reconciled`, `is_reimbursement`, split
 support, or receipt fields - a planning figure isn't a real transaction._
+
+---
+
+## `ledger_restrictednetassets`
+
+One permanent reclassification between two Chart-of-Accounts lines - not a
+placeholder awaiting a bank transaction (unlike Accrual), the transfer *is*
+the economic event. Stored as a single row with both legs; General Ledger
+synthesizes the two per-account lines from it at read time.
+
+| Column | Type | Constraints | Description |
+| --- | --- | --- | --- |
+| `id` | integer | PK, auto-increment | |
+| `transaction_date` | date | nullable | |
+| `from_account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | The account money moves out of. |
+| `to_account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | The account money moves into. |
+| `amount` | float | default `0.0` | |
+| `description` | string(300) | default `""` | |
+| `notes` | string(300) | default `""` | |
+| `created_at` | datetime (tz-aware) | server default: now | |
+
+---
+
+## Pledge Campaigns domain
+
+| Table | Was | Purpose |
+| --- | --- | --- |
+| `campaign` | `pledge_campaigns` | One row per fundraising campaign (goal, starting balance, which `fund` it tracks). |
+| `campaign_donors` | `donors` | The persistent Giving App donor list, reusable across campaigns. |
+| `campaign_pledge_submissions` | `pledges` | One row per pledge form submission against a campaign. |
+| `campaign_pledge_matches` | `pledge_donor_matches` | Links a pledge submission to a donor (auto or manual). |
+| `campaign_donations` | `donations` | The Giving App's full donation export - not scoped to any one campaign; a campaign just claims a `fund` value. |
+
+See `backend/app/models.py` for full column definitions - unchanged other
+than table names and the FKs that follow them (`campaign.id`,
+`campaign_donors.donor_id`, `campaign_pledge_submissions.id`).
+
+---
+
+## Reporting views (`reporting` schema)
+
+One read-only view, standardized for external BI tools (Looker Studio,
+Google Sheets) - see the "rename tables to standardized names" migration.
+It lives in a dedicated `reporting` Postgres schema (not `public`), which
+is what lets a BI-facing view reuse a table's name in the future without
+colliding with it.
+
+Every other page reads straight from its own real table (`ledger_actual`,
+`ledger_accrual`, `ledger_budget`, `ledger_restrictednetassets`,
+`chartofaccounts`, `campaign_pledge_submissions`, `campaign_donations`) -
+those don't need a separate reporting view now that the tables themselves
+carry clean, standardized names. The one exception is General Ledger,
+which is a genuine UNION across 4 different ledger tables with no
+single-table equivalent.
+
+| View | Backs |
+| --- | --- |
+| `reporting.vw_ledger_generalledger` | General Ledger page (union of `ledger_actual`, `ledger_accrual`, `ledger_budget`, `ledger_restrictednetassets`) |
+
+The `ledger_reporting` Postgres role has its `search_path` set to prefer this
+schema, so unqualified queries from a BI tool resolve here without a schema
+prefix.
 
 ---
 

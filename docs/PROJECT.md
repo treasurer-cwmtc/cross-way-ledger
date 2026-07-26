@@ -170,11 +170,11 @@ Google Sheet's shape (`Transaction Date, Date Posted, Reconciled, Statement
 Description, Description, Bank Account, Method, Amount, Check/Invoice Name,
 Bank Description, Notes`, plus Chart-of-Accounts-derived reporting columns).
 
-- **Bank Account** (`bank_accounts` table) - a simple named lookup (seeded
+- **Bank Account** (`ledger_bank_accounts` table) - a simple named lookup (seeded
   with "Chase Operating" to match the church's real data). Picked once on the
   Upload tab before running Reconcile; every resulting row gets tagged with
   it when pushed to Reconciliation via the "Add to Reconciliation" button.
-- **ReconciliationEntry** (`reconciliation_entries` table) is the ledger row.
+- **ReconciliationEntry** (`ledger_actual` table) is the ledger row.
   Every field is directly editable in the grid except the Chart-of-Accounts-
   derived columns (Category, Statement, Item, Item Detail, Grouping,
   IsYouthChaplainShare, IsMissions, Type) and the date-part breakdown columns
@@ -251,7 +251,7 @@ Chase statement for another week. Structurally identical to
 `ReconciliationEntry` (same fields, same Chart-of-Accounts-derived reporting
 columns, same split/undo-split), but entirely hand-entered: there's no
 Upload run to push from, so no `dedup_key`/`source_run_id` and no import
-step - `AccrualEntry` (`accrual_entries` table), `backend/app/routers/accrual.py`.
+step - `AccrualEntry` (`ledger_accrual` table), `backend/app/routers/accrual.py`.
 
 - **Shared UI, separate data**: Reconciliation and Accrual are two different
   tables/endpoints presenting through the *same* register/detail-popup/split
@@ -418,30 +418,43 @@ quick overview - `GET /api/dashboard`
 - `users` — login accounts (username, PBKDF2 password hash, optional email for
   Google Sign-In, is_admin, active, `permissions` JSON list of granted page
   keys - ignored for admins, who always have full access).
-- `statement_categories` / `statement_items` / `chart_of_accounts` — the
-  3-level Chart of Accounts hierarchy (see above). `chart_of_accounts`'
-  Statement Category/Item name+number are derived live from `statement_items`
-  via a relationship, not stored - they can't drift out of sync.
-- `category_rules` — editable rules (`stripe_fund` | `bank_keyword`);
-  `account_no` is a real foreign key into `chart_of_accounts`.
-- `recon_runs` / `recon_lines` — one Upload run and its ephemeral output
+- `chartofaccounts_statement_categories` / `chartofaccounts_statement_items` /
+  `chartofaccounts` — the 3-level Chart of Accounts hierarchy (see above).
+  `chartofaccounts`' Statement Category/Item name+number are derived live
+  from `chartofaccounts_statement_items` via a relationship, not stored -
+  they can't drift out of sync.
+- `upload_rules` — editable rules (`stripe_fund` | `bank_keyword`);
+  `account_no` is a real foreign key into `chartofaccounts`.
+- `upload_runs` / `upload_lines` — one Upload run and its ephemeral output
   lines (preview only, not persisted long-term as the source of truth).
-- `bank_accounts` — named bank account lookup (e.g. "Chase Operating").
-- `reconciliation_entries` — the persistent, editable Reconciliation ledger;
+- `ledger_bank_accounts` — named bank account lookup (e.g. "Chase Operating").
+- `ledger_actual` — the persistent, editable Reconciliation ledger;
   `dedup_key` prevents re-importing the same transaction twice. `account_no`
-  is a nullable foreign key into `chart_of_accounts` (NULL = uncategorized;
+  is a nullable foreign key into `chartofaccounts` (NULL = uncategorized;
   the API still sends/accepts `""` for that state, normalized internally).
-- `accrual_entries` — the persistent, editable Accrual ledger; same shape as
-  `reconciliation_entries` minus `dedup_key`/`source_run_id` (always
+- `ledger_accrual` — the persistent, editable Accrual ledger; same shape as
+  `ledger_actual` minus `dedup_key`/`source_run_id` (always
   hand-entered, never imported); same nullable `account_no` foreign key.
 - `app_settings` — generic key/value store (Config tab: `prior_year_end_date`,
   `frequency_*`, `audit_validation_*`).
-- `budget_entries` — the Budget ledger; a Budget-category account can carry
+- `ledger_budget` — the Budget ledger; a Budget-category account can carry
   multiple lines per year (no uniqueness constraint), `year` derived from
   `transaction_date` like every other ledger; same nullable `account_no`
   foreign key.
+- `ledger_restrictednetassets` — permanent reclassifications between two
+  Chart-of-Accounts lines (both legs on one row); synthesized into two
+  General Ledger lines at read time.
+- `campaign` / `campaign_donors` / `campaign_pledge_submissions` /
+  `campaign_pledge_matches` / `campaign_donations` — the Pledge Campaigns
+  domain (was `pledge_campaigns` / `donors` / `pledges` /
+  `pledge_donor_matches` / `donations`).
+- One read-only reporting view, `reporting.vw_ledger_generalledger`, lives
+  in a dedicated `reporting` Postgres schema (not `public`) for external BI
+  tools (Looker Studio, Sheets) - every other page reads straight from its
+  own real table, which already carries a clean, standardized name. See
+  `docs/DATA_DICTIONARY.md#reporting-views-reporting-schema`.
 
-All four `account_no` columns above are enforced via real foreign key
+All `account_no` columns above are enforced via real foreign key
 constraints (Postgres enforces these natively). Deleting a Chart of Accounts
 row in use by a rule or any ledger entry is blocked with a friendly error
 (`coa.py::delete_account`) rather than silently orphaning data.
