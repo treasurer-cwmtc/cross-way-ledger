@@ -16,12 +16,14 @@ keyword-based auto-categorization.
 
 ### Deployment goal (important)
 
-- The end goal is to run this **on a VPS as a headless service — it must run
-  without a desktop / GUI** (no Excel, no Power BI Desktop, no interactive login).
-- Everything is containerized so `docker compose up` produces the **identical**
-  stack in every environment - dev, CI tests, staging, and prod all run the
-  same Postgres/FastAPI/nginx/Caddy stack, deliberately, after a schema bug
-  once hid behind a dev/prod database mismatch (see `docs/STATUS.md`).
+- The end goal is to run this **as a headless cloud service — it must run
+  without a desktop / GUI** (no Excel, no Power BI Desktop, no interactive
+  login). It runs on Google Cloud Run today, built from the same
+  containers used for local development.
+- Everything is containerized so the exact same image runs in every
+  environment - local dev, CI tests, and both cloud environments all run
+  the identical Postgres/FastAPI/nginx stack, deliberately, after a schema
+  bug once hid behind a dev/prod database mismatch (see `docs/STATUS.md`).
 - Expected usage: **1–4 people**, a **few times a month** (mostly one person).
 
 ---
@@ -396,17 +398,18 @@ quick overview - `GET /api/dashboard`
 | Layer | Choice |
 | --- | --- |
 | Backend | FastAPI + SQLAlchemy (Python 3.12) |
-| Database | PostgreSQL - every environment (dev/CI/staging/prod), no SQLite |
+| Database | PostgreSQL everywhere (local dev, tests, and both cloud environments), no SQLite |
 | Frontend | React + Vite + TypeScript |
-| Packaging | Docker Compose (db + backend + frontend, Caddy in front) |
+| Infrastructure | Google Cloud Run (containers) + Cloud SQL (PostgreSQL), built via GitHub Actions |
 
 - `DATABASE_URL` is required - there is no SQLite fallback (removed after a
   schema bug once hid behind it; see `docs/STATUS.md`).
-- Frontend nginx serves the built SPA and proxies `/api` → backend; Caddy sits
-  in front of that in every environment except plain local `docker compose`,
-  terminating TLS and publishing the only port reachable from outside the
-  box. See `docs/ARCHITECTURE.md` § 5 and `docs/DEPLOYMENT.md` for the full
-  dev/staging/prod topology.
+- Frontend nginx serves the built SPA and proxies `/api` → backend. In the
+  cloud environments, each Cloud Run frontend service reads its backend's
+  URL from a runtime-generated config file rather than a build-time value,
+  so the identical container image can be promoted from dev to prod
+  unchanged. See `docs/ARCHITECTURE.md` § 5 and `docs/DEPLOYMENT.md` for
+  the full dev/prod topology and CI/CD pipeline.
 - **Migrations**: Alembic owns the schema (`backend/alembic/`); the app no
   longer creates or alters tables itself. `alembic upgrade head` runs
   automatically as part of the Docker container's startup command, and must
