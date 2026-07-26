@@ -74,7 +74,7 @@ class StatementCategory(Base):
     (Budget/Expense/Income). `no` auto-increments within that Type and is
     never reused, even if a category is later deleted."""
 
-    __tablename__ = "ledger_statement_categories"
+    __tablename__ = "chartofaccounts_statement_categories"
     __table_args__ = (UniqueConstraint("category", "no", name="uq_statement_category_no"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -91,13 +91,15 @@ class StatementItem(Base):
     """Second level of the hierarchy. `no` auto-increments within its parent
     StatementCategory and is never reused."""
 
-    __tablename__ = "ledger_statement_items"
+    __tablename__ = "chartofaccounts_statement_items"
     __table_args__ = (
         UniqueConstraint("statement_category_id", "no", name="uq_statement_item_no"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    statement_category_id: Mapped[int] = mapped_column(ForeignKey("ledger_statement_categories.id"))
+    statement_category_id: Mapped[int] = mapped_column(
+        ForeignKey("chartofaccounts_statement_categories.id")
+    )
     no: Mapped[str] = mapped_column(String(2))
     name: Mapped[str] = mapped_column(String(120))
 
@@ -132,9 +134,11 @@ class ChartOfAccount(Base):
     already loaded this row.
     """
 
-    __tablename__ = "ledger_chartofaccounts"
+    __tablename__ = "chartofaccounts"
     account_no: Mapped[str] = mapped_column(String(20), primary_key=True)
-    statement_item_id: Mapped[int] = mapped_column(ForeignKey("ledger_statement_items.id"))
+    statement_item_id: Mapped[int] = mapped_column(
+        ForeignKey("chartofaccounts_statement_items.id")
+    )
     category: Mapped[str] = mapped_column(String(50))  # Budget | Expense | Income
     statement_detail: Mapped[str] = mapped_column(String(120), default="")
     statement_detail_no: Mapped[str] = mapped_column(String(2), default="")
@@ -177,12 +181,12 @@ class CategoryRule(Base):
     priority: lower number wins when multiple rules match.
     """
 
-    __tablename__ = "ledger_category_rules"
+    __tablename__ = "upload_rules"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rule_type: Mapped[str] = mapped_column(String(20), index=True)
     pattern: Mapped[str] = mapped_column(String(200))
-    account_no: Mapped[str] = mapped_column(ForeignKey("ledger_chartofaccounts.account_no"))
+    account_no: Mapped[str] = mapped_column(ForeignKey("chartofaccounts.account_no"))
     # Optional friendly "who/what" name to also stamp onto a matched bank
     # line's Description field (e.g. "Sams Club", "Direct Energy") - mirrors
     # the payee-name column on the treasurer's own upload-template
@@ -297,7 +301,7 @@ class ReconciliationEntry(Base):
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
     account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("ledger_chartofaccounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     description: Mapped[str] = mapped_column(String(300), default="")
     bank_account_id: Mapped[int | None] = mapped_column(
@@ -367,7 +371,7 @@ class AccrualEntry(Base):
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
     account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("ledger_chartofaccounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     description: Mapped[str] = mapped_column(String(300), default="")
     bank_account_id: Mapped[int | None] = mapped_column(
@@ -424,7 +428,7 @@ class BudgetEntry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("ledger_chartofaccounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     description: Mapped[str] = mapped_column(String(300), default="")
     amount: Mapped[float] = mapped_column(Float, default=0.0)
@@ -454,10 +458,10 @@ class RestrictedTransferEntry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     from_account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("ledger_chartofaccounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     to_account_no: Mapped[str | None] = mapped_column(
-        ForeignKey("ledger_chartofaccounts.account_no"), nullable=True, default=None
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
     )
     amount: Mapped[float] = mapped_column(Float, default=0.0)
     description: Mapped[str] = mapped_column(String(300), default="")
@@ -476,7 +480,7 @@ class PledgeCampaign(Base):
     Reusable for future campaigns - nothing here is hardcoded to Phase 2.
     """
 
-    __tablename__ = "campaigns"
+    __tablename__ = "campaign"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), unique=True)
@@ -544,7 +548,7 @@ class Pledge(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), index=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaign.id"), index=True)
     submission_id: Mapped[str] = mapped_column(String(60))
     first_name: Mapped[str] = mapped_column(String(120), default="")
     last_name: Mapped[str] = mapped_column(String(120), default="")

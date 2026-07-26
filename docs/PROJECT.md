@@ -418,18 +418,19 @@ quick overview - `GET /api/dashboard`
 - `users` — login accounts (username, PBKDF2 password hash, optional email for
   Google Sign-In, is_admin, active, `permissions` JSON list of granted page
   keys - ignored for admins, who always have full access).
-- `ledger_statement_categories` / `ledger_statement_items` / `ledger_chartofaccounts` —
-  the 3-level Chart of Accounts hierarchy (see above). `ledger_chartofaccounts`'
-  Statement Category/Item name+number are derived live from `ledger_statement_items`
-  via a relationship, not stored - they can't drift out of sync.
-- `ledger_category_rules` — editable rules (`stripe_fund` | `bank_keyword`);
-  `account_no` is a real foreign key into `ledger_chartofaccounts`.
+- `chartofaccounts_statement_categories` / `chartofaccounts_statement_items` /
+  `chartofaccounts` — the 3-level Chart of Accounts hierarchy (see above).
+  `chartofaccounts`' Statement Category/Item name+number are derived live
+  from `chartofaccounts_statement_items` via a relationship, not stored -
+  they can't drift out of sync.
+- `upload_rules` — editable rules (`stripe_fund` | `bank_keyword`);
+  `account_no` is a real foreign key into `chartofaccounts`.
 - `upload_runs` / `upload_lines` — one Upload run and its ephemeral output
   lines (preview only, not persisted long-term as the source of truth).
 - `ledger_bank_accounts` — named bank account lookup (e.g. "Chase Operating").
 - `ledger_actual` — the persistent, editable Reconciliation ledger;
   `dedup_key` prevents re-importing the same transaction twice. `account_no`
-  is a nullable foreign key into `ledger_chartofaccounts` (NULL = uncategorized;
+  is a nullable foreign key into `chartofaccounts` (NULL = uncategorized;
   the API still sends/accepts `""` for that state, normalized internally).
 - `ledger_accrual` — the persistent, editable Accrual ledger; same shape as
   `ledger_actual` minus `dedup_key`/`source_run_id` (always
@@ -443,13 +444,15 @@ quick overview - `GET /api/dashboard`
 - `ledger_restrictednetassets` — permanent reclassifications between two
   Chart-of-Accounts lines (both legs on one row); synthesized into two
   General Ledger lines at read time.
-- `campaigns` / `campaign_donors` / `campaign_pledge_submissions` /
+- `campaign` / `campaign_donors` / `campaign_pledge_submissions` /
   `campaign_pledge_matches` / `campaign_donations` — the Pledge Campaigns
   domain (was `pledge_campaigns` / `donors` / `pledges` /
   `pledge_donor_matches` / `donations`).
-- Nine read-only reporting views live in a dedicated `reporting` Postgres
-  schema (not `public`), one per app page, for external BI tools (Looker
-  Studio, Sheets) - see `docs/DATA_DICTIONARY.md#reporting-views-reporting-schema`.
+- One read-only reporting view, `reporting.vw_ledger_generalledger`, lives
+  in a dedicated `reporting` Postgres schema (not `public`) for external BI
+  tools (Looker Studio, Sheets) - every other page reads straight from its
+  own real table, which already carries a clean, standardized name. See
+  `docs/DATA_DICTIONARY.md#reporting-views-reporting-schema`.
 
 All `account_no` columns above are enforced via real foreign key
 constraints (Postgres enforces these natively). Deleting a Chart of Accounts

@@ -42,7 +42,7 @@ Generic key/value store for app-wide settings the treasurer adjusts by hand
 
 ---
 
-## `ledger_statement_categories`
+## `chartofaccounts_statement_categories`
 
 Level 1 of the Chart of Accounts hierarchy, scoped to a Type.
 
@@ -55,20 +55,20 @@ Level 1 of the Chart of Accounts hierarchy, scoped to a Type.
 
 ---
 
-## `ledger_statement_items`
+## `chartofaccounts_statement_items`
 
 Level 2 - children of a Statement Category.
 
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
 | `id` | integer | PK, auto-increment | |
-| `statement_category_id` | integer | FK -> `ledger_statement_categories.id`, NOT NULL | |
+| `statement_category_id` | integer | FK -> `chartofaccounts_statement_categories.id`, NOT NULL | |
 | `no` | string(2) | UK with `statement_category_id` | Auto-increments within its parent category, never reused. |
 | `name` | string(120) | NOT NULL | e.g. "Storage Unit" under the "Property" category. |
 
 ---
 
-## `ledger_chartofaccounts`
+## `chartofaccounts`
 
 Level 3 / the leaf - one row per actual account. This is what every ledger
 entry ultimately categorizes against.
@@ -76,7 +76,7 @@ entry ultimately categorizes against.
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
 | `account_no` | string(20) | PK | Derived, never hand-typed: `<TypePrefix><CategoryNo><ItemNo><DetailNo>` (Type prefix is B/E/I). See `backend/app/services/coa_numbering.py`. |
-| `statement_item_id` | integer | FK -> `ledger_statement_items.id`, NOT NULL | |
+| `statement_item_id` | integer | FK -> `chartofaccounts_statement_items.id`, NOT NULL | |
 | `category` | string(50) | NOT NULL | Copy of the Type (Budget/Expense/Income) for convenient reads. |
 | `statement_category` / `statement_category_no` | *(not a column)* | derived | Read-only Python properties, not stored - derived live from `parent_item.statement_category` on every read, so they can never drift out of sync with the Chart of Accounts hierarchy. |
 | `statement_item` / `statement_item_no` | *(not a column)* | derived | Same pattern, one level up - derived live from `parent_item`. |
@@ -91,7 +91,7 @@ entry ultimately categorizes against.
 
 ---
 
-## `ledger_category_rules`
+## `upload_rules`
 
 User-editable rules that auto-categorize a line during Upload.
 
@@ -100,7 +100,7 @@ User-editable rules that auto-categorize a line during Upload.
 | `id` | integer | PK, auto-increment | |
 | `rule_type` | string(20) | indexed, NOT NULL | `bank_keyword` (matches a bank line's Description) or `stripe_fund` (matches a Stripe donation's fund name). |
 | `pattern` | string(200) | NOT NULL | The text to match against. |
-| `account_no` | string(20) | FK -> `ledger_chartofaccounts.account_no`, NOT NULL | The account to assign on a match. |
+| `account_no` | string(20) | FK -> `chartofaccounts.account_no`, NOT NULL | The account to assign on a match. |
 | `priority` | integer | default `100` | Lower number wins when multiple rules match the same line. |
 | `active` | boolean | default `true` | Inactive rules are ignored during categorization but kept for reference. |
 | `created_at` | datetime (tz-aware) | server default: now | |
@@ -174,7 +174,7 @@ completed Upload run (deduped via `dedup_key`), then freely hand-edited.
 | `transaction_date` / `date_posted` | date | nullable | Real `Date` columns (unlike `upload_lines`). |
 | `reconciled` | boolean | default `false` | Manually checked off once verified against the bank statement. |
 | `is_reimbursement` | boolean | default `false` | |
-| `account_no` | string(20) | FK -> `ledger_chartofaccounts.account_no`, nullable | The only source of truth for this entry's categorization - Statement Description and every Chart-of-Accounts-derived column shown in the UI are looked up live from this, never stored, so they can't drift. Nullable = uncategorized; the API still sends/accepts `""` for that state, normalized to `NULL` on write by a shared validator (`models.py::_normalize_account_no`) and coerced back to `""` on read. |
+| `account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | The only source of truth for this entry's categorization - Statement Description and every Chart-of-Accounts-derived column shown in the UI are looked up live from this, never stored, so they can't drift. Nullable = uncategorized; the API still sends/accepts `""` for that state, normalized to `NULL` on write by a shared validator (`models.py::_normalize_account_no`) and coerced back to `""` on read. |
 | `description` | string(300) | default `""` | |
 | `bank_account_id` | integer | FK -> `ledger_bank_accounts.id`, nullable | |
 | `method` | string(40) | default `""` | |
@@ -205,7 +205,7 @@ imported bank transaction.
 | `transaction_date` / `date_posted` | date | nullable | |
 | `reconciled` | boolean | default `false` | |
 | `is_reimbursement` | boolean | default `false` | |
-| `account_no` | string(20) | FK -> `ledger_chartofaccounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as `ledger_actual`. |
+| `account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as `ledger_actual`. |
 | `description` | string(300) | default `""` | |
 | `bank_account_id` | integer | FK -> `ledger_bank_accounts.id`, nullable | |
 | `method` | string(40) | default `""` | |
@@ -234,7 +234,7 @@ reporting.
 | --- | --- | --- | --- |
 | `id` | integer | PK, auto-increment | |
 | `transaction_date` | date | nullable | Conventionally Jan 1 of the planned year - `year` is filtered from this, same as every other ledger, with no separate stored year column. |
-| `account_no` | string(20) | FK -> `ledger_chartofaccounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as the other ledgers. |
+| `account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | Same live-lookup and `""`/`NULL` normalization pattern as the other ledgers. |
 | `description` | string(300) | default `""` | |
 | `amount` | float | default `0.0` | Always a plain positive number (no debit/credit sign) - Income Statement reporting takes `abs()` of actual transaction amounts to match. |
 | `notes` | string(300) | default `""` | |
@@ -256,8 +256,8 @@ synthesizes the two per-account lines from it at read time.
 | --- | --- | --- | --- |
 | `id` | integer | PK, auto-increment | |
 | `transaction_date` | date | nullable | |
-| `from_account_no` | string(20) | FK -> `ledger_chartofaccounts.account_no`, nullable | The account money moves out of. |
-| `to_account_no` | string(20) | FK -> `ledger_chartofaccounts.account_no`, nullable | The account money moves into. |
+| `from_account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | The account money moves out of. |
+| `to_account_no` | string(20) | FK -> `chartofaccounts.account_no`, nullable | The account money moves into. |
 | `amount` | float | default `0.0` | |
 | `description` | string(300) | default `""` | |
 | `notes` | string(300) | default `""` | |
@@ -269,39 +269,37 @@ synthesizes the two per-account lines from it at read time.
 
 | Table | Was | Purpose |
 | --- | --- | --- |
-| `campaigns` | `pledge_campaigns` | One row per fundraising campaign (goal, starting balance, which `fund` it tracks). |
+| `campaign` | `pledge_campaigns` | One row per fundraising campaign (goal, starting balance, which `fund` it tracks). |
 | `campaign_donors` | `donors` | The persistent Giving App donor list, reusable across campaigns. |
 | `campaign_pledge_submissions` | `pledges` | One row per pledge form submission against a campaign. |
 | `campaign_pledge_matches` | `pledge_donor_matches` | Links a pledge submission to a donor (auto or manual). |
 | `campaign_donations` | `donations` | The Giving App's full donation export - not scoped to any one campaign; a campaign just claims a `fund` value. |
 
 See `backend/app/models.py` for full column definitions - unchanged other
-than table names and the FKs that follow them (`campaigns.id`,
+than table names and the FKs that follow them (`campaign.id`,
 `campaign_donors.donor_id`, `campaign_pledge_submissions.id`).
 
 ---
 
 ## Reporting views (`reporting` schema)
 
-Nine read-only views, one per app page, standardized for external BI tools
-(Looker Studio, Google Sheets) - see the "add standardized reporting views"
-and "rename tables to standardized names" migrations. They live in a
-dedicated `reporting` Postgres schema (not `public`), which is what lets
-`reporting.ledger_actual` (the friendly, joined-for-readability view) coexist
-with `public.ledger_actual` (the real, raw table the app itself reads and
-writes) without a name collision.
+One read-only view, standardized for external BI tools (Looker Studio,
+Google Sheets) - see the "rename tables to standardized names" migration.
+It lives in a dedicated `reporting` Postgres schema (not `public`), which
+is what lets a BI-facing view reuse a table's name in the future without
+colliding with it.
+
+Every other page reads straight from its own real table (`ledger_actual`,
+`ledger_accrual`, `ledger_budget`, `ledger_restrictednetassets`,
+`chartofaccounts`, `campaign_pledge_submissions`, `campaign_donations`) -
+those don't need a separate reporting view now that the tables themselves
+carry clean, standardized names. The one exception is General Ledger,
+which is a genuine UNION across 4 different ledger tables with no
+single-table equivalent.
 
 | View | Backs |
 | --- | --- |
-| `reporting.ledger_actual` | Actual page |
-| `reporting.ledger_accrual` | Accrual page |
-| `reporting.ledger_budget` | Budget page |
-| `reporting.ledger_restrictednetassets` | Restricted Net Assets page |
-| `reporting.ledger_chartofaccounts` | Chart of Accounts page |
-| `reporting.vw_ledger_generalledger` | General Ledger page (union of the 4 ledger tables) |
-| `reporting.campaign_pledges` | Raw pledge submissions, joined to matched donor |
-| `reporting.campaign_actual` | Raw donations, joined to campaign + donor |
-| `reporting.campaign_detail` | Campaign Details tab (joint-giver-folding logic) |
+| `reporting.vw_ledger_generalledger` | General Ledger page (union of `ledger_actual`, `ledger_accrual`, `ledger_budget`, `ledger_restrictednetassets`) |
 
 The `ledger_reporting` Postgres role has its `search_path` set to prefer this
 schema, so unqualified queries from a BI tool resolve here without a schema
