@@ -151,14 +151,13 @@ def _transfer_to_lines(
     return lines
 
 
-@router.get("", response_model=list[GeneralLedgerLineOut])
-def list_general_ledger(
-    year: int | None = None, db: Session = Depends(get_db)
-) -> list[GeneralLedgerLineOut]:
+def build_general_ledger_lines(db: Session, year: int | None = None) -> list[GeneralLedgerLineOut]:
     """The union of Reconciliation + Accrual + Budget - the single source
     every financial report should read from, rather than each report
-    re-deriving its own view of "all the transactions". Read-only: edit the
-    underlying entry on its own tab (Reconciliation/Accrual/Budget)."""
+    re-deriving its own view of "all the transactions". Shared by the
+    frontend's own /api/general-ledger route and the Google-Sheets-facing
+    /api/sheets/general-ledger route (see routers/sheets_export.py), which
+    authenticates differently but must return identical data."""
     accounts = list(db.scalars(select(ChartOfAccount)))
     coa_by_no = {a.account_no: a for a in accounts}
     bank_accounts_by_id = {b.id: b for b in db.scalars(select(BankAccount))}
@@ -189,3 +188,10 @@ def list_general_ledger(
 
     lines.sort(key=lambda line: line.posted_date or date.min, reverse=True)
     return lines
+
+
+@router.get("", response_model=list[GeneralLedgerLineOut])
+def list_general_ledger(
+    year: int | None = None, db: Session = Depends(get_db)
+) -> list[GeneralLedgerLineOut]:
+    return build_general_ledger_lines(db, year)

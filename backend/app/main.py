@@ -23,6 +23,7 @@ from .routers import (
     reconciliation,
     restricted_transfers,
     rules,
+    sheets_export,
 )
 from .routers import settings as settings_router
 from .seed import seed
@@ -67,6 +68,7 @@ app.include_router(settings_router.router)
 app.include_router(pledge_campaigns.router)
 app.include_router(donors.router)
 app.include_router(donations.router)
+app.include_router(sheets_export.router)
 
 
 @app.exception_handler(IntegrityError)

@@ -251,7 +251,11 @@ They can then open **Cloud SQL Studio** in the Console and sign in with their Go
 
 ## 10. External BI tools (Looker Studio, Google Sheets)
 
-A dedicated read-only Postgres role, **`ledger_reporting`**, exists specifically for BI tools that can't use IAM authentication (Looker Studio's PostgreSQL connector, Google Sheets' Connected Sheets). It has `SELECT`-only access to the `reporting` schema, which currently exposes a single view, `vw_ledger_generalledger` — the General Ledger, unioned across all four ledgers (see [Data Dictionary](DATA_DICTIONARY.md#reporting-views-reporting-schema)).
+### Looker Studio
+
+A dedicated read-only Postgres role, **`ledger_reporting`**, exists specifically for BI tools that connect directly to Postgres (Looker Studio's PostgreSQL connector). It has `SELECT`-only access to the `reporting` schema, which currently exposes a single view, `vw_ledger_generalledger` — the General Ledger, unioned across all four ledgers (see [Data Dictionary](DATA_DICTIONARY.md#reporting-views-reporting-schema)).
+
+> **Google Sheets has no native Postgres/Cloud SQL connector** — its "Connected Sheets" feature only supports BigQuery, Google Analytics, and a few other Google products. Don't try to point Sheets' data connector at `ledger_reporting` directly; use the Apps Script approach below instead.
 
 To let an external tool connect:
 
@@ -261,6 +265,28 @@ To let an external tool connect:
    gcloud sql instances describe ledger-db-prod --format="value(serverCaCert.cert)"
    ```
 3. Connect using the `ledger_reporting` username/password, with SSL enabled and the CA certificate uploaded, but **client authentication left unchecked** (Looker Studio's toggle for this specifically breaks the connection if enabled with only a server cert available).
+
+> **`ledger-db-prod`'s public IP is left open to `0.0.0.0/0`** specifically so Looker Studio can reach it (SSL-only, read-only credential) — this is intentional, not an oversight. If you ever run `gcloud sql instances patch ledger-db-prod --authorized-networks=...` for an unrelated reason (e.g. temporarily authorizing your own IP to run a one-off query), **remember that flag replaces the whole list, not adds to it** — you'll silently revoke Looker Studio's access. Always restore `0.0.0.0/0` afterward:
+> ```bash
+> gcloud sql instances patch ledger-db-prod --authorized-networks=0.0.0.0/0
+> ```
+
+### Google Sheets General Ledger export
+
+Since Sheets can't connect to Postgres directly, the backend exposes a dedicated read-only endpoint, `GET /api/sheets/general-ledger`, authenticated with the **signed-in user's own Google identity** (via Apps Script's `ScriptApp.getIdentityToken()`) rather than a stored password — matching how every other page in the app already authenticates. The code lives in `infra/sheets-general-ledger/`.
+
+**One-time setup, per Sheet:**
+
+1. Create a new Google Sheet, then **Extensions → Apps Script**.
+2. In the Apps Script editor, click the gear icon (**Project Settings**) and check **"Show `appsscript.json` manifest file in editor."**
+3. Paste `infra/sheets-general-ledger/Code.gs` into the script editor, and `infra/sheets-general-ledger/appsscript.json`'s contents into the manifest file.
+4. Still in **Project Settings**, under **Google Cloud Platform (GCP) Project**, click **Change project** and enter the `cross-way-ledger` project number (`gcloud projects describe cross-way-ledger --format="value(projectNumber)"`). This is what lets `getIdentityToken()` issue a real, verifiable Google ID token — without it, the script only has access to a limited default project that can't do this.
+5. Reload the Sheet. A new **Cross Way Ledger** menu appears — click **Refresh General Ledger**. The first run prompts a normal Google OAuth consent screen (since the project's consent screen is already configured **Internal**, any `@crosswaymtc.org` account can approve it immediately, no external review needed).
+6. Once the "General Ledger" tab populates, select the data and **Insert → Pivot table** — a fully native Sheets pivot table, built on real data.
+
+**Why no explicit database credential is needed**: the backend verifies the Google ID token's signature, checks it's a `crosswaymtc.org` account, and looks up that email against the app's own Users table — the same account (and same `general-ledger` permission) already used to sign into the app itself. Unlike `/api/auth/google` (this app's own sign-in), the token's audience isn't pinned to one specific OAuth client, since Apps Script auto-provisions its own per-script client under the linked GCP project rather than using a fixed, predictable one — security instead rests on signature validity, domain, and requiring a pre-provisioned app account, the same bar every other page enforces.
+
+**Refreshing**: click the menu item, or run `setupDailyRefreshTrigger()` once from the Apps Script editor (not the Sheet) to refresh automatically every morning instead.
 
 ## 11. Troubleshooting
 
@@ -282,6 +308,12 @@ proxy_pass $backend_upstream;
 **Looker Studio's "Authenticate" button stays greyed out** — this almost always means SSL is enabled without a server certificate uploaded. Download and upload the CA cert (see [§10](#10-external-bi-tools-looker-studio-google-sheets)).
 
 **`gcloud` commands suddenly fail with a reauthentication error** — Google's OAuth session for the CLI expires periodically; run `gcloud auth login` again.
+
+**Looker Studio (or any external BI tool) suddenly can't connect, with no config changes on its end** — check `ledger-db-prod`'s authorized networks (`gcloud sql instances describe ledger-db-prod --format="yaml(settings.ipConfiguration)"`). `--authorized-networks` **replaces** the entire list rather than appending to it, so any one-off `gcloud sql instances patch --authorized-networks=<your IP>` (e.g. to run a manual query) silently removes the `0.0.0.0/0` rule Looker Studio depends on. Restore it with `gcloud sql instances patch ledger-db-prod --authorized-networks=0.0.0.0/0`.
+
+**`bq` or other Cloud SDK tools fail with `Error retrieving auth credentials from gcloud: [WinError 2]`** (Windows) — the tool shells out to a bare `gcloud` command and needs it on `PATH`; the Cloud SDK installer doesn't always add it. Add the SDK's `bin` directory to `PATH` for the session (`$env:PATH = "$env:LOCALAPPDATA\Google\Cloud SDK\google-cloud-sdk\bin;$env:PATH"` in PowerShell) rather than only invoking `gcloud.cmd`/`bq.cmd` by full path.
+
+**A `gcloud`/`bq` command with a flag value containing spaces fails with `'C:\...\Cloud' is not recognized as an internal or external command`** (Windows) — this is a quoting collision between the Cloud SDK's install path (which itself contains a space, `Google\Cloud SDK`) and a spaced argument value (e.g. `--display-name="My Function"`, `--schedule="0 * * * *"`). Avoid spaces in flag values where possible (use camelCase instead of a spaced display name), or in PowerShell use the `--%` stop-parsing token; as a last resort, write the argument to a file and pass a file path instead.
 
 ---
 
