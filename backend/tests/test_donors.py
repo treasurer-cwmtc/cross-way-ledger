@@ -19,8 +19,8 @@ DONORS_CSV = (
 )
 
 DONATIONS_CSV = """id,donor_id,received_date,fund,amount,net_amount,payment_method
-dg1,DGIVER2,2026-01-10,Building Fund,250.00,250.00,check
-dg2,DGIVER2,2026-02-01,General Fund,50.00,50.00,check
+dg1,DGIVER2,2026-01-10,Donor Gifts Fund A,250.00,250.00,check
+dg2,DGIVER2,2026-02-01,Donor Gifts Fund B,50.00,50.00,check
 """
 
 
@@ -55,7 +55,7 @@ def test_donor_gifts_endpoint_returns_every_fund():
     h = auth_header()
     gifts = client.get("/api/donors/DGIVER2/gifts", headers=h).json()
     funds = {g["fund"] for g in gifts}
-    assert funds == {"Building Fund", "General Fund"}
+    assert funds == {"Donor Gifts Fund A", "Donor Gifts Fund B"}
     assert round(sum(g["net_amount"] for g in gifts), 2) == 300.00
 
 
