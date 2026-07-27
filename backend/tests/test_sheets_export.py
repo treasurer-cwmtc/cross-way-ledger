@@ -1,6 +1,6 @@
 """Google-Sheets-facing General Ledger export: Google ID token
-verification, permission gating, and that it returns the same data as the
-regular /api/general-ledger route."""
+verification, permission gating, and that every column the "Export to
+Excel" button produces is present here too."""
 
 from unittest.mock import patch
 
@@ -54,11 +54,30 @@ def test_sheets_export_rejects_user_without_general_ledger_permission():
     assert r.status_code == 403
 
 
-def test_sheets_export_succeeds_and_matches_regular_endpoint():
+EXPECTED_COLUMNS = [
+    "Transaction Date", "Date Posted", "Reconciled", "Statement Description",
+    "Description", "Bank Account", "Method", "Amount", "Check/Invoice Name",
+    "Bank Description", "Notes", "IsReimbursement", "Category", "Statement",
+    "Item", "ItemDetail", "TransactionLookup", "TransactionDateMonthName",
+    "TransactionDateMonthYear", "TransactionDateYear", "TransactionDateCYPY",
+    "PostedDateMonthName", "PostedDateMonthYear", "PostedDateYear",
+    "PostedDateCYPY", "Grouping", "IsYouthChaplainShare", "IsMissions", "Type",
+]
+
+
+def test_sheets_export_succeeds_with_every_export_column():
     _add_user(username="glsheetsuser", email="glsheetsuser@crosswaymtc.org", permissions=["general-ledger"])
     h = auth_header()
+    budget = client.post(
+        "/api/budget",
+        headers=h,
+        json={"transaction_date": "2026-01-01", "description": "Sheets export test", "amount": 100.0},
+    )
+    assert budget.status_code == 201, budget.text
+
     regular = client.get("/api/general-ledger", headers=h)
     assert regular.status_code == 200
+    assert len(regular.json()) > 0, "just created a budget entry - should show up in the General Ledger"
 
     with patch("app.routers.sheets_export.google_id_token.verify_oauth2_token") as mock_verify:
         mock_verify.return_value = _fake_claims("glsheetsuser@crosswaymtc.org")
@@ -66,7 +85,9 @@ def test_sheets_export_succeeds_and_matches_regular_endpoint():
             "/api/sheets/general-ledger", headers={"Authorization": "Bearer fake"}
         )
     assert via_sheets.status_code == 200, via_sheets.text
-    assert via_sheets.json() == regular.json()
+    rows = via_sheets.json()
+    assert len(rows) == len(regular.json())
+    assert set(rows[0].keys()) == set(EXPECTED_COLUMNS)
 
 
 def test_sheets_export_admin_bypasses_permission_check():
