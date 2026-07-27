@@ -273,20 +273,37 @@ To let an external tool connect:
 
 ### Google Sheets General Ledger export
 
-Since Sheets can't connect to Postgres directly, the backend exposes a dedicated read-only endpoint, `GET /api/sheets/general-ledger`, authenticated with the **signed-in user's own Google identity** (via Apps Script's `ScriptApp.getIdentityToken()`) rather than a stored password — matching how every other page in the app already authenticates. The code lives in `infra/sheets-general-ledger/`.
+Since Sheets can't connect to Postgres directly, the backend exposes a dedicated read-only endpoint, `GET /api/sheets/general-ledger`, authenticated with the **signed-in user's own Google identity** rather than a stored password. The code you'll paste in lives in `infra/sheets-general-ledger/` in the repo (two files: `Code.gs` and `appsscript.json`).
 
-**One-time setup, per Sheet:**
+> ⚠️ **Before you start**: this only works once the code has actually been deployed to **prod** (the endpoint doesn't exist there until a pending deployment is approved on GitHub — see [§6](#6-cicd-pipeline)). If step 5 below fails with an error, this is the first thing to check.
 
-1. Create a new Google Sheet, then **Extensions → Apps Script**.
-2. In the Apps Script editor, click the gear icon (**Project Settings**) and check **"Show `appsscript.json` manifest file in editor."**
-3. Paste `infra/sheets-general-ledger/Code.gs` into the script editor, and `infra/sheets-general-ledger/appsscript.json`'s contents into the manifest file.
-4. Still in **Project Settings**, under **Google Cloud Platform (GCP) Project**, click **Change project** and enter the `cross-way-ledger` project number (`gcloud projects describe cross-way-ledger --format="value(projectNumber)"`). This is what lets `getIdentityToken()` issue a real, verifiable Google ID token — without it, the script only has access to a limited default project that can't do this.
-5. Reload the Sheet. A new **Cross Way Ledger** menu appears — click **Refresh General Ledger**. The first run prompts a normal Google OAuth consent screen (since the project's consent screen is already configured **Internal**, any `@crosswaymtc.org` account can approve it immediately, no external review needed).
-6. Once the "General Ledger" tab populates, select the data and **Insert → Pivot table** — a fully native Sheets pivot table, built on real data.
+**One-time setup, per Sheet — follow every step in order, don't skip ahead:**
 
-**Why no explicit database credential is needed**: the backend verifies the Google ID token's signature, checks it's a `crosswaymtc.org` account, and looks up that email against the app's own Users table — the same account (and same `general-ledger` permission) already used to sign into the app itself. Unlike `/api/auth/google` (this app's own sign-in), the token's audience isn't pinned to one specific OAuth client, since Apps Script auto-provisions its own per-script client under the linked GCP project rather than using a fixed, predictable one — security instead rests on signature validity, domain, and requiring a pre-provisioned app account, the same bar every other page enforces.
+1. Go to **sheets.google.com** and create a **Blank** spreadsheet.
+2. In the menu bar at the top, click **Extensions**, then **Apps Script**. This opens a new tab/window — a separate code editor, not part of the Sheet itself.
+3. You'll see a file called `Code.gs` with some placeholder text already in the editor (`function myFunction() {}`). **Select all of that placeholder text and delete it.** Open `infra/sheets-general-ledger/Code.gs` from the repo, copy its entire contents, and paste it into the now-empty editor.
+4. On the **left-hand sidebar** of the Apps Script editor, click the **gear icon** ⚙️ — this is labeled **Project Settings** if you hover over it.
+5. On the Project Settings page, find the checkbox labeled **"Show `appsscript.json` manifest file in editor"** and check it.
+6. Go back to the left-hand sidebar — you'll now see a second file listed, `appsscript.json`, above `Code.gs`. Click it to open it. **Delete everything in it**, then open `infra/sheets-general-ledger/appsscript.json` from the repo, copy its entire contents, and paste them in.
+7. Click the **save icon** (a floppy disk icon near the top, or press **Ctrl+S** / **Cmd+S**) to save both files.
+8. Go back to the **gear icon / Project Settings** page one more time. Scroll down to the section titled **"Google Cloud Platform (GCP) Project"**. Click the button labeled **Change project**.
+9. A box appears asking for a **"Project Number"** (not project name/ID — specifically the *number*). Paste in exactly this:
+   ```
+   633510572581
+   ```
+   Click **Set project**.
+10. Go back to your actual **Google Sheet tab** (not the Apps Script editor) and **reload the page** (F5, or close and reopen it).
+11. After it reloads, wait a few seconds, then look at the menu bar at the top. A new menu called **Cross Way Ledger** should appear (to the right of Help). If you don't see it, wait a bit longer and reload again — the first load after saving a script can take a moment.
+12. Click **Cross Way Ledger → Refresh General Ledger**.
+13. The **first time only**, this triggers a permission popup ("This app isn't verified" or "Authorization required"). This is expected and safe — it's Google's standard prompt the first time any script asks for your identity. Click through it: **Continue** (or **Advanced → Go to [project name] (unsafe)** if you see that phrasing — this warning is generic and shows for any internal script, not a sign of an actual problem), then **Allow** on the permissions list.
+14. If everything's set up correctly (and prod has been deployed — see the warning above), a new tab named **"General Ledger"** appears at the bottom of your spreadsheet, filled with data, and a popup confirms how many rows were loaded.
+15. Click anywhere inside that data, then use the menu **Insert → Pivot table** to build your pivot table.
 
-**Refreshing**: click the menu item, or run `setupDailyRefreshTrigger()` once from the Apps Script editor (not the Sheet) to refresh automatically every morning instead.
+**If step 12 or 13 gives an error instead**: note the *exact* error text and which step number it happened at — that's the fastest way to diagnose it. The most common causes: prod hasn't been deployed yet (see the warning above), or step 9's project number was mistyped.
+
+**Why no explicit database credential is needed**: the backend verifies the Google ID token's signature, checks it's a `crosswaymtc.org` account, and looks up that email against the app's own Users table — the same account (and same `general-ledger` permission) already used to sign into the app itself.
+
+**Refreshing later**: click **Cross Way Ledger → Refresh General Ledger** again any time, or — from the **Apps Script editor** (not the Sheet) — select `setupDailyRefreshTrigger` from the function dropdown near the top and click **Run** once, to refresh automatically every morning instead of doing it by hand.
 
 ## 11. Troubleshooting
 
