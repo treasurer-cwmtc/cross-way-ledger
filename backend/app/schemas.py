@@ -546,6 +546,8 @@ class DashboardOut(BaseModel):
     expense_ytd: float
     expense_plan_ytd: float
     last_entry_at: datetime | None
+    outstanding_reimbursements_count: int
+    outstanding_reimbursements_total: float
 
 
 # --------------------------------------------------------------------------- #
@@ -757,3 +759,94 @@ class PledgeDashboardOut(BaseModel):
     goal_amount: float
     percent_of_goal: float
     timeline: list[PledgeDashboardPoint]
+
+
+# --- Reimbursements ------------------------------------------------------- #
+
+
+class PcoPersonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    person_id: str
+    name: str
+    email: str
+    phone_number: str
+
+
+class PcoPeopleImportSummary(BaseModel):
+    people_imported: int
+
+
+class ReimbursementAssignmentOut(BaseModel):
+    account_no: str
+    statement_description: str
+
+
+class ReimbursementAssignmentsUpdate(BaseModel):
+    """Replace-all-for-email semantics: send the complete desired list of
+    account numbers, the endpoint diffs and upserts/deletes to match."""
+
+    account_nos: list[str]
+
+
+class ReimbursementOtpRequest(BaseModel):
+    email: str
+
+
+class ReimbursementOtpVerify(BaseModel):
+    email: str
+    code: str
+
+
+class ReimbursementTokenOut(BaseModel):
+    token: str
+    name: str
+
+
+class ReimbursementLineIn(BaseModel):
+    account_no: str
+    amount: float
+    description: str = ""
+    receipt_file_id: str = ""
+    receipt_file_name: str = ""
+    receipt_web_view_link: str = ""
+
+
+class ReimbursementLineOut(BaseModel):
+    id: int
+    account_no: str
+    statement_description: str
+    amount: float
+    description: str
+    receipt_file_id: str
+    receipt_file_name: str
+    receipt_web_view_link: str
+
+
+class ReimbursementCreate(BaseModel):
+    lines: list[ReimbursementLineIn]
+
+
+class ReimbursementOut(BaseModel):
+    id: int
+    name: str
+    submitter_email: str
+    submitter_name: str
+    status: str
+    notes: str
+    total_amount: float
+    submitted_at: datetime
+    decided_at: datetime | None
+    paid_at: datetime | None
+    lines: list[ReimbursementLineOut]
+
+
+class ReimbursementStatusUpdate(BaseModel):
+    status: str
+    notes: str | None = None
+
+
+class ReceiptUploadOut(BaseModel):
+    file_id: str
+    file_name: str
+    web_view_link: str

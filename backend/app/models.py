@@ -644,3 +644,143 @@ class Donation(Base):
     # creation (only inserted, deduped by dedup_key), so this is set once.
     source_file_name: Mapped[str] = mapped_column(String(300), default="")
     source_file_link: Mapped[str] = mapped_column(Text, default="")
+
+
+class PcoPerson(Base):
+    """The Planning Center (PCO) People export, upserted by person_id (PCO's
+    own stable ID) - mirrors Donor/import_donors_for_campaign's exact upsert
+    shape. This is the login allowlist for the Reimbursements portal: a
+    submitter's email must match a row here before they can even request a
+    one-time login code. email is deliberately NOT unique - real households
+    share a single email across multiple person rows (confirmed from a real
+    export), so it's an index, not a key.
+    """
+
+    __tablename__ = "pco_people"
+
+    person_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    email: Mapped[str] = mapped_column(String(255), default="", index=True)
+    phone_number: Mapped[str] = mapped_column(String(40), default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ReimbursementAssignment(Base):
+    """Which Chart-of-Accounts a given email is pre-authorized by the
+    treasurer to submit reimbursements against - one row per (email,
+    account_no). email is plain string, not a foreign key: PcoPerson.email
+    isn't unique, so there's no single PcoPerson row to point at. Validated
+    at write time instead (the assignment endpoint rejects an email with no
+    matching PcoPerson row) rather than enforced by the schema.
+    """
+
+    __tablename__ = "reimbursement_user_relationship"
+    __table_args__ = (
+        UniqueConstraint("email", "account_no", name="uq_reimbursement_assignment"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    account_no: Mapped[str] = mapped_column(ForeignKey("chartofaccounts.account_no"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ReimbursementOtpCode(Base):
+    """A one-time login code emailed to a reimbursement submitter.
+    code_hash reuses security.py's hash_password/verify_password (a login
+    code is treated the same as a short-lived password). Single-use
+    (consumed_at) and short-lived (expires_at, 10 minutes) - see
+    routers/reimbursements.py for the request-otp/verify-otp flow and its
+    rate limiting (max 5 requests per email per hour)."""
+
+    __tablename__ = "reimbursement_otp_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    code_hash: Mapped[str] = mapped_column(String(255))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class Reimbursement(Base):
+    """One reimbursement request (the wizard's "submit" step creates exactly
+    one of these, plus its ReimbursementLine children). `name` is the
+    treasurer-requested auto-generated identifier (submitter email + the
+    submission timestamp) - never hand-typed, always unique.
+
+    status is a plain string (pending | approved | paid | rejected),
+    matching the rest of this schema's convention of not using a DB enum
+    type (see PledgeDonorMatch.match_source). Pending is the only editable
+    state for the submitter - approved locks it even before payment, and
+    rejected is terminal. See routers/reimbursements.py for the exact
+    Accrual-linkage rules tied to each transition.
+    """
+
+    __tablename__ = "reimbursement"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    submitter_email: Mapped[str] = mapped_column(String(255), index=True)
+    # Snapshotted at submission time from PcoPerson, so the request still
+    # reads sensibly even if that person's PCO record later changes/is removed.
+    submitter_name: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    total_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    lines: Mapped[list["ReimbursementLine"]] = relationship(
+        back_populates="reimbursement", cascade="all, delete-orphan"
+    )
+
+
+class ReimbursementLine(Base):
+    """One line item of a Reimbursement request - a Chart-of-Accounts
+    account, a dollar amount, and (usually) a receipt. accrual_entry_id
+    points at the AccrualEntry created for this line at submission time
+    (is_reimbursement=True) - see routers/reimbursements.py for the
+    create/edit/reject rules around that link.
+    """
+
+    __tablename__ = "reimbursement_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    reimbursement_id: Mapped[int] = mapped_column(
+        ForeignKey("reimbursement.id"), index=True
+    )
+    account_no: Mapped[str | None] = mapped_column(
+        ForeignKey("chartofaccounts.account_no"), nullable=True, default=None
+    )
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    description: Mapped[str] = mapped_column(String(300), default="")
+    # Same Google Drive receipt attachment shape as AccrualEntry/
+    # ReconciliationEntry - see services/google_drive.py for how these get
+    # populated (a Shared Drive upload, not the browser-side Picker those
+    # two use, since the submitter has no Google session to consent with).
+    receipt_file_id: Mapped[str] = mapped_column(String(200), default="")
+    receipt_file_name: Mapped[str] = mapped_column(String(300), default="")
+    receipt_web_view_link: Mapped[str] = mapped_column(Text, default="")
+    accrual_entry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ledger_accrual.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    reimbursement: Mapped[Reimbursement] = relationship(back_populates="lines")
+
+    @validates("account_no")
+    def _validate_account_no(self, key, value):
+        return _normalize_account_no(self, key, value)

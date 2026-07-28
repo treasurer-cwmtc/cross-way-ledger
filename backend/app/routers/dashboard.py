@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_current_user
-from ..models import AccrualEntry, BankAccount, ReconciliationEntry
+from ..models import AccrualEntry, BankAccount, ReconciliationEntry, Reimbursement
 from ..schemas import BankAccountBalanceOut, DashboardOut
 from ..services.fiscal import get_current_year
 from ..services.reporting import compute_income_statement
@@ -39,6 +39,10 @@ def dashboard(db: Session = Depends(get_db)) -> DashboardOut:
         if latest is not None and (last_entry_at is None or latest > last_entry_at):
             last_entry_at = latest
 
+    outstanding = list(
+        db.scalars(select(Reimbursement).where(Reimbursement.status.in_(["pending", "approved"])))
+    )
+
     return DashboardOut(
         year=get_current_year(db),
         bank_accounts=bank_accounts,
@@ -47,4 +51,6 @@ def dashboard(db: Session = Depends(get_db)) -> DashboardOut:
         expense_ytd=income_statement.expense_total.actuals,
         expense_plan_ytd=income_statement.expense_total.plan,
         last_entry_at=last_entry_at,
+        outstanding_reimbursements_count=len(outstanding),
+        outstanding_reimbursements_total=round(sum(r.total_amount for r in outstanding), 2),
     )
