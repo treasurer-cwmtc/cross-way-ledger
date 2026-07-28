@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
 import { accountsApi, ChartAccount } from "../../api/accounts";
-import { PcoPerson, Reimbursement, reimbursementsApi } from "../../api/reimbursements";
+import {
+  PcoPerson,
+  Reimbursement,
+  ReimbursementAccessSummary,
+  reimbursementsApi,
+} from "../../api/reimbursements";
 import MultiAccountPicker from "../ledger/MultiAccountPicker";
+import MultiEmailPicker from "./MultiEmailPicker";
+import AccessDetailModal from "./AccessDetailModal";
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+}
+
+function splitName(name: string): { first: string; last: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return { first: parts[0] || "", last: parts.slice(1).join(" ") };
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -177,29 +189,45 @@ function QueueSection() {
 function AssignmentsSection() {
   const [people, setPeople] = useState<PcoPerson[]>([]);
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
-  const [email, setEmail] = useState("");
+  const [summary, setSummary] = useState<ReimbursementAccessSummary[]>([]);
+  const [detailFor, setDetailFor] = useState<ReimbursementAccessSummary | null>(null);
+  const [emails, setEmails] = useState<string[]>([]);
   const [assigned, setAssigned] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
 
+  function loadSummary() {
+    reimbursementsApi.getAssignmentsSummary().then(setSummary).catch((e) => setError((e as Error).message));
+  }
+
   useEffect(() => {
     reimbursementsApi.listPcoPeople().then(setPeople).catch((e) => setError((e as Error).message));
     accountsApi.listAccounts().then(setAccounts).catch((e) => setError((e as Error).message));
+    loadSummary();
   }, []);
 
-  async function selectEmail(value: string) {
-    setEmail(value);
+  // Budget accounts are planning figures, never real expenses/income - a
+  // reimbursement should never be allowed to post against one.
+  const assignableAccounts = accounts.filter((a) => a.category !== "Budget");
+
+  async function selectEmails(values: string[]) {
+    setEmails(values);
     setError("");
     setMsg("");
-    if (!value) {
+    // Only prefill from an existing person's assignments when exactly one
+    // is selected - with several selected at once, their existing sets may
+    // differ, and prefilling from just one would be misleading. Saving
+    // with multiple selected applies the same chosen list to everyone
+    // picked (see `save` below), so start from a clean slate.
+    if (values.length === 1) {
+      try {
+        const rows = await reimbursementsApi.getAssignments(values[0]);
+        setAssigned(rows.map((r) => r.account_no));
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    } else {
       setAssigned([]);
-      return;
-    }
-    try {
-      const rows = await reimbursementsApi.getAssignments(value);
-      setAssigned(rows.map((r) => r.account_no));
-    } catch (e) {
-      setError((e as Error).message);
     }
   }
 
@@ -207,44 +235,35 @@ function AssignmentsSection() {
     setError("");
     setMsg("");
     try {
-      await reimbursementsApi.setAssignments(email, assigned);
-      setMsg("Assignments saved.");
+      await Promise.all(emails.map((email) => reimbursementsApi.setAssignments(email, assigned)));
+      setMsg(
+        emails.length === 1
+          ? "Assignments saved."
+          : `Assignments saved for ${emails.length} people.`
+      );
+      loadSummary();
     } catch (e) {
       setError((e as Error).message);
     }
-  }
-
-  // A person's email may appear on more than one PCO record (shared
-  // household emails) - dedupe to one dropdown entry per email, showing
-  // whichever name comes first.
-  const byEmail = new Map<string, string>();
-  for (const p of people) {
-    if (p.email && !byEmail.has(p.email)) byEmail.set(p.email, p.name);
   }
 
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Reimbursement Access</h3>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        Pick an email from the imported PCO People list, then choose which Chart-of-Accounts
-        they're allowed to submit reimbursements against.
+        Pick one or more people from the imported PCO People list, then choose which
+        Chart-of-Accounts they're allowed to submit reimbursements against. Selecting more than
+        one person applies the same account list to everyone selected.
       </p>
-      <label className="field" style={{ maxWidth: 360 }}>
-        <span>Email</span>
-        <select value={email} onChange={(e) => selectEmail(e.target.value)}>
-          <option value="">— select an email —</option>
-          {[...byEmail.entries()].map(([addr, name]) => (
-            <option key={addr} value={addr}>
-              {name} ({addr})
-            </option>
-          ))}
-        </select>
+      <label className="field" style={{ maxWidth: 480 }}>
+        <span>People</span>
+        <MultiEmailPicker value={emails} people={people} onChange={selectEmails} />
       </label>
 
-      {email && (
+      {emails.length > 0 && (
         <>
           <div style={{ marginTop: 12 }}>
-            <MultiAccountPicker value={assigned} accounts={accounts} onChange={setAssigned} />
+            <MultiAccountPicker value={assigned} accounts={assignableAccounts} onChange={setAssigned} />
           </div>
           <button className="btn" onClick={save} style={{ marginTop: 14 }}>
             Save assignments
@@ -253,6 +272,40 @@ function AssignmentsSection() {
       )}
       {msg && <div className="ok">{msg}</div>}
       {error && <div className="error">{error}</div>}
+
+      <h4 style={{ marginTop: 24, marginBottom: 8 }}>People with access</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Email</th>
+          </tr>
+        </thead>
+        <tbody>
+          {summary.map((s) => {
+            const { first, last } = splitName(s.name);
+            return (
+              <tr key={s.email} onClick={() => setDetailFor(s)} style={{ cursor: "pointer" }}>
+                <td>{first || "—"}</td>
+                <td>{last || "—"}</td>
+                <td>{s.email}</td>
+              </tr>
+            );
+          })}
+          {summary.length === 0 && (
+            <tr>
+              <td colSpan={3} className="subtitle">
+                No one has been granted access yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {detailFor && (
+        <AccessDetailModal summary={detailFor} accounts={accounts} onClose={() => setDetailFor(null)} />
+      )}
     </div>
   );
 }

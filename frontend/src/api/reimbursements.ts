@@ -21,6 +21,12 @@ export interface ReimbursementAssignment {
   statement_description: string;
 }
 
+export interface ReimbursementAccessSummary {
+  email: string;
+  name: string;
+  account_nos: string[];
+}
+
 export interface ReimbursementLine {
   id: number;
   account_no: string;
@@ -71,6 +77,11 @@ export const reimbursementsApi = {
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ account_nos: accountNos }),
     }).then(j<ReimbursementAssignment[]>),
+
+  getAssignmentsSummary: () =>
+    fetch(`${BASE}/api/reimbursements/assignments-summary`, { headers: authHeaders() }).then(
+      j<ReimbursementAccessSummary[]>
+    ),
 
   list: (status?: string) =>
     fetch(`${BASE}/api/reimbursements${status ? `?status=${status}` : ""}`, {
