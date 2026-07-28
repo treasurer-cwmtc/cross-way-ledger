@@ -782,6 +782,16 @@ class ReimbursementAssignmentOut(BaseModel):
     statement_description: str
 
 
+class ReimbursementAccessSummaryOut(BaseModel):
+    """One row per email that currently has at least one Chart-of-Accounts
+    assignment - the "who has portal access" list on the Reimbursements
+    page, distinct from the per-email assignment editor."""
+
+    email: str
+    name: str
+    account_nos: list[str]
+
+
 class ReimbursementAssignmentsUpdate(BaseModel):
     """Replace-all-for-email semantics: send the complete desired list of
     account numbers, the endpoint diffs and upserts/deletes to match."""

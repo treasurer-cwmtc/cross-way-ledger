@@ -30,6 +30,7 @@ from ..schemas import (
     PcoPeopleImportSummary,
     PcoPersonOut,
     ReceiptUploadOut,
+    ReimbursementAccessSummaryOut,
     ReimbursementAssignmentOut,
     ReimbursementAssignmentsUpdate,
     ReimbursementCreate,
@@ -174,6 +175,31 @@ def get_assignments(email: str, db: Session = Depends(get_db)) -> list[Reimburse
                                     if coa_by_no.get(a.account_no) else ""),
         )
         for a in rows
+    ]
+
+
+@router.get(
+    "/assignments-summary",
+    response_model=list[ReimbursementAccessSummaryOut],
+    dependencies=[Depends(require_permission("reimbursements"))],
+)
+def list_assignment_summaries(db: Session = Depends(get_db)) -> list[ReimbursementAccessSummaryOut]:
+    """One row per email that currently has at least one assignment - the
+    "who has portal access" list on the Reimbursements page."""
+    by_email: dict[str, list[str]] = {}
+    for a in db.scalars(select(ReimbursementAssignment)):
+        by_email.setdefault(a.email, []).append(a.account_no)
+
+    name_by_email: dict[str, str] = {}
+    for p in db.scalars(select(PcoPerson)):
+        if p.email and p.email not in name_by_email:
+            name_by_email[p.email] = p.name
+
+    return [
+        ReimbursementAccessSummaryOut(
+            email=email, name=name_by_email.get(email, ""), account_nos=sorted(nos)
+        )
+        for email, nos in sorted(by_email.items())
     ]
 
 
