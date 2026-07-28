@@ -58,8 +58,7 @@ export default function ReimbursementLogin({ onSuccess }: { onSuccess: () => voi
       <img src={logo} alt="Cross Way Mar Thoma Church" style={{ width: 220, maxWidth: "80vw" }} />
       <div style={{ width: "100%", maxWidth: 360 }}>
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>Reimbursement Requests</h2>
-          <p className="subtitle" style={{ marginTop: 0 }}>Cross Way Mar Thoma Church</p>
+          <h2 style={{ marginTop: 0, marginBottom: 20 }}>Reimbursement Requests</h2>
 
           {step === "email" ? (
             <>

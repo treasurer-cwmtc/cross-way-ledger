@@ -5,6 +5,7 @@ import {
   ReimbursementLineIn,
   reimbursementPortalApi,
 } from "../../api/reimbursementPortal";
+import AssignedAccountPicker from "./AssignedAccountPicker";
 
 function fmtMoney(n: number): string {
   return `$${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -21,10 +22,10 @@ function emptyLine(coas: ReimbursementAssignment[]): WizardLine {
   return { key: nextKey++, account_no: coas[0]?.account_no || "", amount: 0, description: "" };
 }
 
-/** Three-step submission wizard - reused for both a brand-new request and
+/** Two-step submission wizard - reused for both a brand-new request and
  * editing an existing Pending one (see mode/existing). Step 1 add lines,
- * step 2 verify totals, step 3 submit - matching the treasurer's
- * requested flow exactly. */
+ * step 2 verify totals and submit together (combined per feedback - both
+ * steps were really "finishing the submission"). */
 export default function ReimbursementWizard(props: {
   coas: ReimbursementAssignment[];
   existing?: Reimbursement;
@@ -48,6 +49,8 @@ export default function ReimbursementWizard(props: {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+
+  const accountByNo = new Map(props.coas.map((a) => [a.account_no, a]));
 
   function updateLine(key: number, patch: Partial<WizardLine>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -111,7 +114,9 @@ export default function ReimbursementWizard(props: {
         <h3 style={{ marginTop: 0 }}>
           {props.existing ? "Request updated" : "Request submitted"}
         </h3>
-        <p className="subtitle">The treasurer has been notified.</p>
+        <p className="subtitle">
+          A confirmation email was sent to you, and the treasurer has been notified.
+        </p>
         <button className="btn" onClick={props.onDone}>
           Done
         </button>
@@ -122,7 +127,7 @@ export default function ReimbursementWizard(props: {
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>
-        {props.existing ? "Edit request" : "New reimbursement request"} — Step {step} of 3
+        {props.existing ? "Edit request" : "New reimbursement request"} — Step {step} of 2
       </h3>
 
       {step === 1 && (
@@ -141,17 +146,11 @@ export default function ReimbursementWizard(props: {
               {lines.map((line) => (
                 <tr key={line.key}>
                   <td>
-                    <select
+                    <AssignedAccountPicker
                       value={line.account_no}
-                      onChange={(e) => updateLine(line.key, { account_no: e.target.value })}
-                    >
-                      <option value="">— choose —</option>
-                      {props.coas.map((c) => (
-                        <option key={c.account_no} value={c.account_no}>
-                          {c.account_no} · {c.statement_description}
-                        </option>
-                      ))}
-                    </select>
+                      accounts={props.coas}
+                      onChange={(accountNo) => updateLine(line.key, { account_no: accountNo })}
+                    />
                   </td>
                   <td>
                     <input
@@ -195,7 +194,7 @@ export default function ReimbursementWizard(props: {
           </button>
           <div className="row" style={{ marginTop: 16, gap: 8 }}>
             <button className="btn" onClick={() => setStep(2)} disabled={!canProceed}>
-              Next: verify totals
+              Next: verify &amp; submit
             </button>
             <button className="btn secondary" onClick={props.onCancel}>
               Cancel
@@ -216,7 +215,12 @@ export default function ReimbursementWizard(props: {
             <tbody>
               {lines.map((l) => (
                 <tr key={l.key}>
-                  <td>{l.account_no}</td>
+                  <td>
+                    {l.account_no}
+                    {accountByNo.get(l.account_no) && (
+                      <span className="subtitle"> · {accountByNo.get(l.account_no)!.statement_description}</span>
+                    )}
+                  </td>
                   <td>{fmtMoney(Number(l.amount))}</td>
                 </tr>
               ))}
@@ -230,28 +234,19 @@ export default function ReimbursementWizard(props: {
               </tr>
             </tbody>
           </table>
+          <p className="subtitle" style={{ marginTop: 12, marginBottom: 0 }}>
+            Submitting {lines.length} line{lines.length === 1 ? "" : "s"} totaling{" "}
+            <b>{fmtMoney(total)}</b>. You and the treasurer will both be emailed with the details.
+          </p>
           <div className="row" style={{ marginTop: 16, gap: 8 }}>
-            <button className="btn" onClick={() => setStep(3)}>
-              Next: submit
+            <button className="btn" onClick={submit} disabled={submitting}>
+              {submitting
+                ? "Submitting…"
+                : props.existing
+                ? "Save changes"
+                : "Submit request"}
             </button>
             <button className="btn secondary" onClick={() => setStep(1)}>
-              Back
-            </button>
-          </div>
-        </>
-      )}
-
-      {step === 3 && (
-        <>
-          <p>
-            Submitting {lines.length} line{lines.length === 1 ? "" : "s"} totaling{" "}
-            <b>{fmtMoney(total)}</b>. The treasurer will be emailed with the details.
-          </p>
-          <div className="row" style={{ gap: 8 }}>
-            <button className="btn" onClick={submit} disabled={submitting}>
-              {props.existing ? "Save changes" : "Submit request"}
-            </button>
-            <button className="btn secondary" onClick={() => setStep(2)}>
               Back
             </button>
           </div>
