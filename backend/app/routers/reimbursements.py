@@ -43,7 +43,7 @@ from ..schemas import (
 )
 from ..security import create_submitter_token
 from ..services import reimbursements as svc
-from ..services.email import send_email, send_email_best_effort
+from ..services.email import render_email_html, send_email, send_email_best_effort
 from ..services.google_drive import upload_receipt
 
 router = APIRouter(prefix="/api/reimbursements", tags=["reimbursements"])
@@ -292,11 +292,22 @@ def update_status(
     db.commit()
     db.refresh(r)
 
+    status_label = r.status.capitalize()
     send_email_best_effort(
         r.submitter_email,
         f"Your reimbursement {r.name} is now {r.status}",
         f"Your reimbursement request {r.name} for ${r.total_amount:.2f} is now marked "
         f"'{r.status}'.\n\nNotes: {r.notes or '(none)'}",
+        render_email_html(
+            f"Your request is now {status_label}",
+            f"""
+            <p style="margin:0 0 12px;">Your reimbursement request <b>{r.name}</b> for
+            <b>${r.total_amount:.2f}</b> is now marked <b>{status_label}</b>.</p>
+            <p style="margin:0;color:{'#64707d'};">
+              <b>Notes:</b> {r.notes or "(none)"}
+            </p>
+            """,
+        ),
     )
     return _reimbursement_out(r, _coa_lookup(db))
 
@@ -330,6 +341,24 @@ def request_otp(payload: ReimbursementOtpRequest, db: Session = Depends(get_db))
             "Your Cross Way Ledger reimbursement login code",
             f"Your one-time login code is: {code}\n\nThis code expires in "
             f"{svc.OTP_TTL_MINUTES} minutes and can only be used once.",
+            render_email_html(
+                "Your login code",
+                f"""
+                <p style="margin:0 0 18px;">Enter this code on the Reimbursement Requests
+                sign-in page to continue:</p>
+                <p style="margin:0 0 18px;text-align:center;">
+                  <span style="display:inline-block;font-size:30px;font-weight:700;
+                               letter-spacing:0.12em;color:#1a94a8;
+                               background:#e5f8fb;border-radius:8px;padding:10px 20px;">
+                    {code}
+                  </span>
+                </p>
+                <p style="margin:0;color:#64707d;font-size:13px;">
+                  This code expires in {svc.OTP_TTL_MINUTES} minutes and can only be used once.
+                  If you didn't request this, you can safely ignore this email.
+                </p>
+                """,
+            ),
         )
     except Exception:
         logger.exception("Failed to send OTP email to %s", email)
@@ -357,6 +386,14 @@ def verify_otp(payload: ReimbursementOtpVerify, db: Session = Depends(get_db)) -
                 f"{name} <{email}> just logged into the Reimbursements portal for the "
                 "first time, but has no Chart-of-Accounts assigned yet, so they can't "
                 "submit a request. Assign them access from the Reimbursements page.",
+                render_email_html(
+                    "New submitter needs access",
+                    f"""
+                    <p style="margin:0;"><b>{name}</b> ({email}) just logged into the
+                    Reimbursements portal for the first time, but has no Chart-of-Accounts
+                    assigned yet - they can't submit a request until you do.</p>
+                    """,
+                ),
             )
 
     return ReimbursementTokenOut(token=create_submitter_token(email), name=name)
@@ -420,13 +457,38 @@ def submit_reimbursement(
     db.refresh(r)
 
     lines_desc = "\n".join(f"  - {line.account_no}: ${line.amount:.2f}" for line in payload.lines)
+    coa_by_no = _coa_lookup(db)
+    lines_html = "".join(
+        f"""<tr>
+              <td style="padding:4px 0;border-bottom:1px solid #e1e6ea;">
+                {line.account_no} &middot;
+                {coa_by_no.get(line.account_no).statement_description if coa_by_no.get(line.account_no) else ""}
+              </td>
+              <td style="padding:4px 0;border-bottom:1px solid #e1e6ea;text-align:right;">
+                ${line.amount:.2f}
+              </td>
+            </tr>"""
+        for line in payload.lines
+    )
     send_email_best_effort(
         settings.reimbursement_notify_email,
         f"New reimbursement request: {r.name} (${r.total_amount:.2f})",
         f"{r.submitter_name} <{r.submitter_email}> submitted a reimbursement request "
         f"for ${r.total_amount:.2f}:\n\n{lines_desc}",
+        render_email_html(
+            f"New reimbursement request - ${r.total_amount:.2f}",
+            f"""
+            <p style="margin:0 0 14px;">
+              <b>{r.submitter_name}</b> ({r.submitter_email}) submitted a new reimbursement
+              request, <b>{r.name}</b>.
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+              {lines_html}
+            </table>
+            """,
+        ),
     )
-    return _reimbursement_out(r, _coa_lookup(db))
+    return _reimbursement_out(r, coa_by_no)
 
 
 @router.get("/my", response_model=list[ReimbursementOut])
@@ -489,5 +551,14 @@ def update_my_reimbursement(
         f"Reimbursement request updated: {r.name}",
         f"{r.submitter_name} <{r.submitter_email}> updated their pending reimbursement "
         f"request {r.name} - new total ${r.total_amount:.2f}.",
+        render_email_html(
+            "Reimbursement request updated",
+            f"""
+            <p style="margin:0;">
+              <b>{r.submitter_name}</b> ({r.submitter_email}) updated their pending
+              reimbursement request <b>{r.name}</b> - new total <b>${r.total_amount:.2f}</b>.
+            </p>
+            """,
+        ),
     )
     return _reimbursement_out(r, _coa_lookup(db))
