@@ -16,7 +16,8 @@
 8. [Backups & disaster recovery](#8-backups--disaster-recovery)
 9. [Database access for people, not just the app](#9-database-access-for-people-not-just-the-app)
 10. [External BI tools (Looker Studio, Google Sheets)](#10-external-bi-tools-looker-studio-google-sheets)
-11. [Troubleshooting](#11-troubleshooting)
+11. [Reimbursements module: outbound email (SMTP)](#11-reimbursements-module-outbound-email-smtp)
+12. [Troubleshooting](#12-troubleshooting)
 
 ---
 
@@ -193,6 +194,7 @@ All sensitive configuration lives in **Secret Manager**, never in the repository
 | `ledger-db-url-dev` / `-prod` | The full `DATABASE_URL` connection string for the backend |
 | `ledger-secret-key-dev` / `-prod` | JWT signing key |
 | `ledger-admin-password-dev` / `-prod` | Seed admin account password |
+| `ledger-smtp-password` | App Password for the `noreply@crosswaymtc.org` mailbox that sends Reimbursements emails (OTP codes, notifications) - **one shared secret**, not per-environment, since dev and prod send through the same real mailbox |
 
 To read a secret:
 
@@ -305,7 +307,55 @@ Since Sheets can't connect to Postgres directly, the backend exposes a dedicated
 
 **Refreshing later**: click **Cross Way Ledger → Refresh General Ledger** again any time, or — from the **Apps Script editor** (not the Sheet) — select `setupDailyRefreshTrigger` from the function dropdown near the top and click **Run** once, to refresh automatically every morning instead of doing it by hand.
 
-## 11. Troubleshooting
+## 11. Reimbursements module: outbound email (SMTP)
+
+The Reimbursements portal (login codes, submission/status-change notifications) sends real email via plain SMTP against a Gmail/Workspace mailbox with an **App Password** - not a third-party transactional email API, and no domain-wide delegation or service account involved (that's a separate, unrelated piece - see the note at the end of this section on Google Drive receipt uploads, which is **not yet set up**).
+
+### One-time setup (already done for dev/prod as of this writing - here for reference/rebuilds)
+
+1. **Create the sending mailbox.** This project uses a dedicated `noreply@crosswaymtc.org` user (not the treasurer's own account) - free under this org's Google Workspace for Nonprofits plan, and keeps automated mail fully isolated from any real person's inbox. Create it in the [Google Admin Console](https://admin.google.com) → Users → Add a new user (username `noreply`).
+2. Sign into that new account at gmail.com once (you'll likely be prompted to set a real password on first login).
+3. While signed in as `noreply@`, go to **myaccount.google.com/security** and turn on **2-Step Verification** - required before App Passwords are available.
+4. Go to **myaccount.google.com/apppasswords**, name it something like `Cross Way Ledger`, click **Create**, and copy the 16-character password (shown as 4 groups of 4 for readability - the actual password is just those 16 characters with no spaces).
+5. Store it in Secret Manager:
+   ```bash
+   printf '%s' 'the16charapppassword' | gcloud secrets create ledger-smtp-password --data-file=-
+   ```
+   (One secret, not per-environment - dev and prod both send through this same real mailbox.)
+6. Grant the Cloud Run runtime service account read access:
+   ```bash
+   gcloud secrets add-iam-policy-binding ledger-smtp-password \
+     --member="serviceAccount:633510572581-compute@developer.gserviceaccount.com" \
+     --role="roles/secretmanager.secretAccessor"
+   ```
+7. Add the SMTP env vars/secret to **both** `ledger-backend-dev` and `ledger-backend-prod` (see the warning immediately below before running this):
+   ```bash
+   gcloud run services update ledger-backend-dev --region=us-south1 \
+     --update-env-vars="SMTP_USERNAME=noreply@crosswaymtc.org,SMTP_FROM_ADDRESS=noreply@crosswaymtc.org" \
+     --update-secrets="SMTP_PASSWORD=ledger-smtp-password:latest"
+   ```
+   `smtp_host`/`smtp_port`/`smtp_use_tls` all have working defaults in `config.py` (`smtp.gmail.com:587`, TLS on) and don't need to be set explicitly.
+
+> **⚠️ `--update-env-vars`/`--update-secrets` merge against the *most recently created* revision, not the one currently serving traffic.** If an earlier deploy attempt failed and Cloud Run rolled back to serving the last good revision (which it does automatically), that failed revision is still the "latest" one from `gcloud`'s point of view - so the next `--update-*` call merges on top of *that broken config*, not the good one that's actually live. This bit us for real: a first attempt used `--set-env-vars` (which fully **replaces** the env list, wiping `DATABASE_URL`/`SECRET_KEY`/etc. - same class of bug as the `--authorized-networks` gotcha below) and failed health checks; Cloud Run kept the old revision serving traffic, but a follow-up `--update-env-vars` call then merged onto the broken failed revision and failed again for the same reason. **Fix**: before using `--update-*` after any failed deploy, pull the full env var list from the last-known-good revision (`gcloud run revisions describe <good-revision> --format=json`, inspect `spec.containers[0].env`) and pass the *complete* set explicitly via `--set-env-vars`/`--set-secrets` at least once to get back to a known-good state.
+>
+> Also: if a value you're passing to `--set-env-vars`/`--update-env-vars` contains a comma (e.g. `CORS_ORIGINS` with multiple origins), gcloud's own comma-separated `KEY=VALUE,KEY2=VALUE2` parsing will split *inside* your value too. Use the `^DELIM^` custom-delimiter syntax to avoid this:
+> ```bash
+> --update-env-vars="^|^CORS_ORIGINS=https://a.example.com,https://b.example.com"
+> ```
+
+### Verifying it's working
+
+```bash
+curl -s -X POST https://<backend-url>/api/reimbursements/request-otp \
+  -H "Content-Type: application/json" -d '{"email":"someone-in-pco-people@example.com"}'
+```
+Always returns the same generic `{"message": "..."}` regardless of whether the email matched anything (deliberate - see `routers/reimbursements.py`), so a 200 here doesn't by itself prove the email sent. Check the Cloud Run logs for the request's revision for any exception, or just have the recipient confirm they received the code.
+
+### Google Drive receipt uploads - separate, not yet configured
+
+The submission wizard's receipt upload (`services/google_drive.py`) needs its own, unrelated one-time setup: a Google Cloud **service account** added as a member of a dedicated **Shared Drive**, plus `google_drive_service_account_json`/`google_drive_shared_drive_id` config. This is independent of the SMTP setup above - don't confuse the two. Not yet done as of this writing.
+
+## 12. Troubleshooting
 
 **"Invalid Tier for Edition" on `gcloud sql instances create`** — add `--edition=ENTERPRISE`; smaller legacy tiers aren't available under the default `ENTERPRISE_PLUS` edition on newer projects.
 
@@ -327,6 +377,8 @@ proxy_pass $backend_upstream;
 **`gcloud` commands suddenly fail with a reauthentication error** — Google's OAuth session for the CLI expires periodically; run `gcloud auth login` again.
 
 **Looker Studio (or any external BI tool) suddenly can't connect, with no config changes on its end** — check `ledger-db-prod`'s authorized networks (`gcloud sql instances describe ledger-db-prod --format="yaml(settings.ipConfiguration)"`). `--authorized-networks` **replaces** the entire list rather than appending to it, so any one-off `gcloud sql instances patch --authorized-networks=<your IP>` (e.g. to run a manual query) silently removes the `0.0.0.0/0` rule Looker Studio depends on. Restore it with `gcloud sql instances patch ledger-db-prod --authorized-networks=0.0.0.0/0`.
+
+**A Cloud Run backend deploy fails health checks after adding/changing env vars, with a `pydantic_core.ValidationError` / missing required field in the logs** — this is the same class of bug as the authorized-networks one above, applied to `gcloud run services update`. `--set-env-vars`/`--set-secrets` **replace** the entire env var list; `--update-env-vars`/`--update-secrets` merge, but only against the *most recently created* revision, which may not be the one actually serving traffic if an earlier deploy attempt already failed. See [§11](#11-reimbursements-module-outbound-email-smtp)'s warning box for the full incident and the fix (pull the last-known-good revision's complete env list and re-apply it explicitly via `--set-*`). Also watch for comma-containing values (e.g. `CORS_ORIGINS`) getting split apart by gcloud's own comma-delimited flag parsing - use the `^DELIM^` custom-delimiter syntax shown there.
 
 **`bq` or other Cloud SDK tools fail with `Error retrieving auth credentials from gcloud: [WinError 2]`** (Windows) — the tool shells out to a bare `gcloud` command and needs it on `PATH`; the Cloud SDK installer doesn't always add it. Add the SDK's `bin` directory to `PATH` for the session (`$env:PATH = "$env:LOCALAPPDATA\Google\Cloud SDK\google-cloud-sdk\bin;$env:PATH"` in PowerShell) rather than only invoking `gcloud.cmd`/`bq.cmd` by full path.
 
