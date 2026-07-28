@@ -19,6 +19,7 @@ import Users from "./pages/Users";
 import Login from "./pages/Login";
 import PledgeCampaigns from "./pages/PledgeCampaigns";
 import PledgeCampaignImportWizard from "./pages/PledgeCampaigns/ImportWizard";
+import Reimbursements from "./pages/Reimbursements";
 
 type Tab =
   | "home"
@@ -36,7 +37,8 @@ type Tab =
   | "users"
   | "pledge-campaigns"
   | "pledge-campaign-import"
-  | "donors";
+  | "donors"
+  | "reimbursements";
 
 interface NavItem {
   tab: Tab;
@@ -74,6 +76,10 @@ const NAV_GROUPS: NavGroup[] = [
       { tab: "pledge-campaigns", label: "Campaign Status" },
       { tab: "pledge-campaign-import", label: "Import Campaigns" },
     ],
+  },
+  {
+    label: "Reimbursements",
+    items: [{ tab: "reimbursements", label: "Reimbursements" }],
   },
   {
     label: "Setup",
@@ -208,6 +214,7 @@ export default function App() {
           {tab === "donors" && <Donors />}
           {tab === "pledge-campaigns" && <PledgeCampaigns user={user} />}
           {tab === "pledge-campaign-import" && <PledgeCampaignImportWizard />}
+          {tab === "reimbursements" && <Reimbursements />}
           {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
         </div>
       </main>

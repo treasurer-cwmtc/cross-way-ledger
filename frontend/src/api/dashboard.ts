@@ -16,6 +16,8 @@ export interface Dashboard {
   expense_ytd: number;
   expense_plan_ytd: number;
   last_entry_at: string | null;
+  outstanding_reimbursements_count: number;
+  outstanding_reimbursements_total: number;
 }
 
 export const dashboardApi = {

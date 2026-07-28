@@ -26,6 +26,7 @@ const GRANTABLE_PAGES: { keys: string[]; label: string }[] = [
   { keys: ["pledge-campaign-status"], label: "Campaign Status" },
   { keys: ["pledge-campaign-pledges", "pledge-campaign-actuals"], label: "Campaign Details" },
   { keys: ["donors"], label: "Giving App - Donors" },
+  { keys: ["reimbursements"], label: "Reimbursements" },
 ];
 
 type AccountType = "local" | "google";

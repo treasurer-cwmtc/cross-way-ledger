@@ -33,6 +33,24 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_workspace_domain: str = "crosswaymtc.org"
 
+    # --- SMTP (Reimbursement portal OTP + notification emails) ---
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_address: str = ""
+    smtp_use_tls: bool = True
+    # Where "new submission" / "new unassigned submitter" notifications go -
+    # defaults to the Workspace domain's treasurer mailbox.
+    reimbursement_notify_email: str = "treasurer@crosswaymtc.org"
+
+    # --- Google Drive (Reimbursement receipt uploads) ---
+    # A service account (not domain-wide delegation) added as a member of a
+    # dedicated Shared Drive - see docs/DEPLOYMENT.md. Empty by default;
+    # receipt upload is skipped with a clear error until configured.
+    google_drive_service_account_json: str = ""
+    google_drive_shared_drive_id: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

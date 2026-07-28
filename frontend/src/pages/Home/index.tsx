@@ -96,6 +96,20 @@ export default function Home() {
       </div>
 
       <div className="card">
+        <h3 style={{ marginTop: 0 }}>Outstanding Reimbursements</h3>
+        <div className="stats">
+          <div className="stat">
+            <b>{data.outstanding_reimbursements_count}</b>
+            <span>Pending / Approved</span>
+          </div>
+          <div className="stat">
+            <b>{fmtMoney(data.outstanding_reimbursements_total)}</b>
+            <span>Total owed</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
         <h3 style={{ marginTop: 0 }}>Last data entry</h3>
         <p className="subtitle" style={{ margin: 0 }}>
           {data.last_entry_at
