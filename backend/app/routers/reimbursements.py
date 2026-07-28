@@ -252,7 +252,7 @@ def list_reimbursements(
 
 
 @router.get(
-    "/{reimbursement_id}",
+    "/{reimbursement_id:int}",
     response_model=ReimbursementOut,
     dependencies=[Depends(require_permission("reimbursements"))],
 )
@@ -264,7 +264,7 @@ def get_reimbursement(reimbursement_id: int, db: Session = Depends(get_db)) -> R
 
 
 @router.put(
-    "/{reimbursement_id}/status",
+    "/{reimbursement_id:int}/status",
     response_model=ReimbursementOut,
     dependencies=[Depends(require_permission("reimbursements"))],
 )
@@ -317,23 +317,34 @@ def update_status(
 # --------------------------------------------------------------------------- #
 
 
-_GENERIC_OTP_RESPONSE = {"message": "If that email is registered, a code has been sent."}
+def _otp_response(email: str) -> dict:
+    """Always shows the entered address back (so a typo is obvious) while
+    staying deliberately non-committal about whether it's actually
+    registered - avoids turning this into an email-enumeration oracle
+    against the church's own membership list (see the module plan). Whether
+    a real email goes out isn't observable from this response alone."""
+    return {"message": f"If {email} is registered, a code has been sent to it."}
 
 
 @router.post("/request-otp")
 def request_otp(payload: ReimbursementOtpRequest, db: Session = Depends(get_db)) -> dict:
-    """Deliberately returns the same generic response whether or not the
-    email is recognized - avoids turning this into an email-enumeration
-    oracle against the church's own membership list (see the module plan)."""
     email = payload.email.strip().lower()
     known = db.scalar(select(PcoPerson.person_id).where(PcoPerson.email == email).limit(1))
     if known is None:
-        return _GENERIC_OTP_RESPONSE
+        return _otp_response(email)
 
     try:
         code = svc.request_otp(db, email)
     except svc.TooManyOtpRequestsError:
-        return _GENERIC_OTP_RESPONSE
+        # Safe to be specific here, unlike the unknown-email case above:
+        # rate-limiting only ever triggers for an email that already
+        # matched (we return early above before ever touching the OTP
+        # table for an unmatched one), so this can't be used to test
+        # whether an email is on the PCO People list.
+        return {
+            "message": "You've requested several codes recently. Please wait a bit "
+            "before requesting another."
+        }
 
     try:
         send_email(
@@ -363,7 +374,7 @@ def request_otp(payload: ReimbursementOtpRequest, db: Session = Depends(get_db))
     except Exception:
         logger.exception("Failed to send OTP email to %s", email)
         raise HTTPException(502, "Couldn't send the login code. Please try again shortly.")
-    return _GENERIC_OTP_RESPONSE
+    return _otp_response(email)
 
 
 @router.post("/verify-otp", response_model=ReimbursementTokenOut)
@@ -488,6 +499,26 @@ def submit_reimbursement(
             """,
         ),
     )
+    # A copy to the submitter too, so they have a record of exactly what
+    # they submitted without having to check the portal again.
+    send_email_best_effort(
+        r.submitter_email,
+        f"Your reimbursement request {r.name} was submitted (${r.total_amount:.2f})",
+        f"Your reimbursement request {r.name} for ${r.total_amount:.2f} was submitted "
+        f"and is now pending review:\n\n{lines_desc}",
+        render_email_html(
+            f"Request submitted - ${r.total_amount:.2f}",
+            f"""
+            <p style="margin:0 0 14px;">
+              Your reimbursement request <b>{r.name}</b> was submitted and is now
+              pending review.
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+              {lines_html}
+            </table>
+            """,
+        ),
+    )
     return _reimbursement_out(r, coa_by_no)
 
 
@@ -504,7 +535,7 @@ def list_my_reimbursements(
     return [_reimbursement_out(r, coa_by_no) for r in rows]
 
 
-@router.get("/my/{reimbursement_id}", response_model=ReimbursementOut)
+@router.get("/my/{reimbursement_id:int}", response_model=ReimbursementOut)
 def get_my_reimbursement(
     reimbursement_id: int,
     email: str = Depends(get_current_submitter),
@@ -514,7 +545,7 @@ def get_my_reimbursement(
     return _reimbursement_out(r, _coa_lookup(db))
 
 
-@router.put("/my/{reimbursement_id}", response_model=ReimbursementOut)
+@router.put("/my/{reimbursement_id:int}", response_model=ReimbursementOut)
 def update_my_reimbursement(
     reimbursement_id: int,
     payload: ReimbursementCreate,

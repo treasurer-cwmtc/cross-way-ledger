@@ -226,3 +226,35 @@ def test_reject_deletes_accrual_entries_and_approve_locks_edits():
     accrual_amounts = [e["amount"] for e in client.get("/api/accrual", headers=h).json() if e["is_reimbursement"]]
     assert 33.0 not in accrual_amounts
     assert detail["status"] == "pending"  # captured before the transitions above
+
+
+def test_submitter_my_list_does_not_collide_with_treasurer_route():
+    """Regression test: GET /api/reimbursements/my (submitter's own list)
+    was silently matching the earlier-declared, untyped
+    GET /api/reimbursements/{reimbursement_id} (treasurer) route - Starlette
+    matches path *shape* in declaration order and treated "my" as a valid
+    value for an untyped path param. That route requires the internal
+    require_permission("reimbursements") dependency, which always rejects a
+    submitter token (no "sub" claim) - so every real submitter, after
+    logging in successfully, immediately got a 401 "Could not validate
+    credentials" the moment the portal tried to load their request list,
+    which the frontend's error handler treated as a dead session and wiped
+    the (perfectly valid) submitter token. Fixed by typing the treasurer
+    route as {reimbursement_id:int}."""
+    _import_pco_people()
+    _assign("jane@example.com", ["I101210"])
+    h_submitter = _submitter_header("jane@example.com")
+
+    r = client.get("/api/reimbursements/my", headers=h_submitter)
+    assert r.status_code == 200, r.text
+    assert isinstance(r.json(), list)
+
+    # The treasurer's numeric-id route must still work normally.
+    h = auth_header()
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        created = client.post(
+            "/api/reimbursements/my",
+            headers=h_submitter,
+            json={"lines": [{"account_no": "I101210", "amount": 12.0}]},
+        ).json()
+    assert client.get(f"/api/reimbursements/{created['id']}", headers=h).status_code == 200
