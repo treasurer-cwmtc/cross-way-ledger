@@ -377,7 +377,10 @@ def submit_reimbursement(
             raise HTTPException(403, f"You aren't authorized to submit against {line.account_no}.")
 
     person = db.scalar(select(PcoPerson).where(PcoPerson.email == email).limit(1))
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    # Microsecond precision, not just seconds - two submissions from the same
+    # person can otherwise land in the same wall-clock second and collide on
+    # the unique `name` column (confirmed by a real CI failure).
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     r = Reimbursement(
         name=f"{email}-{stamp}",
         submitter_email=email,
