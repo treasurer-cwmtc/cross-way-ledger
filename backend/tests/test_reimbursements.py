@@ -207,6 +207,44 @@ def test_submission_rejects_unauthorized_account():
     assert r.status_code == 403
 
 
+def test_marking_paid_sets_accrual_posted_date():
+    """Regression test: the linked AccrualEntry only gets a transaction_date
+    at submission, not a posted_date - the Accrual page's year filter treats
+    a null posted_date as "not in any year" and has no "all years" option,
+    so every reimbursement entry was invisible there until marked Paid.
+    Fixed by setting posted_date when the status transitions to paid."""
+    _import_pco_people()
+    _assign("jane@example.com", ["I101210"])
+    h_submitter = _submitter_header("jane@example.com")
+
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        created = client.post(
+            "/api/reimbursements/my",
+            headers=h_submitter,
+            json={"lines": [{"account_no": "I101210", "amount": 17.0}]},
+        ).json()
+
+    h = auth_header()
+    accrual_id = next(
+        e["id"] for e in client.get("/api/accrual", headers=h).json()
+        if e["is_reimbursement"] and e["amount"] == 17.0
+    )
+    assert client.get("/api/accrual", headers=h).json()
+    before = next(e for e in client.get("/api/accrual", headers=h).json() if e["id"] == accrual_id)
+    assert before["posted_date"] is None
+
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        paid = client.put(
+            f"/api/reimbursements/{created['id']}/status",
+            headers=h,
+            json={"status": "paid"},
+        )
+    assert paid.status_code == 200, paid.text
+
+    after = next(e for e in client.get("/api/accrual", headers=h).json() if e["id"] == accrual_id)
+    assert after["posted_date"] is not None
+
+
 def test_reject_deletes_accrual_entries_and_approve_locks_edits():
     _import_pco_people()
     _assign("jane@example.com", ["I101210"])
