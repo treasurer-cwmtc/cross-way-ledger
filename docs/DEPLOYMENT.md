@@ -269,10 +269,19 @@ To let an external tool connect:
    ```
 3. Connect using the `ledger_reporting` username/password, with SSL enabled and the CA certificate uploaded, but **client authentication left unchecked** (Looker Studio's toggle for this specifically breaks the connection if enabled with only a server cert available).
 
-> **`ledger-db-prod`'s public IP is left open to `0.0.0.0/0`** specifically so Looker Studio can reach it (SSL-only, read-only credential) — this is intentional, not an oversight. If you ever run `gcloud sql instances patch ledger-db-prod --authorized-networks=...` for an unrelated reason (e.g. temporarily authorizing your own IP to run a one-off query), **remember that flag replaces the whole list, not adds to it** — you'll silently revoke Looker Studio's access. Always restore `0.0.0.0/0` afterward:
+> **⚠️ Superseded as of 2026-07-29 — `ledger-db-prod` is no longer reachable from the internet.**
+>
+> This section previously instructed leaving the prod public IP open to `0.0.0.0/0` so Looker Studio could reach it. **That guidance is withdrawn.** The Looker Studio effort was dropped, and `authorizedNetworks` on `ledger-db-prod` has been cleared:
 > ```bash
-> gcloud sql instances patch ledger-db-prod --authorized-networks=0.0.0.0/0
+> gcloud sql instances patch ledger-db-prod --clear-authorized-networks
 > ```
+> The application is unaffected — Cloud Run reaches the database over the Cloud SQL unix socket (`?host=/cloudsql/<connection-name>` in `DATABASE_URL`), never the public IP. Verified after the change: `/api/health` 200, frontend 200, and a direct public-IP connection attempt times out.
+>
+> **Do not re-add `0.0.0.0/0`.** If you need direct database access for an ad-hoc query, use the Cloud SQL Auth Proxy with the IAM database users from [§9](#9-database-access-for-people-not-just-the-app) — that authenticates through Google's APIs and needs no authorized-network entry at all:
+> ```bash
+> cloud-sql-proxy cross-way-ledger:us-south1:ledger-db-prod --auto-iam-authn
+> ```
+> Note `ledger-db-dev` is still open to `0.0.0.0/0` deliberately, for development convenience against non-production data.
 
 ### Google Sheets General Ledger export
 
@@ -436,7 +445,9 @@ proxy_pass $backend_upstream;
 
 **`gcloud` commands suddenly fail with a reauthentication error** — Google's OAuth session for the CLI expires periodically; run `gcloud auth login` again.
 
-**Looker Studio (or any external BI tool) suddenly can't connect, with no config changes on its end** — check `ledger-db-prod`'s authorized networks (`gcloud sql instances describe ledger-db-prod --format="yaml(settings.ipConfiguration)"`). `--authorized-networks` **replaces** the entire list rather than appending to it, so any one-off `gcloud sql instances patch --authorized-networks=<your IP>` (e.g. to run a manual query) silently removes the `0.0.0.0/0` rule Looker Studio depends on. Restore it with `gcloud sql instances patch ledger-db-prod --authorized-networks=0.0.0.0/0`.
+**Can't reach `ledger-db-prod` directly from a SQL client / script** — expected. As of 2026-07-29 its `authorizedNetworks` list is empty, so the public IP is closed to everything (see the note in [§10](#10-external-bi-tools-looker-studio-google-sheets)). This does not affect the application, which connects over the Cloud SQL socket. For ad-hoc access use the Cloud SQL Auth Proxy with `--auto-iam-authn` and the IAM users from [§9](#9-database-access-for-people-not-just-the-app). Do **not** "fix" this by re-adding `0.0.0.0/0`.
+
+**Still worth knowing: `--authorized-networks` replaces the entire list rather than appending to it.** This is the same class of footgun as `--set-env-vars` on Cloud Run. It bit us once when a one-off patch to authorize a single IP silently revoked the rule an external tool depended on. If you ever do manage authorized networks on an instance (e.g. `ledger-db-dev`), always pass the complete intended list, or use `--clear-authorized-networks` when you mean to empty it.
 
 **A Cloud Run backend deploy fails health checks after adding/changing env vars, with a `pydantic_core.ValidationError` / missing required field in the logs** — this is the same class of bug as the authorized-networks one above, applied to `gcloud run services update`. `--set-env-vars`/`--set-secrets` **replace** the entire env var list; `--update-env-vars`/`--update-secrets` merge, but only against the *most recently created* revision, which may not be the one actually serving traffic if an earlier deploy attempt already failed. See [§11](#11-reimbursements-module-outbound-email-smtp)'s warning box for the full incident and the fix (pull the last-known-good revision's complete env list and re-apply it explicitly via `--set-*`). Also watch for comma-containing values (e.g. `CORS_ORIGINS`) getting split apart by gcloud's own comma-delimited flag parsing - use the `^DELIM^` custom-delimiter syntax shown there.
 
