@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -28,6 +29,8 @@ from .routers import (
 )
 from .routers import settings as settings_router
 from .seed import seed
+
+logger = logging.getLogger("app.main")
 
 settings = get_settings()
 
@@ -78,6 +81,17 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     # Catches whatever a router didn't already turn into a friendly 400
     # itself (e.g. a bad account_no rejected by the FK constraint) - a
     # database constraint violation should never surface as a raw 500.
+    #
+    # Log the real exception. The generic message below is deliberately
+    # vague for the user, but that once made a genuine FK-ordering bug
+    # effectively undiagnosable: the handler swallowed the underlying
+    # ForeignKeyViolation, nothing was logged, and the user-facing text
+    # ("invalid account number") pointed at a completely innocent field.
+    # Reproducing it required rerunning the ORM sequence by hand against a
+    # real database. Never again - always leave the real error in the logs.
+    logger.exception(
+        "IntegrityError on %s %s", request.method, request.url.path, exc_info=exc
+    )
     return JSONResponse(
         status_code=400,
         content={"detail": "This would violate a database constraint (e.g. an invalid account number)."},
