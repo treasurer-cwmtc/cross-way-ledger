@@ -817,6 +817,7 @@ class ReimbursementLineIn(BaseModel):
     account_no: str
     amount: float
     description: str = ""
+    transaction_date: date | None = None
     receipt_file_id: str = ""
     receipt_file_name: str = ""
     receipt_web_view_link: str = ""
@@ -828,6 +829,7 @@ class ReimbursementLineOut(BaseModel):
     statement_description: str
     amount: float
     description: str
+    transaction_date: date | None
     receipt_file_id: str
     receipt_file_name: str
     receipt_web_view_link: str

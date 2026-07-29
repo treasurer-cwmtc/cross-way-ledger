@@ -74,6 +74,7 @@ def _line_out(line: ReimbursementLine, coa_by_no: dict[str, ChartOfAccount]) -> 
         statement_description=coa.statement_description if coa else "",
         amount=line.amount,
         description=line.description,
+        transaction_date=line.transaction_date,
         receipt_file_id=line.receipt_file_id,
         receipt_file_name=line.receipt_file_name,
         receipt_web_view_link=line.receipt_web_view_link,
@@ -107,6 +108,7 @@ def _apply_lines(db: Session, reimbursement: Reimbursement, payload: Reimburseme
             account_no=line.account_no,
             amount=line.amount,
             description=line.description,
+            transaction_date=line.transaction_date,
             receipt_file_id=line.receipt_file_id,
             receipt_file_name=line.receipt_file_name,
             receipt_web_view_link=line.receipt_web_view_link,
@@ -468,6 +470,7 @@ def submit_reimbursement(
     db.refresh(r)
 
     lines_desc = "\n".join(f"  - {line.account_no}: ${line.amount:.2f}" for line in payload.lines)
+    lines_desc += f"\n  Total: ${r.total_amount:.2f}"
     coa_by_no = _coa_lookup(db)
     lines_html = "".join(
         f"""<tr>
@@ -481,6 +484,12 @@ def submit_reimbursement(
             </tr>"""
         for line in payload.lines
     )
+    lines_html += f"""<tr>
+              <td style="padding:6px 0 0;font-weight:700;">Total</td>
+              <td style="padding:6px 0 0;font-weight:700;text-align:right;">
+                ${r.total_amount:.2f}
+              </td>
+            </tr>"""
     send_email_best_effort(
         settings.reimbursement_notify_email,
         f"New reimbursement request: {r.name} (${r.total_amount:.2f})",

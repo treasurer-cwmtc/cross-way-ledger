@@ -161,6 +161,39 @@ def test_submission_creates_accrual_entries_and_dashboard_kpi_reflects_it():
     assert dashboard["outstanding_reimbursements_total"] >= 52.50
 
 
+def test_submission_line_transaction_date_flows_to_accrual_entry():
+    """Regression test: a submitter-supplied transaction_date should land
+    on the linked AccrualEntry instead of always defaulting to today - see
+    services/reimbursements.create_accrual_entries."""
+    _import_pco_people()
+    _assign("jane@example.com", ["I101210"])
+    h_submitter = _submitter_header("jane@example.com")
+
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        r = client.post(
+            "/api/reimbursements/my",
+            headers=h_submitter,
+            json={
+                "lines": [
+                    {
+                        "account_no": "I101210",
+                        "amount": 15.0,
+                        "description": "Backdated expense",
+                        "transaction_date": "2026-01-15",
+                    }
+                ]
+            },
+        )
+    assert r.status_code == 201, r.text
+    assert r.json()["lines"][0]["transaction_date"] == "2026-01-15"
+
+    h = auth_header()
+    entries = client.get("/api/accrual", headers=h).json()
+    matching = [e for e in entries if e["description"] == "Backdated expense"]
+    assert len(matching) == 1
+    assert matching[0]["transaction_date"] == "2026-01-15"
+
+
 def test_submission_rejects_unauthorized_account():
     _import_pco_people()
     _assign("jane@example.com", ["I101210"])

@@ -55,6 +55,7 @@ export interface ReimbursementLineIn {
   account_no: string;
   amount: number;
   description?: string;
+  transaction_date?: string | null;
   receipt_file_id?: string;
   receipt_file_name?: string;
   receipt_web_view_link?: string;
@@ -66,6 +67,7 @@ export interface ReimbursementLine {
   statement_description: string;
   amount: number;
   description: string;
+  transaction_date: string | null;
   receipt_file_id: string;
   receipt_file_name: string;
   receipt_web_view_link: string;
