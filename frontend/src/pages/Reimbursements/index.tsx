@@ -300,7 +300,12 @@ function AssignmentsSection() {
       </table>
 
       {detailFor && (
-        <AccessDetailModal summary={detailFor} accounts={accounts} onClose={() => setDetailFor(null)} />
+        <AccessDetailModal
+          summary={detailFor}
+          accounts={accounts}
+          onClose={() => setDetailFor(null)}
+          onSaved={loadSummary}
+        />
       )}
     </div>
   );

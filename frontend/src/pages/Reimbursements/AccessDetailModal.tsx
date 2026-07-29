@@ -1,22 +1,50 @@
+import { useState } from "react";
 import { ChartAccount } from "../../api/accounts";
-import { ReimbursementAccessSummary } from "../../api/reimbursements";
+import { ReimbursementAccessSummary, reimbursementsApi } from "../../api/reimbursements";
+import MultiAccountPicker from "../ledger/MultiAccountPicker";
 
-/** Read-only popup showing everything one person is authorized to submit
- * reimbursements against - clicked from the "who has access" list.
- * Mirrors DonorDetailModal.tsx's overlay/card pattern. */
+/** Popup showing (and letting you edit) everything one person is authorized
+ * to submit reimbursements against - clicked from the "who has access"
+ * list. Mirrors DonorDetailModal.tsx's overlay/card pattern, but unlike
+ * that one this is a real editor: saving here is equivalent to re-selecting
+ * this person in the People picker below and saving from there, just
+ * without leaving the row you clicked. */
 export default function AccessDetailModal({
   summary,
   accounts,
   onClose,
+  onSaved,
 }: {
   summary: ReimbursementAccessSummary;
   accounts: ChartAccount[];
   onClose: () => void;
+  onSaved: () => void;
 }) {
-  const accountByNo = new Map(accounts.map((a) => [a.account_no, a]));
+  const [assigned, setAssigned] = useState<string[]>(summary.account_nos);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Budget accounts are planning figures, never real expenses/income - a
+  // reimbursement should never be allowed to post against one (same filter
+  // as the main assignment editor below).
+  const assignableAccounts = accounts.filter((a) => a.category !== "Budget");
 
   function onEsc(ev: React.KeyboardEvent) {
     if (ev.key === "Escape") onClose();
+  }
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await reimbursementsApi.setAssignments(summary.email, assigned);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -38,7 +66,7 @@ export default function AccessDetailModal({
       <div
         className="card"
         onClick={(ev) => ev.stopPropagation()}
-        style={{ maxWidth: 480, width: "90%", maxHeight: "85vh", overflowY: "auto" }}
+        style={{ maxWidth: 600, width: "90%", maxHeight: "85vh", overflowY: "auto" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <h3 style={{ marginTop: 0 }}>{summary.name || summary.email}</h3>
@@ -49,29 +77,17 @@ export default function AccessDetailModal({
         <p className="subtitle" style={{ marginTop: 0 }}>{summary.email}</p>
 
         <h4 style={{ marginBottom: 6 }}>Authorized Chart-of-Accounts</h4>
-        <table>
-          <thead>
-            <tr>
-              <th>Account</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.account_nos.map((no) => (
-              <tr key={no}>
-                <td>{no}</td>
-                <td>{accountByNo.get(no)?.statement_description || "—"}</td>
-              </tr>
-            ))}
-            {summary.account_nos.length === 0 && (
-              <tr>
-                <td colSpan={2} className="subtitle">
-                  No accounts assigned.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <MultiAccountPicker value={assigned} accounts={assignableAccounts} onChange={setAssigned} />
+
+        <div className="row" style={{ marginTop: 14, gap: 8 }}>
+          <button className="btn" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+          <button className="btn secondary" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+        {error && <div className="error">{error}</div>}
       </div>
     </div>
   );
