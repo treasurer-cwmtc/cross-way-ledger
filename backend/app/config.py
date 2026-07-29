@@ -45,20 +45,24 @@ class Settings(BaseSettings):
     reimbursement_notify_email: str = "treasurer@crosswaymtc.org"
 
     # --- Google Drive (Reimbursement receipt uploads) ---
-    # A dedicated service account (svc-cross-way-ledger-drive@...), added as
-    # an Editor on the treasurer's existing root Drive folder (the same one
-    # frontend/src/lib/googleDrive.ts's ROOT_FOLDER_ID points at, used for
-    # campaign imports/bank uploads) - a plain folder share, not a Shared
-    # Drive/domain-wide delegation, so receipts land in the same place as
-    # every other treasurer document. No JSON key is stored anywhere - the
-    # org's iam.disableServiceAccountKeyCreation policy blocks that, and it's
-    # unnecessary anyway: the Cloud Run runtime service account has been
-    # granted roles/iam.serviceAccountTokenCreator on this service account,
-    # so the backend impersonates it for short-lived tokens (see
+    # A dedicated service account (svc-cross-way-ledger-drive@...) that
+    # impersonates google_drive_impersonate_user (the treasurer's real
+    # Workspace account) via domain-wide delegation, uploading into that
+    # user's existing root Drive folder (the same one frontend/src/lib/
+    # googleDrive.ts's ROOT_FOLDER_ID points at, used for campaign imports/
+    # bank uploads) - not a Shared Drive. A plain folder share + bare
+    # service-account auth was tried first and rejected by the Drive API
+    # (service accounts have no storage quota of their own), hence the
+    # impersonation. No JSON key is stored anywhere - the org's
+    # iam.disableServiceAccountKeyCreation policy blocks that; the Cloud Run
+    # runtime service account instead has roles/iam.serviceAccountTokenCreator
+    # on this service account, used to keylessly sign the domain-wide
+    # delegation JWT via the IAM Credentials API (see
     # services/google_drive.py, docs/DEPLOYMENT.md). Empty by default;
     # receipt upload is skipped with a clear error until configured.
     google_drive_service_account_email: str = ""
     google_drive_root_folder_id: str = ""
+    google_drive_impersonate_user: str = "treasurer@crosswaymtc.org"
 
     @property
     def cors_origin_list(self) -> list[str]:

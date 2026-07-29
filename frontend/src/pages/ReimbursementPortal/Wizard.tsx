@@ -171,7 +171,13 @@ export default function ReimbursementWizard(props: {
                   </td>
                   <td>
                     {line.receipt_file_name ? (
-                      <span>{line.receipt_file_name}</span>
+                      line.receipt_web_view_link ? (
+                        <a href={line.receipt_web_view_link} target="_blank" rel="noreferrer">
+                          {line.receipt_file_name}
+                        </a>
+                      ) : (
+                        <span>{line.receipt_file_name}</span>
+                      )
                     ) : (
                       <input
                         type="file"

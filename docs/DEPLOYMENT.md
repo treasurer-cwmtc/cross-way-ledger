@@ -362,6 +362,8 @@ Receipts attached to a reimbursement submission upload into the **same existing 
 
 Submitters authenticate with an emailed one-time code, not a Google session, so there's no browser-side OAuth token to upload with - the backend uploads server-side using a dedicated service account.
 
+**A plain service-account-as-folder-Editor approach was tried first and doesn't work.** Even added as an Editor on the folder, a bare service account has no Drive storage quota of its own, so Google rejects any file creation there with `storageQuotaExceeded` ("Service Accounts do not have storage quota. Leverage shared drives, or use OAuth delegation instead."). The fix is **domain-wide delegation**: the service account impersonates the treasurer's real Workspace account, so every file it creates is owned by (and counts against the quota of) an actual person - exactly as if they'd uploaded it themselves.
+
 ### One-time setup (already done for dev as of this writing - here for reference/rebuilds)
 
 1. **Create the service account** (already done):
@@ -372,31 +374,46 @@ Submitters authenticate with an emailed one-time code, not a Google session, so 
    ```
    Note: "Cross Way" is two words - the service account ID uses a hyphen (`svc-cross-way-ledger-drive`) to represent that, since GCP service account IDs can't contain spaces. Its full email is `svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com`.
 
-2. **Share the existing root Drive folder with that service account as Editor.** In Drive, right-click the "Cross Way Ledger" folder → Share → add `svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com` as Editor. Google will warn that this is an external/unrecognized account - that's expected for any service account; click "Share anyway." This is a completely ordinary folder share, exactly like sharing with any other person - no Shared Drive, no Workspace Admin Console involvement.
+2. **Authorize domain-wide delegation in the Google Workspace Admin Console** - this step can only be done by a Workspace Super Admin, in the browser, and is the piece that actually grants the service account permission to impersonate a real user:
+   - Go to [admin.google.com](https://admin.google.com) → **Security** → **API Controls** → **Domain-wide Delegation**
+   - Click **Add new**
+   - **Client ID**: the service account's numeric unique ID, not its email - get it with:
+     ```bash
+     gcloud iam service-accounts describe svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com \
+       --project=cross-way-ledger --format="value(uniqueId)"
+     ```
+   - **OAuth Scopes**: `https://www.googleapis.com/auth/drive` - the *full* Drive scope, not the narrower `drive.file`. `drive.file` only grants access to files an app itself created or that were explicitly opened through it; the year/`Reimbursements` subfolders already exist, created earlier by a completely different OAuth client (the frontend's Picker flow), so a narrower scope can't see or write into them.
+   - Click **Authorize**
 
-3. **No JSON key is generated or stored.** This project's GCP org has `constraints/iam.disableServiceAccountKeyCreation` enabled, so `gcloud iam service-accounts keys create` fails with `FAILED_PRECONDITION: Key creation is not allowed on this service account` - and a static key would be worse practice anyway (a long-lived secret that can leak and doesn't rotate). Instead, the Cloud Run runtime service account **impersonates** the Drive service account for short-lived tokens:
+3. **No JSON key is generated or stored, even for this domain-wide-delegation flow.** This project's GCP org has `constraints/iam.disableServiceAccountKeyCreation` enabled, so `gcloud iam service-accounts keys create` fails with `FAILED_PRECONDITION: Key creation is not allowed on this service account` - and a static key would be worse practice anyway (a long-lived secret that can leak and doesn't rotate). Domain-wide delegation normally requires a service account's own private key to self-sign the JWT assertion it exchanges for a delegated token, but `google.auth.iam.Signer` does that signing via the IAM Credentials API's `signBlob` method instead, keylessly - it just needs the caller to already have `roles/iam.serviceAccountTokenCreator` on the target service account (that permission includes `signBlob`):
    ```bash
    gcloud iam service-accounts add-iam-policy-binding \
      svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com \
      --member="serviceAccount:633510572581-compute@developer.gserviceaccount.com" \
      --role="roles/iam.serviceAccountTokenCreator"
    ```
-   `services/google_drive.py` calls `google.auth.default()` to get Cloud Run's own ambient credentials, then wraps them in `google.auth.impersonated_credentials.Credentials` targeting the Drive service account - no secret in Secret Manager for this piece at all.
+   `services/google_drive.py` builds a `google.oauth2.service_account.Credentials` with `subject=<the treasurer's email>` for the domain-wide-delegation impersonation, but backs it with an `iam.Signer` (using Cloud Run's own ambient credentials to call `signBlob`) instead of a local private key.
 
-4. **Add the two plain (non-secret) env vars** to `ledger-backend-dev` (see the ⚠️ warning in §11 above before running any `--update-*` command against a service that might not be on its latest-ready revision):
+4. **Add the plain (non-secret) env vars** to `ledger-backend-dev` (see the ⚠️ warning in §11 above before running any `--update-*` command against a service that might not be on its latest-ready revision):
    ```bash
    gcloud run services update ledger-backend-dev --region=us-south1 \
-     --update-env-vars="GOOGLE_DRIVE_ROOT_FOLDER_ID=1xc26-KngtfILik8Y2_8GA--6pJRYkK7P,GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL=svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com"
+     --update-env-vars="GOOGLE_DRIVE_ROOT_FOLDER_ID=1xc26-KngtfILik8Y2_8GA--6pJRYkK7P,GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL=svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com,GOOGLE_DRIVE_IMPERSONATE_USER=treasurer@crosswaymtc.org"
    ```
+   `google_drive_impersonate_user` already defaults to `treasurer@crosswaymtc.org` in `config.py`, so this last var is optional in practice - included here for explicitness.
+
    **Not yet applied to `ledger-backend-prod`** as of this writing - the whole Reimbursements module (including its SMTP config in §11) hasn't shipped to prod yet. Add these alongside the rest of that module's config when it does.
 
 ### Folder layout
 
 Uploads land at `<root>/<year>/Reimbursements/<submitter_email>/<timestamp>_<filename>` - year first, then category, matching the convention `uploadCampaignImportFile`/`uploadBankOrStripeFile` already use elsewhere in the same root folder. Year/category/email subfolders are created on first use via a find-or-create-by-name query.
 
+### Receipt visibility for submitters
+
+The treasurer and anyone else already sharing the root Drive folder (auditor, other treasurer) can open any receipt normally - new files inherit the parent folder's sharing automatically. But **reimbursement submitters can't be assumed to have a Google account tied to their PCO email at all** (they log in via an emailed one-time code, not Google Sign-In), so folder-level sharing doesn't reach them. Each uploaded file is therefore individually set to "anyone with the link can view" (`drive.permissions().create(..., body={"type": "anyone", "role": "reader"})`) right after upload, so the submitter's own copy of the link (shown back to them in the wizard) works regardless of whether they have a Google account. The file ID itself isn't guessable, but be aware this means the link isn't identity-gated - anyone who obtains it can view that one file.
+
 ### Verifying it's working
 
-Have a submitter attach a receipt in the portal wizard, then confirm the file actually appears under the correct `<year>/Reimbursements/<email>/` subfolder in the "Cross Way Ledger" Drive folder. A `RuntimeError` with the message "Google Drive receipt uploads aren't configured yet" means the env vars above haven't been set on the service actually receiving the request.
+Have a submitter attach a receipt in the portal wizard, then confirm the file actually appears under the correct `<year>/Reimbursements/<email>/` subfolder in the "Cross Way Ledger" Drive folder, and that clicking the link in the wizard actually opens it. A `RuntimeError` with the message "Google Drive receipt uploads aren't configured yet" means the env vars above haven't been set on the service actually receiving the request. A `storageQuotaExceeded` error means domain-wide delegation isn't authorized yet (or the wrong scope was granted) - see step 2 above.
 
 ## 13. Troubleshooting
 
@@ -427,7 +444,9 @@ proxy_pass $backend_upstream;
 
 **A `gcloud`/`bq` command with a flag value containing spaces fails with `'C:\...\Cloud' is not recognized as an internal or external command`** (Windows) — this is a quoting collision between the Cloud SDK's install path (which itself contains a space, `Google\Cloud SDK`) and a spaced argument value (e.g. `--display-name="My Function"`, `--schedule="0 * * * *"`). Avoid spaces in flag values where possible (use camelCase instead of a spaced display name), or in PowerShell use the `--%` stop-parsing token; as a last resort, write the argument to a file and pass a file path instead.
 
-**`gcloud iam service-accounts keys create` fails with `FAILED_PRECONDITION: Key creation is not allowed on this service account`** — this project's org has `constraints/iam.disableServiceAccountKeyCreation` enabled, blocking static JSON keys entirely. Don't disable the policy to work around it; use service account impersonation instead - grant the caller (e.g. the Cloud Run runtime service account) `roles/iam.serviceAccountTokenCreator` on the target service account, then request credentials via `google.auth.impersonated_credentials` rather than loading a key file. See [§12](#12-reimbursements-module-google-drive-receipt-uploads) for a working example.
+**`gcloud iam service-accounts keys create` fails with `FAILED_PRECONDITION: Key creation is not allowed on this service account`** — this project's org has `constraints/iam.disableServiceAccountKeyCreation` enabled, blocking static JSON keys entirely. Don't disable the policy to work around it. For plain "call this API as this service account" needs, grant the caller `roles/iam.serviceAccountTokenCreator` and use `google.auth.impersonated_credentials`. For Workspace domain-wide delegation specifically (impersonating a *real user*, not another service account), that role also unlocks `google.auth.iam.Signer` for keyless JWT signing via the IAM Credentials API's `signBlob` method - see [§12](#12-reimbursements-module-google-drive-receipt-uploads) for a working example of both.
+
+**Drive API upload fails with `storageQuotaExceeded` ("Service Accounts do not have storage quota...")** — a bare service account, even added as an Editor on a folder, can't own files outside a Shared Drive - it has no storage quota of its own. Either move the target folder to a real Shared Drive, or use domain-wide delegation so the service account impersonates a real user and files are created (and quota-counted) as that person. See [§12](#12-reimbursements-module-google-drive-receipt-uploads).
 
 ---
 
