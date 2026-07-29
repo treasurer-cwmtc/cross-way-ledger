@@ -7,9 +7,16 @@ from unittest.mock import patch
 
 from test_auth import auth_header, client  # reuse the shared TestClient/app setup
 
+# Each _submitter_header() call consumes one of OTP_RATE_LIMIT_PER_HOUR's 5
+# slots for that email, against a test DB shared with every other test file.
+# Tests here have already had to be moved between people to avoid starving an
+# unrelated test's OTP request, so keep enough identities that no single one
+# approaches the limit rather than rationing two of them.
 PCO_CSV = """Person ID,Name,Primary Email,Primary Phone Number
 1001,Jane Doe,jane@example.com,(214) 555-1111
 1002,John Smith,john@example.com,(214) 555-2222
+1003,Mary Abraham,mary@example.com,(214) 555-3333
+1004,Thomas Varghese,thomas@example.com,(214) 555-4444
 """
 
 
@@ -53,7 +60,7 @@ def _submitter_header(email: str) -> dict:
 
 def test_pco_people_import_is_upserted_by_person_id():
     result = _import_pco_people()
-    assert result["people_imported"] == 2
+    assert result["people_imported"] == 4
 
     h = auth_header()
     people = {p["person_id"]: p for p in client.get("/api/reimbursements/pco-people", headers=h).json()}
@@ -322,6 +329,79 @@ def test_marking_paid_sets_accrual_posted_date():
 
     after = next(e for e in client.get("/api/accrual", headers=h).json() if e["id"] == accrual_id)
     assert after["posted_date"] is not None
+
+
+def test_editing_a_pending_request_succeeds_and_relinks_accrual_entries():
+    """Regression test for the edit path, which had no successful-case
+    coverage at all - the only existing edit test asserted a 409 on a
+    locked request, so the happy path was never exercised and shipped
+    broken.
+
+    delete_accrual_entries nulls line.accrual_entry_id in Python, but
+    reimbursement_lines has a real FK to ledger_accrual.id. On edit those
+    deletes shared a flush with _apply_lines' ReimbursementLine deletes,
+    and SQLAlchemy emitted DELETE FROM ledger_accrual before the reference
+    was actually cleared in the database:
+
+        ForeignKeyViolation: update or delete on table "ledger_accrual"
+        violates foreign key constraint
+        "reimbursement_lines_accrual_entry_id_fkey"
+        DETAIL: Key (id)=(21) is still referenced from reimbursement_lines.
+
+    Surfaced to the user as "This would violate a database constraint
+    (e.g. an invalid account number)" - pointing at a field that was
+    perfectly valid.
+    """
+    _import_pco_people()
+    _assign("mary@example.com", ["I101210", "E151910"])
+    h_submitter = _submitter_header("mary@example.com")
+
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        created = client.post(
+            "/api/reimbursements/my",
+            headers=h_submitter,
+            json={
+                "lines": [
+                    {"account_no": "I101210", "amount": 40.0, "description": "Edit path A",
+                     "transaction_date": "2026-03-01", "receipt_file_id": "edit-f1"},
+                    {"account_no": "E151910", "amount": 60.0, "description": "Edit path B",
+                     "transaction_date": "2026-03-02", "receipt_file_id": "edit-f2"},
+                ]
+            },
+        ).json()
+    assert round(created["total_amount"], 2) == 100.0
+
+    h = auth_header()
+    before = [e for e in client.get("/api/accrual", headers=h).json()
+              if e["description"] in ("Edit path A", "Edit path B")]
+    assert len(before) == 2
+
+    # The actual edit: change amounts, drop to a single line, rename.
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        edited = client.put(
+            f"/api/reimbursements/my/{created['id']}",
+            headers=h_submitter,
+            json={
+                "name": "Edited request name",
+                "lines": [
+                    {"account_no": "I101210", "amount": 75.0, "description": "Edit path C",
+                     "transaction_date": "2026-03-03", "receipt_file_id": "edit-f3"},
+                ],
+            },
+        )
+    assert edited.status_code == 200, edited.text
+    body = edited.json()
+    assert body["name"] == "Edited request name"
+    assert round(body["total_amount"], 2) == 75.0
+    assert len(body["lines"]) == 1
+
+    # Old Accrual entries gone, exactly one new one, freshly linked.
+    entries = client.get("/api/accrual", headers=h).json()
+    descs = {e["description"] for e in entries}
+    assert "Edit path A" not in descs and "Edit path B" not in descs
+    new_entries = [e for e in entries if e["description"] == "Edit path C"]
+    assert len(new_entries) == 1
+    assert new_entries[0]["transaction_date"] == "2026-03-03"
 
 
 def test_reject_deletes_accrual_entries_and_paid_locks_edits():

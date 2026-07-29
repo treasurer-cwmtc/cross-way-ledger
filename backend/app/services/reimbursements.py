@@ -159,12 +159,36 @@ def has_reconciled_accrual_entries(db: Session, reimbursement: Reimbursement) ->
 
 
 def delete_accrual_entries(db: Session, reimbursement: Reimbursement) -> None:
+    """Deletes each line's linked AccrualEntry.
+
+    The two flushes are load-bearing, not defensive. reimbursement_lines has
+    a real FK to ledger_accrual.id, so the reference has to be gone *in the
+    database* before the AccrualEntry row can be deleted. Setting
+    line.accrual_entry_id = None only changes it in Python - if that update
+    and the DELETE land in the same flush, SQLAlchemy is free to order the
+    DELETE first and Postgres rejects it:
+
+        ForeignKeyViolation: update or delete on table "ledger_accrual"
+        violates foreign key constraint
+        "reimbursement_lines_accrual_entry_id_fkey"
+
+    That's exactly what happened on the edit path, where these deletes
+    shared a flush with the ReimbursementLine deletes from _apply_lines
+    (see the regression test for a successful edit). Clearing the FK and
+    flushing first makes the ordering explicit instead of relying on
+    SQLAlchemy's dependency sort to guess correctly.
+    """
+    entries: list[AccrualEntry] = []
     for line in reimbursement.lines:
         if line.accrual_entry_id:
             entry = db.get(AccrualEntry, line.accrual_entry_id)
             if entry is not None:
-                db.delete(entry)
+                entries.append(entry)
             line.accrual_entry_id = None
+    db.flush()
+    for entry in entries:
+        db.delete(entry)
+    db.flush()
 
 
 def mark_accrual_entries_posted(db: Session, reimbursement: Reimbursement, posted_date: date) -> None:
