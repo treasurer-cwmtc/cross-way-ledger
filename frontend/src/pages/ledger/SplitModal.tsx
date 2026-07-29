@@ -35,7 +35,11 @@ export default function SplitModal(props: {
   const total = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const delta = Math.round((e.amount - total) * 100) / 100;
   const balanced = Math.abs(delta) < 0.01;
-  const allFilled = lines.every((l) => l.description.trim() && Number(l.amount) > 0);
+  // Split lines inherit the original's sign (expenses are negative amounts
+  // throughout this ledger) - only reject blank/zero, not negative, or a
+  // real expense split (like this one) could never actually save even
+  // when balanced.
+  const allFilled = lines.every((l) => l.description.trim() && Number(l.amount) !== 0);
   const canSave = balanced && allFilled && lines.length >= 2;
 
   function updateLine(i: number, patch: Partial<DraftLine>) {
