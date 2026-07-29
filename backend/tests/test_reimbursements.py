@@ -213,9 +213,14 @@ def test_marking_paid_sets_accrual_posted_date():
     a null posted_date as "not in any year" and has no "all years" option,
     so every reimbursement entry was invisible there until marked Paid.
     Fixed by setting posted_date when the status transitions to paid."""
+    # Uses john@example.com, not jane@example.com - the latter already logs
+    # in via _login several times elsewhere in this file, and each login
+    # consumes one of OTP_RATE_LIMIT_PER_HOUR's 5 slots against the same
+    # shared test DB; adding a 6th call here made a later, unrelated test's
+    # OTP request get rate-limited instead of actually sending.
     _import_pco_people()
-    _assign("jane@example.com", ["I101210"])
-    h_submitter = _submitter_header("jane@example.com")
+    _assign("john@example.com", ["I101210"])
+    h_submitter = _submitter_header("john@example.com")
 
     with patch("app.routers.reimbursements.send_email_best_effort"):
         created = client.post(
