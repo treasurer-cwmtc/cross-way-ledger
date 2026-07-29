@@ -765,6 +765,10 @@ class ReimbursementLine(Base):
     )
     amount: Mapped[float] = mapped_column(Float, default=0.0)
     description: Mapped[str] = mapped_column(String(300), default="")
+    # The date the expense was actually incurred (set by the submitter),
+    # not the submission date - flows into the linked AccrualEntry's own
+    # transaction_date instead of defaulting to "today" at submission time.
+    transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     # Same Google Drive receipt attachment shape as AccrualEntry/
     # ReconciliationEntry - see services/google_drive.py for how these get
     # populated (a Shared Drive upload, not the browser-side Picker those

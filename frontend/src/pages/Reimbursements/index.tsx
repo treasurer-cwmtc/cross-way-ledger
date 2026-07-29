@@ -128,6 +128,7 @@ function QueueSection() {
                 <th>Account</th>
                 <th>Amount</th>
                 <th>Description</th>
+                <th>Date</th>
                 <th>Receipt</th>
               </tr>
             </thead>
@@ -139,6 +140,7 @@ function QueueSection() {
                   </td>
                   <td>{fmtMoney(line.amount)}</td>
                   <td>{line.description}</td>
+                  <td>{line.transaction_date || "—"}</td>
                   <td>
                     {line.receipt_web_view_link ? (
                       <a href={line.receipt_web_view_link} target="_blank" rel="noreferrer">

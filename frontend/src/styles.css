@@ -501,6 +501,7 @@ input.input-error:focus {
 td input[type="text"],
 td input[type="number"],
 td input[type="date"],
+td input[type="search"],
 td select {
   padding: 4px 6px;
   font-size: 13px;

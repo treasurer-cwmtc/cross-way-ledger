@@ -19,7 +19,13 @@ interface WizardLine extends ReimbursementLineIn {
 let nextKey = 1;
 
 function emptyLine(coas: ReimbursementAssignment[]): WizardLine {
-  return { key: nextKey++, account_no: coas[0]?.account_no || "", amount: 0, description: "" };
+  return {
+    key: nextKey++,
+    account_no: coas[0]?.account_no || "",
+    amount: 0,
+    description: "",
+    transaction_date: new Date().toISOString().slice(0, 10),
+  };
 }
 
 /** Two-step submission wizard - reused for both a brand-new request and
@@ -40,6 +46,7 @@ export default function ReimbursementWizard(props: {
           account_no: l.account_no,
           amount: l.amount,
           description: l.description,
+          transaction_date: l.transaction_date,
           receipt_file_id: l.receipt_file_id,
           receipt_file_name: l.receipt_file_name,
           receipt_web_view_link: l.receipt_web_view_link,
@@ -91,6 +98,7 @@ export default function ReimbursementWizard(props: {
         account_no: l.account_no,
         amount: Number(l.amount),
         description: l.description,
+        transaction_date: l.transaction_date || null,
         receipt_file_id: l.receipt_file_id,
         receipt_file_name: l.receipt_file_name,
         receipt_web_view_link: l.receipt_web_view_link,
@@ -138,6 +146,7 @@ export default function ReimbursementWizard(props: {
                 <th>Account</th>
                 <th>Amount</th>
                 <th>Description</th>
+                <th>Date</th>
                 <th>Receipt</th>
                 <th></th>
               </tr>
@@ -167,6 +176,13 @@ export default function ReimbursementWizard(props: {
                       type="text"
                       value={line.description}
                       onChange={(e) => updateLine(line.key, { description: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="date"
+                      value={line.transaction_date || ""}
+                      onChange={(e) => updateLine(line.key, { transaction_date: e.target.value })}
                     />
                   </td>
                   <td>
@@ -215,6 +231,7 @@ export default function ReimbursementWizard(props: {
             <thead>
               <tr>
                 <th>Account</th>
+                <th>Date</th>
                 <th>Amount</th>
               </tr>
             </thead>
@@ -227,6 +244,7 @@ export default function ReimbursementWizard(props: {
                       <span className="subtitle"> · {accountByNo.get(l.account_no)!.statement_description}</span>
                     )}
                   </td>
+                  <td>{l.transaction_date || "—"}</td>
                   <td>{fmtMoney(Number(l.amount))}</td>
                 </tr>
               ))}
@@ -234,6 +252,7 @@ export default function ReimbursementWizard(props: {
                 <td>
                   <b>Total</b>
                 </td>
+                <td></td>
                 <td>
                   <b>{fmtMoney(total)}</b>
                 </td>

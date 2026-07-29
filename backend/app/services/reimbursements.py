@@ -131,7 +131,7 @@ def create_accrual_entries(db: Session, reimbursement: Reimbursement) -> None:
     not approval."""
     for line in reimbursement.lines:
         entry = AccrualEntry(
-            transaction_date=date.today(),
+            transaction_date=line.transaction_date or date.today(),
             account_no=line.account_no,
             description=line.description or f"Reimbursement {reimbursement.name}",
             amount=line.amount,
