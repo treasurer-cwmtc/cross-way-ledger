@@ -165,3 +165,19 @@ def delete_accrual_entries(db: Session, reimbursement: Reimbursement) -> None:
             if entry is not None:
                 db.delete(entry)
             line.accrual_entry_id = None
+
+
+def mark_accrual_entries_posted(db: Session, reimbursement: Reimbursement, posted_date: date) -> None:
+    """Sets posted_date on each line's linked AccrualEntry once a
+    reimbursement is actually paid. Entries are created at submission with
+    only transaction_date set (see create_accrual_entries) - posted_date is
+    left null until now on purpose, matching every other AccrualEntry
+    (it means "recorded/cleared", not "incurred"). Without this, a
+    reimbursement's entries would never show up on the Accrual page's
+    Posted Year filter, which has no "all years" option and treats a null
+    posted_date as "doesn't match any year"."""
+    for line in reimbursement.lines:
+        if line.accrual_entry_id:
+            entry = db.get(AccrualEntry, line.accrual_entry_id)
+            if entry is not None:
+                entry.posted_date = posted_date

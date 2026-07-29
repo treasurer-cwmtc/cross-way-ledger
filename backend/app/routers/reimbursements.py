@@ -287,6 +287,7 @@ def update_status(
         r.decided_at = now
     elif payload.status == "paid":
         r.paid_at = now
+        svc.mark_accrual_entries_posted(db, r, now.date())
 
     r.status = payload.status
     if payload.notes is not None:
