@@ -45,11 +45,20 @@ class Settings(BaseSettings):
     reimbursement_notify_email: str = "treasurer@crosswaymtc.org"
 
     # --- Google Drive (Reimbursement receipt uploads) ---
-    # A service account (not domain-wide delegation) added as a member of a
-    # dedicated Shared Drive - see docs/DEPLOYMENT.md. Empty by default;
+    # A dedicated service account (svc-cross-way-ledger-drive@...), added as
+    # an Editor on the treasurer's existing root Drive folder (the same one
+    # frontend/src/lib/googleDrive.ts's ROOT_FOLDER_ID points at, used for
+    # campaign imports/bank uploads) - a plain folder share, not a Shared
+    # Drive/domain-wide delegation, so receipts land in the same place as
+    # every other treasurer document. No JSON key is stored anywhere - the
+    # org's iam.disableServiceAccountKeyCreation policy blocks that, and it's
+    # unnecessary anyway: the Cloud Run runtime service account has been
+    # granted roles/iam.serviceAccountTokenCreator on this service account,
+    # so the backend impersonates it for short-lived tokens (see
+    # services/google_drive.py, docs/DEPLOYMENT.md). Empty by default;
     # receipt upload is skipped with a clear error until configured.
-    google_drive_service_account_json: str = ""
-    google_drive_shared_drive_id: str = ""
+    google_drive_service_account_email: str = ""
+    google_drive_root_folder_id: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

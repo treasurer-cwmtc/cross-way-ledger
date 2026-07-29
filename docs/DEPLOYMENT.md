@@ -17,7 +17,8 @@
 9. [Database access for people, not just the app](#9-database-access-for-people-not-just-the-app)
 10. [External BI tools (Looker Studio, Google Sheets)](#10-external-bi-tools-looker-studio-google-sheets)
 11. [Reimbursements module: outbound email (SMTP)](#11-reimbursements-module-outbound-email-smtp)
-12. [Troubleshooting](#12-troubleshooting)
+12. [Reimbursements module: Google Drive receipt uploads](#12-reimbursements-module-google-drive-receipt-uploads)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
@@ -351,11 +352,53 @@ curl -s -X POST https://<backend-url>/api/reimbursements/request-otp \
 ```
 Always returns the same generic `{"message": "..."}` regardless of whether the email matched anything (deliberate - see `routers/reimbursements.py`), so a 200 here doesn't by itself prove the email sent. Check the Cloud Run logs for the request's revision for any exception, or just have the recipient confirm they received the code.
 
-### Google Drive receipt uploads - separate, not yet configured
+### Google Drive receipt uploads
 
-The submission wizard's receipt upload (`services/google_drive.py`) needs its own, unrelated one-time setup: a Google Cloud **service account** added as a member of a dedicated **Shared Drive**, plus `google_drive_service_account_json`/`google_drive_shared_drive_id` config. This is independent of the SMTP setup above - don't confuse the two. Not yet done as of this writing.
+The submission wizard's receipt upload (`services/google_drive.py`) is a separate, unrelated piece of setup from the SMTP config above - don't confuse the two. See §12 below for the full setup.
 
-## 12. Troubleshooting
+## 12. Reimbursements module: Google Drive receipt uploads
+
+Receipts attached to a reimbursement submission upload into the **same existing Drive folder** the treasurer already uses for campaign-import CSVs and bank/Stripe uploads (`ROOT_FOLDER_ID` in `frontend/src/lib/googleDrive.ts`, a folder literally named "Cross Way Ledger" in the treasurer's personal My Drive) - not a separate Shared Drive. That was the original plan (a dedicated Shared Drive with the service account as a Content Manager member), but it was changed once it became clear receipts need to land alongside every other treasurer document, not in a separate silo.
+
+Submitters authenticate with an emailed one-time code, not a Google session, so there's no browser-side OAuth token to upload with - the backend uploads server-side using a dedicated service account.
+
+### One-time setup (already done for dev as of this writing - here for reference/rebuilds)
+
+1. **Create the service account** (already done):
+   ```bash
+   gcloud iam service-accounts create svc-cross-way-ledger-drive \
+     --display-name="Cross Way Ledger - Drive uploader" \
+     --project=cross-way-ledger
+   ```
+   Note: "Cross Way" is two words - the service account ID uses a hyphen (`svc-cross-way-ledger-drive`) to represent that, since GCP service account IDs can't contain spaces. Its full email is `svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com`.
+
+2. **Share the existing root Drive folder with that service account as Editor.** In Drive, right-click the "Cross Way Ledger" folder → Share → add `svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com` as Editor. Google will warn that this is an external/unrecognized account - that's expected for any service account; click "Share anyway." This is a completely ordinary folder share, exactly like sharing with any other person - no Shared Drive, no Workspace Admin Console involvement.
+
+3. **No JSON key is generated or stored.** This project's GCP org has `constraints/iam.disableServiceAccountKeyCreation` enabled, so `gcloud iam service-accounts keys create` fails with `FAILED_PRECONDITION: Key creation is not allowed on this service account` - and a static key would be worse practice anyway (a long-lived secret that can leak and doesn't rotate). Instead, the Cloud Run runtime service account **impersonates** the Drive service account for short-lived tokens:
+   ```bash
+   gcloud iam service-accounts add-iam-policy-binding \
+     svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com \
+     --member="serviceAccount:633510572581-compute@developer.gserviceaccount.com" \
+     --role="roles/iam.serviceAccountTokenCreator"
+   ```
+   `services/google_drive.py` calls `google.auth.default()` to get Cloud Run's own ambient credentials, then wraps them in `google.auth.impersonated_credentials.Credentials` targeting the Drive service account - no secret in Secret Manager for this piece at all.
+
+4. **Add the two plain (non-secret) env vars** to `ledger-backend-dev` (see the ⚠️ warning in §11 above before running any `--update-*` command against a service that might not be on its latest-ready revision):
+   ```bash
+   gcloud run services update ledger-backend-dev --region=us-south1 \
+     --update-env-vars="GOOGLE_DRIVE_ROOT_FOLDER_ID=1xc26-KngtfILik8Y2_8GA--6pJRYkK7P,GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL=svc-cross-way-ledger-drive@cross-way-ledger.iam.gserviceaccount.com"
+   ```
+   **Not yet applied to `ledger-backend-prod`** as of this writing - the whole Reimbursements module (including its SMTP config in §11) hasn't shipped to prod yet. Add these alongside the rest of that module's config when it does.
+
+### Folder layout
+
+Uploads land at `<root>/<year>/Reimbursements/<submitter_email>/<timestamp>_<filename>` - year first, then category, matching the convention `uploadCampaignImportFile`/`uploadBankOrStripeFile` already use elsewhere in the same root folder. Year/category/email subfolders are created on first use via a find-or-create-by-name query.
+
+### Verifying it's working
+
+Have a submitter attach a receipt in the portal wizard, then confirm the file actually appears under the correct `<year>/Reimbursements/<email>/` subfolder in the "Cross Way Ledger" Drive folder. A `RuntimeError` with the message "Google Drive receipt uploads aren't configured yet" means the env vars above haven't been set on the service actually receiving the request.
+
+## 13. Troubleshooting
 
 **"Invalid Tier for Edition" on `gcloud sql instances create`** — add `--edition=ENTERPRISE`; smaller legacy tiers aren't available under the default `ENTERPRISE_PLUS` edition on newer projects.
 
@@ -383,6 +426,8 @@ proxy_pass $backend_upstream;
 **`bq` or other Cloud SDK tools fail with `Error retrieving auth credentials from gcloud: [WinError 2]`** (Windows) — the tool shells out to a bare `gcloud` command and needs it on `PATH`; the Cloud SDK installer doesn't always add it. Add the SDK's `bin` directory to `PATH` for the session (`$env:PATH = "$env:LOCALAPPDATA\Google\Cloud SDK\google-cloud-sdk\bin;$env:PATH"` in PowerShell) rather than only invoking `gcloud.cmd`/`bq.cmd` by full path.
 
 **A `gcloud`/`bq` command with a flag value containing spaces fails with `'C:\...\Cloud' is not recognized as an internal or external command`** (Windows) — this is a quoting collision between the Cloud SDK's install path (which itself contains a space, `Google\Cloud SDK`) and a spaced argument value (e.g. `--display-name="My Function"`, `--schedule="0 * * * *"`). Avoid spaces in flag values where possible (use camelCase instead of a spaced display name), or in PowerShell use the `--%` stop-parsing token; as a last resort, write the argument to a file and pass a file path instead.
+
+**`gcloud iam service-accounts keys create` fails with `FAILED_PRECONDITION: Key creation is not allowed on this service account`** — this project's org has `constraints/iam.disableServiceAccountKeyCreation` enabled, blocking static JSON keys entirely. Don't disable the policy to work around it; use service account impersonation instead - grant the caller (e.g. the Cloud Run runtime service account) `roles/iam.serviceAccountTokenCreator` on the target service account, then request credentials via `google.auth.impersonated_credentials` rather than loading a key file. See [§12](#12-reimbursements-module-google-drive-receipt-uploads) for a working example.
 
 ---
 
