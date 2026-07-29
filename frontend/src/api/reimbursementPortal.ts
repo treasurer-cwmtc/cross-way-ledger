@@ -126,11 +126,11 @@ export const reimbursementPortalApi = {
     }).then(sj<ReceiptUpload>);
   },
 
-  submit: (lines: ReimbursementLineIn[]) =>
+  submit: (lines: ReimbursementLineIn[], name?: string) =>
     fetch(`${BASE}/api/reimbursements/my`, {
       method: "POST",
       headers: submitterAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ lines }),
+      body: JSON.stringify({ lines, name }),
     }).then(sj<Reimbursement>),
 
   myRequests: () =>
@@ -139,10 +139,10 @@ export const reimbursementPortalApi = {
   myRequest: (id: number) =>
     fetch(`${BASE}/api/reimbursements/my/${id}`, { headers: submitterAuthHeaders() }).then(sj<Reimbursement>),
 
-  updateMyRequest: (id: number, lines: ReimbursementLineIn[]) =>
+  updateMyRequest: (id: number, lines: ReimbursementLineIn[], name?: string) =>
     fetch(`${BASE}/api/reimbursements/my/${id}`, {
       method: "PUT",
       headers: submitterAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ lines }),
+      body: JSON.stringify({ lines, name }),
     }).then(sj<Reimbursement>),
 };

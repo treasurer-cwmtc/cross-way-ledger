@@ -43,7 +43,7 @@ export default function ReimbursementPortal() {
 
   return (
     <div className="app-shell" style={{ display: "block", padding: "24px" }}>
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+      <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
           <h2 className="page-title" style={{ margin: 0 }}>
             Reimbursement Requests

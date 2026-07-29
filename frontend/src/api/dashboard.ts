@@ -15,7 +15,7 @@ export interface Dashboard {
   income_plan_ytd: number;
   expense_ytd: number;
   expense_plan_ytd: number;
-  last_entry_at: string | null;
+  last_posted_date: string | null;
   outstanding_reimbursements_count: number;
   outstanding_reimbursements_total: number;
 }

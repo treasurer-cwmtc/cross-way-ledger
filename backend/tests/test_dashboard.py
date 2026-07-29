@@ -1,11 +1,15 @@
 """Home dashboard tests: bank account balances, Income/Expense YTD (which
 delegates to the same aggregation as Income Statement - see
 test_income_statement.py for the Plan/Actuals/sign-convention math itself),
-and the last-entry timestamp. Uses before/after deltas rather than absolute
-values, since other test files share this in-memory DB and already
-contribute Reconciliation/Accrual/Budget data."""
+and the last-posted-date staleness check. Uses before/after deltas rather
+than absolute values, since other test files share this in-memory DB and
+already contribute Reconciliation/Accrual/Budget data."""
 
-from test_auth import auth_header, client
+from datetime import date
+
+from test_auth import TestingSession, auth_header, client  # noqa: E402
+
+from app.models import ReconciliationEntry  # noqa: E402
 
 
 def _bank_account_id() -> int:
@@ -56,11 +60,30 @@ def test_py_dated_entry_does_not_affect_income_ytd():
     assert after == before
 
 
-def test_last_entry_at_updates_after_new_entry():
+def test_last_posted_date_reflects_actual_not_accrual():
+    """Regression test: this used to be the max created_at across
+    Reconciliation + Accrual (a row-creation timestamp), which meant a
+    purely-planned Accrual entry could make the dashboard claim the books
+    were current even with no real bank data posted. Now it's strictly the
+    max posted_date on the Actual (Reconciliation) ledger."""
     h = auth_header()
-    before = client.get("/api/dashboard", headers=h).json()["last_entry_at"]
-    _add_accrual("Dashboard timestamp test", 1.0, "2026-02-02")
-    after = client.get("/api/dashboard", headers=h).json()["last_entry_at"]
-    assert after is not None
-    if before is not None:
-        assert after >= before
+    before = client.get("/api/dashboard", headers=h).json()["last_posted_date"]
+    _add_accrual("Dashboard last-posted-date isolation test", 1.0, "2020-01-01")
+    unchanged = client.get("/api/dashboard", headers=h).json()["last_posted_date"]
+    assert unchanged == before
+
+    with TestingSession() as db:
+        db.add(
+            ReconciliationEntry(
+                transaction_date=date(2027, 5, 1),
+                posted_date=date(2027, 5, 1),
+                account_no="I101010",
+                description="Dashboard last-posted-date test",
+                amount=1.0,
+                dedup_key="dashboard-last-posted-date-test",
+            )
+        )
+        db.commit()
+
+    after = client.get("/api/dashboard", headers=h).json()["last_posted_date"]
+    assert after == "2027-05-01"

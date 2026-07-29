@@ -50,8 +50,9 @@ router = APIRouter(prefix="/api/reimbursements", tags=["reimbursements"])
 settings = get_settings()
 logger = logging.getLogger("app.reimbursements")
 
-_OPEN_STATUSES = {"pending", "approved"}
-_VALID_STATUSES = {"pending", "approved", "paid", "rejected"}
+# No separate "approved" step - Paid *is* the approval; a treasurer who
+# finds a problem just Rejects instead of paying.
+_VALID_STATUSES = {"pending", "paid", "rejected"}
 
 
 async def _read_csv(file: UploadFile) -> str:
@@ -286,9 +287,8 @@ def update_status(
     if payload.status == "rejected":
         svc.delete_accrual_entries(db, r)
         r.decided_at = now
-    elif payload.status == "approved":
-        r.decided_at = now
     elif payload.status == "paid":
+        r.decided_at = now
         r.paid_at = now
         svc.mark_accrual_entries_posted(db, r, now.date())
 
@@ -461,8 +461,11 @@ def submit_reimbursement(
     # person can otherwise land in the same wall-clock second and collide on
     # the unique `name` column (confirmed by a real CI failure).
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    name = (payload.name or "").strip() or f"{email}-{stamp}"
+    if db.scalar(select(Reimbursement.id).where(Reimbursement.name == name).limit(1)):
+        raise HTTPException(400, f'"{name}" is already used by another request - please choose a different name.')
     r = Reimbursement(
-        name=f"{email}-{stamp}",
+        name=name,
         submitter_email=email,
         submitter_name=person.name if person else email,
     )
@@ -582,6 +585,14 @@ def update_my_reimbursement(
     for line in payload.lines:
         if line.account_no not in allowed:
             raise HTTPException(403, f"You aren't authorized to submit against {line.account_no}.")
+
+    new_name = (payload.name or "").strip()
+    if new_name and new_name != r.name:
+        if db.scalar(select(Reimbursement.id).where(Reimbursement.name == new_name).limit(1)):
+            raise HTTPException(
+                400, f'"{new_name}" is already used by another request - please choose a different name.'
+            )
+        r.name = new_name
 
     svc.delete_accrual_entries(db, r)
     _apply_lines(db, r, payload)

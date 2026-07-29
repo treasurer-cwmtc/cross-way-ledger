@@ -712,16 +712,19 @@ class ReimbursementOtpCode(Base):
 
 class Reimbursement(Base):
     """One reimbursement request (the wizard's "submit" step creates exactly
-    one of these, plus its ReimbursementLine children). `name` is the
-    treasurer-requested auto-generated identifier (submitter email + the
-    submission timestamp) - never hand-typed, always unique.
+    one of these, plus its ReimbursementLine children). `name` defaults to
+    an auto-generated identifier (submitter email + the submission
+    timestamp) but the submitter can overwrite it with anything they like
+    while the request is Pending - still enforced unique.
 
-    status is a plain string (pending | approved | paid | rejected),
-    matching the rest of this schema's convention of not using a DB enum
-    type (see PledgeDonorMatch.match_source). Pending is the only editable
-    state for the submitter - approved locks it even before payment, and
-    rejected is terminal. See routers/reimbursements.py for the exact
-    Accrual-linkage rules tied to each transition.
+    status is a plain string (pending | paid | rejected), matching the rest
+    of this schema's convention of not using a DB enum type (see
+    PledgeDonorMatch.match_source). There's no separate "approved" step -
+    Paid *is* the approval (a treasurer who finds a problem just doesn't pay
+    it, and Rejects instead). Pending is the only editable state for the
+    submitter; both Paid and Rejected are terminal. See
+    routers/reimbursements.py for the exact Accrual-linkage rules tied to
+    each transition.
     """
 
     __tablename__ = "reimbursement"

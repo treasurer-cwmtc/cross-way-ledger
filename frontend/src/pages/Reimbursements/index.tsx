@@ -21,7 +21,6 @@ function splitName(name: string): { first: string; last: string } {
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
-  approved: "Approved",
   paid: "Paid",
   rejected: "Rejected",
 };
@@ -163,18 +162,13 @@ function QueueSection() {
           <div className="row" style={{ marginTop: 10, gap: 8 }}>
             {selected.status === "pending" && (
               <>
-                <button className="btn" onClick={() => setStatus("approved")}>
-                  Approve
+                <button className="btn" onClick={() => setStatus("paid")}>
+                  Mark Paid
                 </button>
                 <button className="btn secondary" onClick={() => setStatus("rejected")}>
                   Reject
                 </button>
               </>
-            )}
-            {selected.status === "approved" && (
-              <button className="btn" onClick={() => setStatus("paid")}>
-                Mark Paid
-              </button>
             )}
             <button className="btn secondary" onClick={() => setStatus(selected.status)}>
               Save notes
