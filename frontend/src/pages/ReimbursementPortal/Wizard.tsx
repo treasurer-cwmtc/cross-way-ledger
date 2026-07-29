@@ -88,7 +88,7 @@ export default function ReimbursementWizard(props: {
   }
 
   const total = lines.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
-  const canProceed = lines.every((l) => l.account_no && Number(l.amount) > 0);
+  const canProceed = lines.every((l) => l.account_no && Number(l.amount) > 0 && l.receipt_file_id);
 
   async function submit() {
     setError("");
@@ -147,7 +147,7 @@ export default function ReimbursementWizard(props: {
                 <th>Amount</th>
                 <th>Description</th>
                 <th>Date</th>
-                <th>Receipt</th>
+                <th>Receipt (required)</th>
                 <th></th>
               </tr>
             </thead>
