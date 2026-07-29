@@ -46,7 +46,11 @@ export default function RequestList({ onEdit }: { onEdit: (r: Reimbursement) => 
               </div>
             </div>
             {r.status === "pending" && (
-              <button className="btn secondary" onClick={() => onEdit(r)}>
+              <button
+                className="btn secondary"
+                onClick={() => onEdit(r)}
+                style={{ flex: "none", minWidth: 0 }}
+              >
                 Edit
               </button>
             )}
