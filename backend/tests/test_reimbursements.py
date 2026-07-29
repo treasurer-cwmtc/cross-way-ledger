@@ -139,8 +139,8 @@ def test_submission_creates_accrual_entries_and_dashboard_kpi_reflects_it():
             headers=h_submitter,
             json={
                 "lines": [
-                    {"account_no": "I101210", "amount": 42.50, "description": "Supplies"},
-                    {"account_no": "E151910", "amount": 10.00, "description": "Gas"},
+                    {"account_no": "I101210", "amount": 42.50, "description": "Supplies", "receipt_file_id": "test-file-1"},
+                    {"account_no": "E151910", "amount": 10.00, "description": "Gas", "receipt_file_id": "test-file-2"},
                 ]
             },
         )
@@ -180,6 +180,7 @@ def test_submission_line_transaction_date_flows_to_accrual_entry():
                         "amount": 15.0,
                         "description": "Backdated expense",
                         "transaction_date": "2026-01-15",
+                        "receipt_file_id": "test-file-1",
                     }
                 ]
             },
@@ -192,6 +193,22 @@ def test_submission_line_transaction_date_flows_to_accrual_entry():
     matching = [e for e in entries if e["description"] == "Backdated expense"]
     assert len(matching) == 1
     assert matching[0]["transaction_date"] == "2026-01-15"
+
+
+def test_submission_rejects_line_without_receipt():
+    # Uses john@example.com, not jane@example.com - see the rate-limit note
+    # on test_marking_paid_sets_accrual_posted_date above.
+    _import_pco_people()
+    _assign("john@example.com", ["I101210"])
+    h_submitter = _submitter_header("john@example.com")
+
+    r = client.post(
+        "/api/reimbursements/my",
+        headers=h_submitter,
+        json={"lines": [{"account_no": "I101210", "amount": 5.0}]},
+    )
+    assert r.status_code == 400
+    assert "receipt" in r.json()["detail"].lower()
 
 
 def test_submission_rejects_unauthorized_account():
@@ -226,7 +243,7 @@ def test_marking_paid_sets_accrual_posted_date():
         created = client.post(
             "/api/reimbursements/my",
             headers=h_submitter,
-            json={"lines": [{"account_no": "I101210", "amount": 17.0}]},
+            json={"lines": [{"account_no": "I101210", "amount": 17.0, "receipt_file_id": "test-file-1"}]},
         ).json()
 
     h = auth_header()
@@ -259,7 +276,7 @@ def test_reject_deletes_accrual_entries_and_approve_locks_edits():
         created = client.post(
             "/api/reimbursements/my",
             headers=h_submitter,
-            json={"lines": [{"account_no": "I101210", "amount": 20.0}]},
+            json={"lines": [{"account_no": "I101210", "amount": 20.0, "receipt_file_id": "test-file-1"}]},
         ).json()
 
     h = auth_header()
@@ -291,7 +308,7 @@ def test_reject_deletes_accrual_entries_and_approve_locks_edits():
         second = client.post(
             "/api/reimbursements/my",
             headers=h_submitter,
-            json={"lines": [{"account_no": "I101210", "amount": 33.0}]},
+            json={"lines": [{"account_no": "I101210", "amount": 33.0, "receipt_file_id": "test-file-1"}]},
         ).json()
         rejected = client.put(
             f"/api/reimbursements/{second['id']}/status",
@@ -331,6 +348,6 @@ def test_submitter_my_list_does_not_collide_with_treasurer_route():
         created = client.post(
             "/api/reimbursements/my",
             headers=h_submitter,
-            json={"lines": [{"account_no": "I101210", "amount": 12.0}]},
+            json={"lines": [{"account_no": "I101210", "amount": 12.0, "receipt_file_id": "test-file-1"}]},
         ).json()
     assert client.get(f"/api/reimbursements/{created['id']}", headers=h).status_code == 200

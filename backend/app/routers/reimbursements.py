@@ -100,6 +100,9 @@ def _reimbursement_out(r: Reimbursement, coa_by_no: dict[str, ChartOfAccount]) -
 def _apply_lines(db: Session, reimbursement: Reimbursement, payload: ReimbursementCreate) -> None:
     if not payload.lines:
         raise HTTPException(400, "Provide at least one line.")
+    for line in payload.lines:
+        if not line.receipt_file_id:
+            raise HTTPException(400, "Every line needs a receipt attached.")
     for existing_line in list(reimbursement.lines):
         db.delete(existing_line)
     db.flush()
