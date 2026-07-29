@@ -25,14 +25,32 @@ export default function MultiAccountPicker(props: {
     props.onChange(props.value.filter((a) => a !== accountNo));
   }
 
+  function selectAll() {
+    props.onChange(props.accounts.map((a) => a.account_no));
+  }
+
+  function clearAll() {
+    props.onChange([]);
+  }
+
   return (
     <div>
-      <AccountPicker
-        value=""
-        accounts={remaining}
-        onChange={add}
-        placeholder="Search to add a Chart of Accounts…"
-      />
+      <div className="row" style={{ gap: 10, alignItems: "center" }}>
+        <div style={{ flex: 1 }}>
+          <AccountPicker
+            value=""
+            accounts={remaining}
+            onChange={add}
+            placeholder="Search to add a Chart of Accounts…"
+          />
+        </div>
+        <button type="button" className="btn secondary" onClick={selectAll}>
+          Select all
+        </button>
+        <button type="button" className="btn secondary" onClick={clearAll}>
+          Clear
+        </button>
+      </div>
       <div className="chip-strip" style={{ marginTop: 10 }}>
         {selected.map((a) => (
           <span key={a.account_no} className="chip active">
