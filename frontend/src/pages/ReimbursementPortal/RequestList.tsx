@@ -7,14 +7,13 @@ function fmtMoney(n: number): string {
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
-  approved: "Approved",
   paid: "Paid",
   rejected: "Rejected",
 };
 
 /** Submitter's own past/present requests, with notes - editing is only
- * offered while a request is Pending (locked once Approved, per the
- * confirmed status lifecycle - see the Reimbursements module plan). */
+ * offered while a request is Pending (locked once Paid - there's no
+ * separate Approved step; Paid *is* the approval). */
 export default function RequestList({ onEdit }: { onEdit: (r: Reimbursement) => void }) {
   const [requests, setRequests] = useState<Reimbursement[]>([]);
   const [error, setError] = useState("");

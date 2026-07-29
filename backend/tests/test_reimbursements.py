@@ -195,6 +195,63 @@ def test_submission_line_transaction_date_flows_to_accrual_entry():
     assert matching[0]["transaction_date"] == "2026-01-15"
 
 
+def test_submission_accepts_custom_name_and_rejects_duplicate():
+    # Uses john@example.com - see the rate-limit note on
+    # test_marking_paid_sets_accrual_posted_date above.
+    _import_pco_people()
+    _assign("john@example.com", ["I101210"])
+    h_submitter = _submitter_header("john@example.com")
+
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        r = client.post(
+            "/api/reimbursements/my",
+            headers=h_submitter,
+            json={
+                "name": "VBS supplies run",
+                "lines": [{"account_no": "I101210", "amount": 8.0, "receipt_file_id": "test-file-1"}],
+            },
+        )
+    assert r.status_code == 201, r.text
+    assert r.json()["name"] == "VBS supplies run"
+
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        dup = client.post(
+            "/api/reimbursements/my",
+            headers=h_submitter,
+            json={
+                "name": "VBS supplies run",
+                "lines": [{"account_no": "I101210", "amount": 3.0, "receipt_file_id": "test-file-1"}],
+            },
+        )
+    assert dup.status_code == 400
+    assert "already used" in dup.json()["detail"]
+
+
+def test_status_update_rejects_removed_approved_value():
+    """Regression test: "approved" is no longer a valid status - Paid is
+    the approval, so a treasurer who finds a problem just Rejects instead."""
+    # Uses john@example.com - see the rate-limit note on
+    # test_marking_paid_sets_accrual_posted_date above.
+    _import_pco_people()
+    _assign("john@example.com", ["I101210"])
+    h_submitter = _submitter_header("john@example.com")
+
+    with patch("app.routers.reimbursements.send_email_best_effort"):
+        created = client.post(
+            "/api/reimbursements/my",
+            headers=h_submitter,
+            json={"lines": [{"account_no": "I101210", "amount": 6.0, "receipt_file_id": "test-file-1"}]},
+        ).json()
+
+    h = auth_header()
+    r = client.put(
+        f"/api/reimbursements/{created['id']}/status",
+        headers=h,
+        json={"status": "approved"},
+    )
+    assert r.status_code == 400
+
+
 def test_submission_rejects_line_without_receipt():
     # Uses john@example.com, not jane@example.com - see the rate-limit note
     # on test_marking_paid_sets_accrual_posted_date above.
@@ -267,7 +324,7 @@ def test_marking_paid_sets_accrual_posted_date():
     assert after["posted_date"] is not None
 
 
-def test_reject_deletes_accrual_entries_and_approve_locks_edits():
+def test_reject_deletes_accrual_entries_and_paid_locks_edits():
     _import_pco_people()
     _assign("jane@example.com", ["I101210"])
     h_submitter = _submitter_header("jane@example.com")
@@ -287,19 +344,20 @@ def test_reject_deletes_accrual_entries_and_approve_locks_edits():
             accrual_id = e["id"]
     assert accrual_id is not None
 
-    # Approve locks the submitter out of further edits.
+    # Marking Paid (there's no separate Approved step) locks the submitter
+    # out of further edits.
     with patch("app.routers.reimbursements.send_email_best_effort"):
-        approved = client.put(
+        paid = client.put(
             f"/api/reimbursements/{created['id']}/status",
             headers=h,
-            json={"status": "approved"},
+            json={"status": "paid"},
         )
-    assert approved.status_code == 200, approved.text
+    assert paid.status_code == 200, paid.text
 
     edit_attempt = client.put(
         f"/api/reimbursements/my/{created['id']}",
         headers=h_submitter,
-        json={"lines": [{"account_no": "I101210", "amount": 999.0}]},
+        json={"lines": [{"account_no": "I101210", "amount": 999.0, "receipt_file_id": "test-file-1"}]},
     )
     assert edit_attempt.status_code == 409
 

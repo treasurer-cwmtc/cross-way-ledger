@@ -545,7 +545,7 @@ class DashboardOut(BaseModel):
     income_plan_ytd: float
     expense_ytd: float
     expense_plan_ytd: float
-    last_entry_at: datetime | None
+    last_posted_date: date | None
     outstanding_reimbursements_count: int
     outstanding_reimbursements_total: float
 
@@ -837,6 +837,7 @@ class ReimbursementLineOut(BaseModel):
 
 class ReimbursementCreate(BaseModel):
     lines: list[ReimbursementLineIn]
+    name: str | None = None
 
 
 class ReimbursementOut(BaseModel):

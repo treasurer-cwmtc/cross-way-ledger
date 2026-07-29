@@ -110,11 +110,11 @@ export default function Home() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Last data entry</h3>
+        <h3 style={{ marginTop: 0 }}>Last posted transaction</h3>
         <p className="subtitle" style={{ margin: 0 }}>
-          {data.last_entry_at
-            ? `${fmtRelative(data.last_entry_at)} (${new Date(data.last_entry_at).toLocaleString()})`
-            : "No Actual or Accrual entries yet."}
+          {data.last_posted_date
+            ? `${fmtRelative(data.last_posted_date)} (${data.last_posted_date})`
+            : "No posted Actual transactions yet."}
         </p>
       </div>
     </div>

@@ -39,6 +39,7 @@ export default function ReimbursementWizard(props: {
   onCancel: () => void;
 }) {
   const [step, setStep] = useState(1);
+  const [name, setName] = useState(props.existing?.name || "");
   const [lines, setLines] = useState<WizardLine[]>(() =>
     props.existing
       ? props.existing.lines.map((l) => ({
@@ -104,9 +105,9 @@ export default function ReimbursementWizard(props: {
         receipt_web_view_link: l.receipt_web_view_link,
       }));
       if (props.existing) {
-        await reimbursementPortalApi.updateMyRequest(props.existing.id, payload);
+        await reimbursementPortalApi.updateMyRequest(props.existing.id, payload, name.trim());
       } else {
-        await reimbursementPortalApi.submit(payload);
+        await reimbursementPortalApi.submit(payload, name.trim());
       }
       setDone(true);
     } catch (e) {
@@ -138,15 +139,29 @@ export default function ReimbursementWizard(props: {
         {props.existing ? "Edit request" : "New reimbursement request"} — Step {step} of 2
       </h3>
 
+      <label className="field" style={{ maxWidth: 360 }}>
+        <span>Request name</span>
+        <input
+          type="text"
+          value={name}
+          placeholder="e.g. VBS supplies run"
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <p className="subtitle" style={{ marginTop: -6 }}>
+        We'll pick a name automatically if you leave this blank - feel free to change it to
+        something easier to recognize later.
+      </p>
+
       {step === 1 && (
         <>
           <table>
             <thead>
               <tr>
+                <th>Transaction Date</th>
                 <th>Account</th>
-                <th>Amount</th>
                 <th>Description</th>
-                <th>Date</th>
+                <th>Amount</th>
                 <th>Receipt (required)</th>
                 <th></th>
               </tr>
@@ -155,20 +170,17 @@ export default function ReimbursementWizard(props: {
               {lines.map((line) => (
                 <tr key={line.key}>
                   <td>
+                    <input
+                      type="date"
+                      value={line.transaction_date || ""}
+                      onChange={(e) => updateLine(line.key, { transaction_date: e.target.value })}
+                    />
+                  </td>
+                  <td>
                     <AssignedAccountPicker
                       value={line.account_no}
                       accounts={props.coas}
                       onChange={(accountNo) => updateLine(line.key, { account_no: accountNo })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.amount || ""}
-                      onChange={(e) => updateLine(line.key, { amount: Number(e.target.value) })}
-                      style={{ width: 100 }}
                     />
                   </td>
                   <td>
@@ -180,9 +192,12 @@ export default function ReimbursementWizard(props: {
                   </td>
                   <td>
                     <input
-                      type="date"
-                      value={line.transaction_date || ""}
-                      onChange={(e) => updateLine(line.key, { transaction_date: e.target.value })}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={line.amount || ""}
+                      onChange={(e) => updateLine(line.key, { amount: Number(e.target.value) })}
+                      style={{ width: 100 }}
                     />
                   </td>
                   <td>
@@ -230,29 +245,29 @@ export default function ReimbursementWizard(props: {
           <table>
             <thead>
               <tr>
+                <th>Transaction Date</th>
                 <th>Account</th>
-                <th>Date</th>
                 <th>Amount</th>
               </tr>
             </thead>
             <tbody>
               {lines.map((l) => (
                 <tr key={l.key}>
+                  <td>{l.transaction_date || "—"}</td>
                   <td>
                     {l.account_no}
                     {accountByNo.get(l.account_no) && (
                       <span className="subtitle"> · {accountByNo.get(l.account_no)!.statement_description}</span>
                     )}
                   </td>
-                  <td>{l.transaction_date || "—"}</td>
                   <td>{fmtMoney(Number(l.amount))}</td>
                 </tr>
               ))}
               <tr>
+                <td></td>
                 <td>
                   <b>Total</b>
                 </td>
-                <td></td>
                 <td>
                   <b>{fmtMoney(total)}</b>
                 </td>
