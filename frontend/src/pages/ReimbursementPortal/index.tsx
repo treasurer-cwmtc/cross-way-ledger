@@ -43,53 +43,55 @@ export default function ReimbursementPortal() {
 
   return (
     <div className="app-shell" style={{ display: "block", padding: "24px" }}>
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
-        <h2 className="page-title" style={{ margin: 0 }}>
-          Reimbursement Requests
-        </h2>
-        <button className="link" onClick={logout}>
-          Log out
-        </button>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
+          <h2 className="page-title" style={{ margin: 0 }}>
+            Reimbursement Requests
+          </h2>
+          <button className="link" onClick={logout}>
+            Log out
+          </button>
+        </div>
+
+        {error && <div className="error">{error}</div>}
+
+        {view === "list" && (
+          <>
+            {coas && coas.length > 0 ? (
+              <div className="row" style={{ marginBottom: 16 }}>
+                <button className="btn" onClick={() => setView("new")}>
+                  New reimbursement request
+                </button>
+              </div>
+            ) : coas ? (
+              <div className="card">
+                <p className="subtitle" style={{ margin: 0 }}>
+                  Your account isn't set up to submit reimbursements yet. We've notified the
+                  church office - check back soon.
+                </p>
+              </div>
+            ) : null}
+            <RequestList onEdit={(r) => setView({ edit: r })} />
+          </>
+        )}
+
+        {view === "new" && coas && (
+          <ReimbursementWizard
+            coas={coas}
+            onDone={() => setView("list")}
+            onCancel={() => setView("list")}
+          />
+        )}
+
+        {typeof view === "object" && "edit" in view && coas && (
+          <ReimbursementWizard
+            coas={coas}
+            existing={view.edit}
+            onDone={() => setView("list")}
+            onCancel={() => setView("list")}
+          />
+        )}
       </div>
-
-      {error && <div className="error">{error}</div>}
-
-      {view === "list" && (
-        <>
-          {coas && coas.length > 0 ? (
-            <div className="row" style={{ marginBottom: 16 }}>
-              <button className="btn" onClick={() => setView("new")}>
-                New reimbursement request
-              </button>
-            </div>
-          ) : coas ? (
-            <div className="card">
-              <p className="subtitle" style={{ margin: 0 }}>
-                Your account isn't set up to submit reimbursements yet. We've notified the
-                church office - check back soon.
-              </p>
-            </div>
-          ) : null}
-          <RequestList onEdit={(r) => setView({ edit: r })} />
-        </>
-      )}
-
-      {view === "new" && coas && (
-        <ReimbursementWizard
-          coas={coas}
-          onDone={() => setView("list")}
-          onCancel={() => setView("list")}
-        />
-      )}
-
-      {typeof view === "object" && "edit" in view && coas && (
-        <ReimbursementWizard
-          coas={coas}
-          existing={view.edit}
-          onDone={() => setView("list")}
-          onCancel={() => setView("list")}
-        />
-      )}
     </div>
   );
 }
