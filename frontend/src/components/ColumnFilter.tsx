@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /** Shared anchoring for a column-header filter popover: a portaled panel
@@ -38,8 +38,20 @@ function useAnchoredPopover(open: boolean, onClose: () => void) {
     if (!open || !anchorRef.current) return;
     const rect = anchorRef.current.getBoundingClientRect();
     const width = 240;
-    const left = Math.min(rect.left, window.innerWidth - width - 12);
-    setCoords({ top: rect.bottom + 4, left: Math.max(left, 8) });
+    // Clamp within the nearest .table-wrap (the actual scrollable table
+    // region every table page renders into - see AccountPicker.tsx's
+    // comment on the same convention), not just the browser window - a
+    // fixed-position portal clamped only to the window still happily
+    // floats out over neighboring columns of a table that's narrower than
+    // the viewport, which is exactly the "overlaps Bank Description"
+    // report this was built to fix. Falls back to the window if a table
+    // page doesn't use that wrapper for some reason.
+    const wrap = anchorRef.current.closest(".table-wrap");
+    const bounds = wrap ? wrap.getBoundingClientRect() : { left: 0, right: window.innerWidth };
+    const minLeft = Math.max(bounds.left, 0) + 8;
+    const maxLeft = Math.min(bounds.right, window.innerWidth) - width - 8;
+    const left = Math.max(minLeft, Math.min(rect.left, maxLeft));
+    setCoords({ top: rect.bottom + 4, left });
 
     function onScroll(ev: Event) {
       // Scrolling the popover's own (portaled) panel fires a capture-phase
@@ -98,11 +110,19 @@ export function TextColumnFilter({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Set<string> | null>(selected);
+  const [query, setQuery] = useState("");
   const { anchorRef, coords } = useAnchoredPopover(open, () => setOpen(false));
   const active = selected !== null;
 
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((opt) => (opt || "(blank)").toLowerCase().includes(q));
+  }, [options, query]);
+
   function openPopover() {
     setDraft(selected);
+    setQuery("");
     setOpen(true);
   }
 
@@ -111,6 +131,17 @@ export function TextColumnFilter({
     const next = new Set(base);
     if (next.has(value)) next.delete(value);
     else next.add(value);
+    setDraft(next.size === options.length ? null : next);
+  }
+
+  // Checks off everything the search currently matches, without touching
+  // selections outside that filtered set - lets "restricted" + one click
+  // grab every "Income - Income - Restricted ..." value in one go instead
+  // of scrolling and checking each individually.
+  function selectAllVisible() {
+    const base = draft ?? new Set(options);
+    const next = new Set(base);
+    visible.forEach((opt) => next.add(opt));
     setDraft(next.size === options.length ? null : next);
   }
 
@@ -151,6 +182,16 @@ export function TextColumnFilter({
               padding: 10,
             }}
           >
+            {options.length > 8 && (
+              <input
+                type="text"
+                placeholder="Search…"
+                value={query}
+                autoFocus
+                onChange={(ev) => setQuery(ev.target.value)}
+                style={{ marginBottom: 6, fontSize: 13, padding: "4px 8px" }}
+              />
+            )}
             <div className="row" style={{ marginBottom: 6, gap: 8 }}>
               <button className="link" onClick={() => setDraft(null)}>
                 Select all
@@ -158,9 +199,14 @@ export function TextColumnFilter({
               <button className="link" onClick={() => setDraft(new Set())}>
                 Clear
               </button>
+              {query.trim() && (
+                <button className="link" onClick={selectAllVisible}>
+                  Select {visible.length} shown
+                </button>
+              )}
             </div>
             <div style={{ overflowY: "auto", flex: 1 }}>
-              {options.map((opt) => (
+              {visible.map((opt) => (
                 <label
                   key={opt}
                   className="field-checkbox"
@@ -175,6 +221,9 @@ export function TextColumnFilter({
                 </label>
               ))}
               {options.length === 0 && <p className="subtitle">No values.</p>}
+              {options.length > 0 && visible.length === 0 && (
+                <p className="subtitle">No matches.</p>
+              )}
             </div>
             <div className="row" style={{ marginTop: 8, gap: 8, justifyContent: "flex-end" }}>
               <button className="btn secondary" style={{ padding: "5px 12px" }} onClick={() => setOpen(false)}>
