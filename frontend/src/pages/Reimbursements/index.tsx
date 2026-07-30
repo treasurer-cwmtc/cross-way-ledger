@@ -25,6 +25,12 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
 };
 
+const STATUS_PILL_CLASS: Record<string, string> = {
+  pending: "warn",
+  paid: "bank",
+  rejected: "danger",
+};
+
 function QueueSection() {
   const [statusFilter, setStatusFilter] = useState("");
   const [requests, setRequests] = useState<Reimbursement[]>([]);
@@ -101,7 +107,9 @@ function QueueSection() {
               <td>
                 {r.submitter_name} <span className="subtitle">({r.submitter_email})</span>
               </td>
-              <td>{STATUS_LABELS[r.status]}</td>
+              <td>
+                <span className={"pill lg " + STATUS_PILL_CLASS[r.status]}>{STATUS_LABELS[r.status]}</span>
+              </td>
               <td>{fmtMoney(r.total_amount)}</td>
               <td>{new Date(r.submitted_at).toLocaleString()}</td>
             </tr>
