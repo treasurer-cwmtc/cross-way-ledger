@@ -1,24 +1,83 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChartAccount } from "../../api/accounts";
-import AccountPicker from "./AccountPicker";
 
-/** Multi-select Chart-of-Accounts picker: an AccountPicker for adding one
- * account at a time, rendered as removable chips - built for the
- * Reimbursements assignment editor ("which accounts can this person submit
- * against"), the first place in the app that needed more than one account
- * selected at once. Reuses AccountPicker's search/keyboard logic rather
- * than forking it, since a single-select-then-add UX is simpler to build
- * and reason about than a fully multi-select autocomplete. */
+function labelFor(a: ChartAccount) {
+  return `${a.account_no} · ${a.statement_description}`;
+}
+
+/** Multi-select Chart-of-Accounts picker: type to filter, click (or Enter) to
+ * toggle an account on/off - the dropdown stays open across picks, so
+ * checking several accounts under the same search (e.g. "vbs") doesn't
+ * require re-opening and re-typing between every one. Selected accounts also
+ * show as removable chips below. Built for the Reimbursements assignment
+ * editor ("which accounts can this person submit against"). */
 export default function MultiAccountPicker(props: {
   value: string[];
   accounts: ChartAccount[];
   onChange: (accountNos: string[]) => void;
 }) {
-  const selected = props.accounts.filter((a) => props.value.includes(a.account_no));
-  const remaining = props.accounts.filter((a) => !props.value.includes(a.account_no));
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+  const boxRef = useRef<HTMLDivElement>(null);
 
-  function add(accountNo: string) {
-    if (!accountNo || props.value.includes(accountNo)) return;
-    props.onChange([...props.value, accountNo]);
+  const selected = props.accounts.filter((a) => props.value.includes(a.account_no));
+
+  useEffect(() => {
+    function onDocMouseDown(ev: MouseEvent) {
+      const target = ev.target as Node;
+      if (
+        boxRef.current &&
+        !boxRef.current.contains(target) &&
+        !(target instanceof Element && target.closest(".autocomplete-list"))
+      ) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !boxRef.current) return;
+    const rect = boxRef.current.getBoundingClientRect();
+    const width = Math.max(rect.width, 380);
+    const left = Math.min(rect.left, window.innerWidth - width - 12);
+    setCoords({ top: rect.bottom + 4, left: Math.max(left, 8), width });
+
+    function onScroll(ev: Event) {
+      const target = ev.target as Node;
+      if (target instanceof Element && target.closest(".autocomplete-list")) return;
+      setOpen(false);
+    }
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const pool = !q
+      ? props.accounts
+      : props.accounts.filter(
+          (a) =>
+            a.account_no.toLowerCase().includes(q) ||
+            a.statement_description.toLowerCase().includes(q)
+        );
+    return pool.slice(0, 50);
+  }, [props.accounts, query]);
+
+  function toggle(accountNo: string) {
+    if (props.value.includes(accountNo)) {
+      props.onChange(props.value.filter((a) => a !== accountNo));
+    } else {
+      props.onChange([...props.value, accountNo]);
+    }
   }
 
   function remove(accountNo: string) {
@@ -33,16 +92,119 @@ export default function MultiAccountPicker(props: {
     props.onChange([]);
   }
 
+  // Selects/deselects everything the current search matched, not the whole
+  // account list - lets "vbs" + one click grab all 6 VBS accounts instead of
+  // clicking each one individually.
+  const allMatchesSelected = matches.length > 0 && matches.every((a) => props.value.includes(a.account_no));
+
+  function toggleAllMatches() {
+    if (allMatchesSelected) {
+      const matchNos = new Set(matches.map((a) => a.account_no));
+      props.onChange(props.value.filter((a) => !matchNos.has(a)));
+    } else {
+      const toAdd = matches.map((a) => a.account_no).filter((a) => !props.value.includes(a));
+      props.onChange([...props.value, ...toAdd]);
+    }
+  }
+
+  function onKeyDown(ev: React.KeyboardEvent<HTMLInputElement>) {
+    if (!open) {
+      if (ev.key === "ArrowDown" || ev.key === "Enter") {
+        ev.preventDefault();
+        setOpen(true);
+        setHighlight(0);
+      }
+      return;
+    }
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      setHighlight((h) => Math.min(h + 1, matches.length - 1));
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (ev.key === "Enter") {
+      ev.preventDefault();
+      const a = matches[highlight];
+      if (a) toggle(a.account_no);
+    } else if (ev.key === "Escape") {
+      ev.stopPropagation();
+      setOpen(false);
+    }
+  }
+
   return (
     <div>
       <div className="row" style={{ gap: 10, alignItems: "center" }}>
-        <div style={{ flex: 1 }}>
-          <AccountPicker
-            value=""
-            accounts={remaining}
-            onChange={add}
-            placeholder="Search to add a Chart of Accounts…"
+        <div ref={boxRef} className="autocomplete" style={{ flex: 1 }}>
+          <input
+            type="text"
+            placeholder="Search to check off Chart-of-Accounts…"
+            value={query}
+            onFocus={() => {
+              setOpen(true);
+              setHighlight(0);
+            }}
+            onChange={(ev) => {
+              setQuery(ev.target.value);
+              setHighlight(0);
+              if (!open) setOpen(true);
+            }}
+            onKeyDown={onKeyDown}
           />
+          {open &&
+            createPortal(
+              <div
+                className="autocomplete-list"
+                style={{
+                  position: "fixed",
+                  top: coords.top,
+                  left: coords.left,
+                  width: coords.width,
+                }}
+              >
+                {matches.length > 0 && (
+                  <div
+                    className="autocomplete-option"
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      toggleAllMatches();
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontWeight: 600,
+                      borderBottom: "1px solid var(--border)",
+                    }}
+                  >
+                    <input type="checkbox" checked={allMatchesSelected} readOnly style={{ flex: "none" }} />
+                    <span>
+                      {query.trim() ? `Select all ${matches.length} matching` : "Select all"}
+                    </span>
+                  </div>
+                )}
+                {matches.map((a, i) => {
+                  const checked = props.value.includes(a.account_no);
+                  return (
+                    <div
+                      key={a.account_no}
+                      className={"autocomplete-option" + (highlight === i ? " active" : "")}
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        toggle(a.account_no);
+                      }}
+                      onMouseEnter={() => setHighlight(i)}
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <input type="checkbox" checked={checked} readOnly style={{ flex: "none" }} />
+                      <span>{labelFor(a)}</span>
+                    </div>
+                  );
+                })}
+                {matches.length === 0 && <div className="autocomplete-empty">No matches</div>}
+              </div>,
+              document.body
+            )}
         </div>
         <button type="button" className="btn secondary" onClick={selectAll}>
           Select all

@@ -6,9 +6,15 @@ function fmtMoney(n: number): string {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
+  pending: "Submitted",
   paid: "Paid",
   rejected: "Rejected",
+};
+
+const STATUS_PILL_CLASS: Record<string, string> = {
+  pending: "warn",
+  paid: "bank",
+  rejected: "danger",
 };
 
 /** Submitter's own past/present requests, with notes - editing is only
@@ -38,11 +44,19 @@ export default function RequestList({ onEdit }: { onEdit: (r: Reimbursement) => 
       {requests.length === 0 && <p className="subtitle">No requests yet.</p>}
       {requests.map((r) => (
         <div key={r.id} style={{ borderBottom: "1px solid var(--border)", padding: "12px 0" }}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <b>{r.name}</b> — {fmtMoney(r.total_amount)}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <b>{r.name}</b>
+                <span
+                  className={"pill lg " + STATUS_PILL_CLASS[r.status]}
+                  style={{ flex: "none" }}
+                >
+                  {STATUS_LABELS[r.status]}
+                </span>
+              </div>
               <div className="subtitle">
-                {STATUS_LABELS[r.status]} · submitted {new Date(r.submitted_at).toLocaleString()}
+                {new Date(r.submitted_at).toLocaleDateString()} · {fmtMoney(r.total_amount)}
               </div>
             </div>
             {r.status === "pending" && (
