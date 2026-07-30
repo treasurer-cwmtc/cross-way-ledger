@@ -410,6 +410,12 @@ table.resizable-cols td {
   font-weight: 600;
 }
 
+.pill.lg {
+  padding: 4px 14px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
 .pill.stripe {
   background: var(--primary-light);
   color: var(--primary);
@@ -423,6 +429,11 @@ table.resizable-cols td {
 .pill.warn {
   background: #fef3c7;
   color: var(--amber);
+}
+
+.pill.danger {
+  background: #fee2e2;
+  color: var(--red);
 }
 
 .stats {
