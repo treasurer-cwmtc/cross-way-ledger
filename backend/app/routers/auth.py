@@ -15,6 +15,7 @@ from ..models import User
 from ..schemas import (
     GoogleLoginRequest,
     PasswordChange,
+    PasswordReset,
     Token,
     UserCreate,
     UserOut,
@@ -170,6 +171,34 @@ def update_permissions(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.put("/users/{user_id}/reset-password", status_code=204)
+def reset_password(
+    user_id: int,
+    payload: PasswordReset,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Admin-only password reset - unlike change-password, doesn't require
+    knowing the old one (the point: an admin resetting a *forgotten*
+    password). Only meaningful for local accounts - a Google account's
+    password_hash is a random value nobody ever uses to sign in (see
+    create_user), so resetting it wouldn't change how that person logs in."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.email:
+        raise HTTPException(
+            status_code=400,
+            detail="This account signs in with Google; there is no password to reset.",
+        )
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=400, detail="New password must be at least 8 characters"
+        )
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
 
 
 @router.delete("/users/{user_id}", status_code=204)

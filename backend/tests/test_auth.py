@@ -144,3 +144,63 @@ def test_duplicate_username_rejected():
         json={"username": "dupe", "password": "supersecret1"},
     )
     assert r.status_code == 409
+
+
+def test_admin_can_reset_a_local_users_password():
+    h = auth_header()
+    r = client.post(
+        "/api/auth/users",
+        headers=h,
+        json={"username": "resettable", "password": "originalpass1"},
+    )
+    user_id = r.json()["id"]
+
+    r = client.put(
+        f"/api/auth/users/{user_id}/reset-password",
+        headers=h,
+        json={"new_password": "brandnewpass1"},
+    )
+    assert r.status_code == 204, r.text
+
+    # Old password no longer works, new one does.
+    assert (
+        client.post(
+            "/api/auth/login",
+            data={"username": "resettable", "password": "originalpass1"},
+        ).status_code
+        == 401
+    )
+    assert auth_header("resettable", "brandnewpass1")
+
+
+def test_reset_password_rejects_short_password():
+    h = auth_header()
+    r = client.post(
+        "/api/auth/users",
+        headers=h,
+        json={"username": "shortpw", "password": "originalpass1"},
+    )
+    user_id = r.json()["id"]
+    r = client.put(
+        f"/api/auth/users/{user_id}/reset-password",
+        headers=h,
+        json={"new_password": "short"},
+    )
+    assert r.status_code == 400
+
+
+def test_reset_password_rejects_google_account():
+    h = auth_header()
+    r = client.post(
+        "/api/auth/users",
+        headers=h,
+        json={"username": "googleuser", "email": "googleuser@crosswaymtc.org"},
+    )
+    user_id = r.json()["id"]
+    r = client.put(
+        f"/api/auth/users/{user_id}/reset-password",
+        headers=h,
+        json={"new_password": "somepassword1"},
+    )
+    assert r.status_code == 400
+    assert "Google" in r.json()["detail"]
