@@ -16,6 +16,8 @@ from app.services.categorizer import Categorizer
 from app.services.parsers import parse_bank_csv, parse_stripe_csv
 from app.services.reconciler import reconcile
 
+from _db_safety import assert_safe_test_database
+
 FIXTURES = Path(__file__).parent
 
 
@@ -25,6 +27,7 @@ def make_session():
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL must be set to a real Postgres instance to run tests.")
+    assert_safe_test_database(database_url)
     engine = create_engine(database_url)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)

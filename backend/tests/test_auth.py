@@ -14,6 +14,8 @@ from app import database  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
+from _db_safety import assert_safe_test_database  # noqa: E402
+
 # Tests run against a real Postgres instance - same database engine as every
 # real environment (dev/staging/prod) - not SQLite. Point this at a throwaway
 # Postgres, e.g. `docker compose up -d db` then
@@ -24,6 +26,7 @@ if not database_url:
         "DATABASE_URL must be set to a real Postgres instance to run tests "
         "(see docs/DEPLOYMENT.md) - there is no SQLite fallback."
     )
+assert_safe_test_database(database_url)
 
 # Use a single shared Postgres DB for the app under test, reset fresh below.
 engine = create_engine(database_url, future=True)

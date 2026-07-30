@@ -232,6 +232,8 @@ gcloud sql instances clone ledger-db-prod ledger-db-prod-restore \
 
 Cost is billed per GB-month of actual backup storage (list price roughly $0.08/GB/month); both instances are small, so this typically adds well under $2/month combined.
 
+> **⚠️ Never run the backend test suite with `DATABASE_URL` pointed at a real Cloud SQL instance.** `backend/tests/test_auth.py` and `test_reconciler.py` bootstrap by calling `Base.metadata.drop_all()` + `create_all()` + reseeding - meant for a throwaway local/CI Postgres, not a real database. On 2026-07-30 a manual local `pytest` run had `DATABASE_URL` set to `ledger-db-dev`'s real IP instead of `localhost`, which wiped every table in dev (recovered via the point-in-time clone-and-copy procedure above - see issue #75). Both files now call `assert_safe_test_database()` (`backend/tests/_db_safety.py`), which refuses to run against any host that isn't `localhost`/`127.0.0.1`/`::1`/`db` - so this specific mistake can no longer even execute. Always let CI run the suite (its Postgres is a disposable per-run container), or run it locally against `docker compose up -d db`.
+
 ## 9. Database access for people, not just the app
 
 Cloud SQL supports **IAM database authentication** — signing in with a Google identity instead of a database password. This is enabled on both instances for the accounts that need direct query access.
