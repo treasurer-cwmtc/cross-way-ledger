@@ -221,6 +221,10 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+class PasswordReset(BaseModel):
+    new_password: str
+
+
 class GoogleLoginRequest(BaseModel):
     id_token: str
 

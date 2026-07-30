@@ -62,6 +62,13 @@ export const authApi = {
       headers: authHeaders(),
     }).then(j<void>),
 
+  resetPassword: (id: number, new_password: string) =>
+    fetch(`${BASE}/api/auth/users/${id}/reset-password`, {
+      method: "PUT",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ new_password }),
+    }).then(j<void>),
+
   updatePermissions: (
     id: number,
     permissions: string[],

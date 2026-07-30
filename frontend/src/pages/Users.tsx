@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { authApi, User } from "../api/auth";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../components/ColumnResize";
+import ResetPasswordModal from "./ResetPasswordModal";
 
 // Matches the backend's GRANTABLE_PERMISSIONS (app/deps.py) and the
 // corresponding Tab keys in App.tsx - kept as its own small list here since
@@ -39,6 +40,9 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+
+  const [resetPasswordFor, setResetPasswordFor] = useState<User | null>(null);
+  const [userListMsg, setUserListMsg] = useState("");
 
   const [selectedUserId, setSelectedUserId] = useState<number | "">("");
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -194,14 +198,19 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
         <h3 style={{ marginTop: 0 }}>Users</h3>
         <table className="resizable-cols">
           <ColGroup
-            columns={["username", "email", "admin", "active", "created", "actions"]}
+            columns={["username", "type", "email", "admin", "active", "created", "actions"]}
             widths={widths}
+            defaultWidths={{ actions: 220 }}
           />
           <thead>
             <tr>
               <th>
                 Username
                 <ColResizeHandle col="username" startResize={startResize} />
+              </th>
+              <th>
+                Type
+                <ColResizeHandle col="type" startResize={startResize} />
               </th>
               <th>
                 Email
@@ -220,35 +229,59 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
                 <ColResizeHandle col="created" startResize={startResize} />
               </th>
               <th>
-                <ColResizeHandle col="actions" startResize={startResize} />
+                <ColResizeHandle col="actions" defaultWidth={220} startResize={startResize} />
               </th>
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  <b>{u.username}</b>
-                  {u.id === currentUserId && (
-                    <span style={{ color: "var(--muted)" }}> (you)</span>
-                  )}
-                </td>
-                <td>{u.email || "—"}</td>
-                <td>{u.is_admin ? "Yes" : ""}</td>
-                <td>{u.active ? "Yes" : "No"}</td>
-                <td>{new Date(u.created_at).toLocaleDateString()}</td>
-                <td>
-                  {u.active && u.id !== currentUserId && (
-                    <button className="link" onClick={() => deactivate(u)}>
-                      Deactivate
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {users.map((u) => {
+              // Google accounts always have `email` set (see models.py's
+              // User.email docstring) - local accounts never do in this
+              // app's current create-user flow, so this is a reliable split
+              // even though the schema technically allows both on one row.
+              const isGoogle = !!u.email;
+              return (
+                <tr key={u.id}>
+                  <td>
+                    <b>{u.username}</b>
+                    {u.id === currentUserId && (
+                      <span style={{ color: "var(--muted)" }}> (you)</span>
+                    )}
+                  </td>
+                  <td>{isGoogle ? "Google" : "Local"}</td>
+                  <td>{u.email || "—"}</td>
+                  <td>{u.is_admin ? "Yes" : ""}</td>
+                  <td>{u.active ? "Yes" : "No"}</td>
+                  <td>{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "nowrap" }}>
+                      {!isGoogle && (
+                        <button className="link" onClick={() => setResetPasswordFor(u)}>
+                          Reset password
+                        </button>
+                      )}
+                      {u.active && u.id !== currentUserId && (
+                        <button className="link" onClick={() => deactivate(u)}>
+                          Deactivate
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        {userListMsg && <div className="ok">{userListMsg}</div>}
       </div>
+
+      {resetPasswordFor && (
+        <ResetPasswordModal
+          user={resetPasswordFor}
+          onClose={() => setResetPasswordFor(null)}
+          onSaved={() => setUserListMsg(`Password reset for "${resetPasswordFor.username}".`)}
+        />
+      )}
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Permissions</h3>
