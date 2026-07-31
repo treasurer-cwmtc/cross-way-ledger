@@ -28,6 +28,18 @@ Click any row to open its full detail editor. Every field is directly editable e
 
 If one bank line actually covers several categories (a common case: one lump "REMOTE ONLINE DEPOSIT" covering several checks), split it. The original row is kept, hidden from the normal list, so it still blocks a future re-import of the same statement from re-adding it as a "new" duplicate — the visible, editable rows afterward are its children. Undoing a split removes the children and un-hides the original.
 
+### Reconciling an Actual line against Accrual entries
+
+The mirror image of splitting: one bank line that actually settles *several* Accrual entries at once (e.g. one Zelle payment covering multiple expense lines, or a reimbursement that was paid in one lump sum). From the Actual page, open the bank line and click **Reconcile against Accrual**:
+
+1. **Select matching lines** — pick one or more Accrual entries from the candidate table. The selected total must tie to the actual's amount (within a cent) before you can continue.
+2. **Preview** — see exactly what will happen: the actual line will be replaced by one new row per selected accrual entry (retaining the actual's Posted Date and Bank Description, so the connection to the real bank statement isn't lost), and the accrual entries you picked will be removed from the Accrual ledger.
+3. **Submit** — both sides happen together, in one transaction; if anything fails, nothing changes.
+
+Like a split, nothing is actually deleted: the original actual line and the consumed accrual entries are hidden (not hard-deleted), preserving the audit trail and preventing a re-imported bank statement from recreating the actual line as a duplicate.
+
+An Accrual entry linked to a reimbursement can only be reconciled once its reimbursement request is **Paid** or **Rejected** — a still-pending request can still be edited or rejected, which would change or remove the same accrual entry out from under the reconciliation.
+
 ### Attaching a receipt
 
 Open an entry and use the Google Drive picker to attach a receipt file. Only the file's identity and a link are stored — the file itself stays in your Drive, never copied into the app's own storage. For attaching many receipts at once against already-existing entries, see [Link Receipts](donors-and-receipts.md#link-receipts).
