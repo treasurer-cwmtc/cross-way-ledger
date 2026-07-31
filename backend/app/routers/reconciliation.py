@@ -11,6 +11,7 @@ from ..models import (
     ChartOfAccount,
     ReconciliationEntry,
     ReconRun,
+    Reimbursement,
     ReimbursementLine,
 )
 from ..schemas import (
@@ -243,9 +244,11 @@ def reconcile_with_accruals(
     payment clears, but deleting it outright would both lose the audit
     trail of which actual line it became and risk violating
     reimbursement_lines.accrual_entry_id's FK for any entry still linked to
-    a Reimbursement (see delete_accrual_entries's docstring in
-    services/reimbursements.py for that exact failure mode) - so those are
-    rejected here rather than silently skipped.
+    a *pending* Reimbursement (see delete_accrual_entries's docstring in
+    services/reimbursements.py for that exact failure mode) - those are
+    rejected here rather than silently skipped. A *paid* reimbursement's
+    accrual entries are exactly what this feature exists to reconcile, so
+    those are allowed through.
 
     Everything below the initial validation happens in one flush/commit: if
     creating the replacement actual lines fails partway, nothing (not the
@@ -279,20 +282,29 @@ def reconcile_with_accruals(
             detail=f"Accrual entry(ies) already split or reconciled: {already_hidden}",
         )
 
-    linked = list(
+    # A pending reimbursement can still be edited or rejected, either of
+    # which would touch this same accrual entry out from under us - block
+    # those. A paid one is terminal (see the Reimbursement model docstring:
+    # both Paid and Rejected are terminal) and mark_accrual_entries_posted
+    # never deletes the entry, only stamps posted_date - so its accrual
+    # entries are exactly what this feature exists to reconcile, not
+    # something to reject.
+    still_pending = list(
         db.scalars(
-            select(ReimbursementLine.accrual_entry_id).where(
-                ReimbursementLine.accrual_entry_id.in_(ids)
+            select(ReimbursementLine.accrual_entry_id)
+            .join(Reimbursement, Reimbursement.id == ReimbursementLine.reimbursement_id)
+            .where(
+                ReimbursementLine.accrual_entry_id.in_(ids),
+                Reimbursement.status == "pending",
             )
         )
     )
-    if linked:
+    if still_pending:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Accrual entry(ies) {linked} are linked to a Reimbursement request and "
-                "can't be reconciled this way - they're removed automatically when that "
-                "request is paid or rejected."
+                f"Accrual entry(ies) {still_pending} are linked to a still-pending "
+                "Reimbursement request and can't be reconciled until it's paid or rejected."
             ),
         )
 
