@@ -407,13 +407,44 @@ def test_reconcile_with_accruals_rejects_mismatched_total():
     assert r.status_code == 400
 
 
-def test_reconcile_with_accruals_rejects_reimbursement_linked_entries():
-    """An AccrualEntry still linked from a reimbursement_lines row (a real
-    FK) must be rejected, not silently deleted - that's the exact failure
-    mode fixed in delete_accrual_entries (see its docstring)."""
-    from app.models import AccrualEntry, Reimbursement, ReimbursementLine  # noqa: E402
-    from test_auth import TestingSession  # noqa: E402
+def _make_linked_accrual(status: str, amount: float = -10.0):
+    """Directly constructs an AccrualEntry linked to a Reimbursement of the
+    given status (bypassing the real submission API, which only ever
+    produces "pending"). total_amount is deliberately left at 0.0 regardless
+    of status - dashboard.py's outstanding-reimbursements KPI sums every
+    pending/approved Reimbursement.total_amount across the whole shared test
+    DB, so a leftover row with a real amount here would silently skew a
+    completely unrelated test's assertion (this bit an unrelated dashboard
+    test in CI the first time this fixture was written)."""
+    from app.models import AccrualEntry, Reimbursement, ReimbursementLine
+    from test_auth import TestingSession
 
+    with TestingSession() as db:
+        entry = AccrualEntry(description=f"Linked to {status} reimbursement", amount=amount)
+        db.add(entry)
+        db.flush()
+        reimb = Reimbursement(
+            submitter_email="reconcile-test@example.com",
+            name=f"reconcile-test@example.com-{status}-{entry.id}",
+            status=status,
+            total_amount=0.0,
+        )
+        db.add(reimb)
+        db.flush()
+        line = ReimbursementLine(
+            reimbursement_id=reimb.id, account_no=None, amount=amount, accrual_entry_id=entry.id
+        )
+        db.add(line)
+        db.commit()
+        return entry.id
+
+
+def test_reconcile_with_accruals_rejects_pending_reimbursement_linked_entries():
+    """An AccrualEntry linked from a still-pending Reimbursement (a real FK,
+    via reimbursement_lines) must be rejected, not silently touched - that
+    request could still be edited or rejected, which would delete this same
+    accrual entry out from under an in-progress reconciliation (the exact
+    failure mode fixed in delete_accrual_entries, see its docstring)."""
     h = auth_header()
     run_id = _run_upload()
     bank_account_id = _bank_account_id()
@@ -425,30 +456,7 @@ def test_reconcile_with_accruals_rejects_reimbursement_linked_entries():
     entries = client.get("/api/reconciliation", headers=h).json()
     target = next(e for e in entries if e["amount"] != 0 and e["split_parent_id"] is None)
 
-    with TestingSession() as db:
-        entry = AccrualEntry(description="Linked to reimbursement", amount=-10.0)
-        db.add(entry)
-        db.flush()
-        # status/total_amount deliberately inert (not "pending" with a real
-        # amount) - dashboard.py's outstanding-reimbursements KPI sums every
-        # pending/approved Reimbursement.total_amount across the whole
-        # shared test DB, so a leftover pending row here would silently
-        # skew a completely unrelated test's assertion (this one bit an
-        # unrelated dashboard test in CI the first time around).
-        reimb = Reimbursement(
-            submitter_email="reconcile-test@example.com",
-            name="reconcile-test@example.com-linked",
-            status="rejected",
-            total_amount=0.0,
-        )
-        db.add(reimb)
-        db.flush()
-        line = ReimbursementLine(
-            reimbursement_id=reimb.id, account_no=None, amount=-10.0, accrual_entry_id=entry.id
-        )
-        db.add(line)
-        db.commit()
-        linked_accrual_id = entry.id
+    linked_accrual_id = _make_linked_accrual("pending")
 
     r = client.post(
         f"/api/reconciliation/{target['id']}/reconcile-with-accruals",
@@ -456,7 +464,37 @@ def test_reconcile_with_accruals_rejects_reimbursement_linked_entries():
         json={"accrual_entry_ids": [linked_accrual_id]},
     )
     assert r.status_code == 400
-    assert "Reimbursement" in r.json()["detail"]
+    assert "pending" in r.json()["detail"]
+
+
+def test_reconcile_with_accruals_allows_paid_reimbursement_linked_entries():
+    """A paid reimbursement is terminal - mark_accrual_entries_posted only
+    stamps posted_date, it never deletes the accrual entry - so its accrual
+    entries are exactly what this feature exists to reconcile against a real
+    bank line, not something to block."""
+    h = auth_header()
+    run_id = _run_upload()
+    bank_account_id = _bank_account_id()
+    client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    entries = client.get("/api/reconciliation", headers=h).json()
+    target = next(
+        e for e in entries if e["amount"] != 0 and e["split_parent_id"] is None
+    )
+    target_amount = target["amount"]
+
+    linked_accrual_id = _make_linked_accrual("paid", amount=target_amount)
+
+    r = client.post(
+        f"/api/reconciliation/{target['id']}/reconcile-with-accruals",
+        headers=h,
+        json={"accrual_entry_ids": [linked_accrual_id]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["reconciled_accrual_ids"] == [linked_accrual_id]
 
 
 def test_prior_year_end_date_setting_is_seeded_and_editable():
