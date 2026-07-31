@@ -399,6 +399,20 @@ class AccrualEntry(Base):
     receipt_file_name: Mapped[str] = mapped_column(String(300), default="")
     receipt_web_view_link: Mapped[str] = mapped_column(Text, default="")
 
+    # Set when this accrual entry has been reconciled against a real bank
+    # transaction (see routers/reconciliation.py's reconcile_with_accruals) -
+    # an accrual is only ever meant to exist until the actual payment clears
+    # the bank, so once that happens this row is hidden from the normal
+    # Accrual list (same is_split==False filtering pattern, just gated on
+    # this instead) rather than deleted outright - deleting it would lose
+    # the audit trail of which real bank line it became, and would violate
+    # reimbursement_lines.accrual_entry_id's FK for any entry still linked
+    # to a Reimbursement (see delete_accrual_entries's docstring for that
+    # exact failure mode).
+    reconciled_to_actual_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ledger_actual.id"), nullable=True
+    )
+
     bank_account: Mapped[BankAccount | None] = relationship()
 
     @validates("account_no")

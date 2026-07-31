@@ -44,6 +44,7 @@ def _to_out(
         receipt_file_id=entry.receipt_file_id,
         receipt_file_name=entry.receipt_file_name,
         receipt_web_view_link=entry.receipt_web_view_link,
+        reconciled_to_actual_id=entry.reconciled_to_actual_id,
         statement_description=coa.statement_description if coa else "",
         category=coa.category if coa else "",
         statement_category=coa.statement_category if coa else "",
@@ -69,6 +70,7 @@ def list_entries(
     entries = db.scalars(
         select(AccrualEntry)
         .where(AccrualEntry.is_split == False)  # noqa: E712 - hidden once split
+        .where(AccrualEntry.reconciled_to_actual_id.is_(None))  # hidden once reconciled
         .order_by(AccrualEntry.transaction_date.desc(), AccrualEntry.id.desc())
     )
     return [

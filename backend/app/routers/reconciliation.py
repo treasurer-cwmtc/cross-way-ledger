@@ -4,8 +4,18 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import require_permission
-from ..models import BankAccount, CategoryRule, ChartOfAccount, ReconciliationEntry, ReconRun
+from ..models import (
+    AccrualEntry,
+    BankAccount,
+    CategoryRule,
+    ChartOfAccount,
+    ReconciliationEntry,
+    ReconRun,
+    ReimbursementLine,
+)
 from ..schemas import (
+    ReconcileWithAccrualsRequest,
+    ReconcileWithAccrualsResult,
     ReconciliationEntryOut,
     ReconciliationEntryUpdate,
     ReconciliationImportRequest,
@@ -214,6 +224,122 @@ def get_split_group(parent_id: int, db: Session = Depends(get_db)) -> SplitGroup
     return SplitGroupOut(
         parent=_to_out(parent, coa_by_no, bank_accounts_by_id, categorizer),
         children=[_to_out(c, coa_by_no, bank_accounts_by_id, categorizer) for c in children],
+    )
+
+
+@router.post("/{actual_id}/reconcile-with-accruals", response_model=ReconcileWithAccrualsResult)
+def reconcile_with_accruals(
+    actual_id: int, payload: ReconcileWithAccrualsRequest, db: Session = Depends(get_db)
+) -> ReconcileWithAccrualsResult:
+    """One bank line often represents several accrual entries at once (e.g.
+    one Zelle payment to a person that was accrued as 5 separate expense
+    lines) - the mirror image of Stripe reconciliation, where one bank
+    payout line explodes into several Stripe donation lines. This replaces
+    the actual with one child per selected accrual entry (same split
+    mechanics as split_entry - the original is hidden via is_split, not
+    deleted, so its dedup_key keeps blocking re-import) and hides the
+    accrual entries via reconciled_to_actual_id rather than deleting them -
+    an accrual is never meant to be a long-lived record once the real
+    payment clears, but deleting it outright would both lose the audit
+    trail of which actual line it became and risk violating
+    reimbursement_lines.accrual_entry_id's FK for any entry still linked to
+    a Reimbursement (see delete_accrual_entries's docstring in
+    services/reimbursements.py for that exact failure mode) - so those are
+    rejected here rather than silently skipped.
+
+    Everything below the initial validation happens in one flush/commit: if
+    creating the replacement actual lines fails partway, nothing (not the
+    accrual hides, not the original actual's is_split flag) is left
+    committed - the whole request either fully succeeds or fully rolls back.
+    """
+    actual = db.get(ReconciliationEntry, actual_id)
+    if actual is None:
+        raise HTTPException(status_code=404, detail="Actual entry not found.")
+    if actual.is_split:
+        raise HTTPException(status_code=400, detail="This line has already been split.")
+    if actual.split_parent_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="This line is already part of a split; undo that split first.",
+        )
+
+    if not payload.accrual_entry_ids:
+        raise HTTPException(status_code=400, detail="Select at least one accrual line.")
+    ids = list(dict.fromkeys(payload.accrual_entry_ids))  # de-dup, keep order
+    accruals = list(db.scalars(select(AccrualEntry).where(AccrualEntry.id.in_(ids))))
+    if len(accruals) != len(ids):
+        found = {a.id for a in accruals}
+        missing = [i for i in ids if i not in found]
+        raise HTTPException(status_code=404, detail=f"Accrual entry(ies) not found: {missing}")
+
+    already_hidden = [a.id for a in accruals if a.is_split or a.reconciled_to_actual_id is not None]
+    if already_hidden:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Accrual entry(ies) already split or reconciled: {already_hidden}",
+        )
+
+    linked = list(
+        db.scalars(
+            select(ReimbursementLine.accrual_entry_id).where(
+                ReimbursementLine.accrual_entry_id.in_(ids)
+            )
+        )
+    )
+    if linked:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Accrual entry(ies) {linked} are linked to a Reimbursement request and "
+                "can't be reconciled this way - they're removed automatically when that "
+                "request is paid or rejected."
+            ),
+        )
+
+    total = round(sum(a.amount for a in accruals), 2)
+    if abs(total - round(actual.amount, 2)) >= 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Selected accrual lines total ${total:.2f}, but the actual amount is ${actual.amount:.2f}.",
+        )
+
+    children = []
+    for i, accrual in enumerate(accruals):
+        child = ReconciliationEntry(
+            transaction_date=accrual.transaction_date,
+            posted_date=actual.posted_date,
+            account_no=accrual.account_no,
+            description=accrual.description,
+            bank_account_id=actual.bank_account_id,
+            method=actual.method,
+            amount=accrual.amount,
+            check_invoice_name=accrual.check_invoice_name,
+            bank_description=actual.bank_description,
+            notes=accrual.notes,
+            is_reimbursement=accrual.is_reimbursement,
+            reconciled=True,
+            dedup_key=f"{actual.dedup_key}#accrual{i}",
+            source_run_id=actual.source_run_id,
+            source_file_name=actual.source_file_name,
+            source_file_link=actual.source_file_link,
+            split_parent_id=actual.id,
+            receipt_file_id=accrual.receipt_file_id,
+            receipt_file_name=accrual.receipt_file_name,
+            receipt_web_view_link=accrual.receipt_web_view_link,
+        )
+        db.add(child)
+        children.append(child)
+    actual.is_split = True
+    for accrual in accruals:
+        accrual.reconciled_to_actual_id = actual.id
+        accrual.reconciled = True
+    db.commit()
+    for c in children:
+        db.refresh(c)
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
+    return ReconcileWithAccrualsResult(
+        actual_lines=[_to_out(c, coa_by_no, bank_accounts_by_id, categorizer) for c in children],
+        reconciled_accrual_ids=[a.id for a in accruals],
     )
 
 

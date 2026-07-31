@@ -333,6 +333,132 @@ def test_split_preserves_dedup_on_reimport():
     assert reimport.json()["imported"] == 0
 
 
+def test_reconcile_actual_with_accruals_replaces_and_hides_both_sides():
+    h = auth_header()
+    run_id = _run_upload()
+    bank_account_id = _bank_account_id()
+    client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    entries = client.get("/api/reconciliation", headers=h).json()
+    target = next(e for e in entries if e["amount"] != 0 and e["split_parent_id"] is None)
+    actual_id = target["id"]
+    actual_amount = target["amount"]
+
+    half = round(actual_amount / 2, 2)
+    remainder = round(actual_amount - half, 2)
+    a1 = client.post(
+        "/api/accrual", headers=h, json={"description": "Accrual A", "amount": half}
+    ).json()
+    a2 = client.post(
+        "/api/accrual", headers=h, json={"description": "Accrual B", "amount": remainder}
+    ).json()
+
+    r = client.post(
+        f"/api/reconciliation/{actual_id}/reconcile-with-accruals",
+        headers=h,
+        json={"accrual_entry_ids": [a1["id"], a2["id"]]},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["actual_lines"]) == 2
+    assert {l["split_parent_id"] for l in body["actual_lines"]} == {actual_id}
+    assert round(sum(l["amount"] for l in body["actual_lines"]), 2) == round(actual_amount, 2)
+    assert set(body["reconciled_accrual_ids"]) == {a1["id"], a2["id"]}
+    # Bank-level fields are retained from the actual, not the accrual.
+    assert all(l["bank_description"] == target["bank_description"] for l in body["actual_lines"])
+    assert all(l["reconciled"] for l in body["actual_lines"])
+
+    # Original actual is hidden (same as a manual split); accrual entries
+    # are hidden too, rather than deleted.
+    after = client.get("/api/reconciliation", headers=h).json()
+    assert actual_id not in {e["id"] for e in after}
+    remaining_accruals = {e["id"] for e in client.get("/api/accrual", headers=h).json()}
+    assert a1["id"] not in remaining_accruals
+    assert a2["id"] not in remaining_accruals
+    # Still exist in the DB, just hidden - and traceable back to the actual.
+    a1_after = client.put(f"/api/accrual/{a1['id']}", headers=h, json={}).json()
+    assert a1_after["reconciled_to_actual_id"] == actual_id
+    assert a1_after["reconciled"] is True
+
+
+def test_reconcile_with_accruals_rejects_mismatched_total():
+    h = auth_header()
+    run_id = _run_upload()
+    bank_account_id = _bank_account_id()
+    client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    entries = client.get("/api/reconciliation", headers=h).json()
+    target = next(e for e in entries if e["amount"] != 0 and e["split_parent_id"] is None)
+
+    accrual = client.post(
+        "/api/accrual", headers=h, json={"description": "Too small", "amount": 0.01}
+    ).json()
+    r = client.post(
+        f"/api/reconciliation/{target['id']}/reconcile-with-accruals",
+        headers=h,
+        json={"accrual_entry_ids": [accrual["id"]]},
+    )
+    assert r.status_code == 400
+
+
+def test_reconcile_with_accruals_rejects_reimbursement_linked_entries():
+    """An AccrualEntry still linked from a reimbursement_lines row (a real
+    FK) must be rejected, not silently deleted - that's the exact failure
+    mode fixed in delete_accrual_entries (see its docstring)."""
+    from app.models import AccrualEntry, Reimbursement, ReimbursementLine  # noqa: E402
+    from test_auth import TestingSession  # noqa: E402
+
+    h = auth_header()
+    run_id = _run_upload()
+    bank_account_id = _bank_account_id()
+    client.post(
+        f"/api/reconciliation/import-run/{run_id}",
+        headers=h,
+        json={"bank_account_id": bank_account_id},
+    )
+    entries = client.get("/api/reconciliation", headers=h).json()
+    target = next(e for e in entries if e["amount"] != 0 and e["split_parent_id"] is None)
+
+    with TestingSession() as db:
+        entry = AccrualEntry(description="Linked to reimbursement", amount=-10.0)
+        db.add(entry)
+        db.flush()
+        # status/total_amount deliberately inert (not "pending" with a real
+        # amount) - dashboard.py's outstanding-reimbursements KPI sums every
+        # pending/approved Reimbursement.total_amount across the whole
+        # shared test DB, so a leftover pending row here would silently
+        # skew a completely unrelated test's assertion (this one bit an
+        # unrelated dashboard test in CI the first time around).
+        reimb = Reimbursement(
+            submitter_email="reconcile-test@example.com",
+            name="reconcile-test@example.com-linked",
+            status="rejected",
+            total_amount=0.0,
+        )
+        db.add(reimb)
+        db.flush()
+        line = ReimbursementLine(
+            reimbursement_id=reimb.id, account_no=None, amount=-10.0, accrual_entry_id=entry.id
+        )
+        db.add(line)
+        db.commit()
+        linked_accrual_id = entry.id
+
+    r = client.post(
+        f"/api/reconciliation/{target['id']}/reconcile-with-accruals",
+        headers=h,
+        json={"accrual_entry_ids": [linked_accrual_id]},
+    )
+    assert r.status_code == 400
+    assert "Reimbursement" in r.json()["detail"]
+
+
 def test_prior_year_end_date_setting_is_seeded_and_editable():
     h = auth_header()
     r = client.get("/api/settings/prior_year_end_date", headers=h)

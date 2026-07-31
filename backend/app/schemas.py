@@ -325,6 +325,15 @@ class SplitGroupOut(BaseModel):
     children: list[ReconciliationEntryOut]
 
 
+class ReconcileWithAccrualsRequest(BaseModel):
+    accrual_entry_ids: list[int]
+
+
+class ReconcileWithAccrualsResult(BaseModel):
+    actual_lines: list[ReconciliationEntryOut]
+    reconciled_accrual_ids: list[int]
+
+
 class ReconciliationImportRequest(BaseModel):
     bank_account_id: int
 
@@ -356,6 +365,7 @@ class AccrualEntryOut(BaseModel):
     receipt_file_id: str
     receipt_file_name: str
     receipt_web_view_link: str
+    reconciled_to_actual_id: int | None
     statement_description: str
     category: str
     statement_category: str
