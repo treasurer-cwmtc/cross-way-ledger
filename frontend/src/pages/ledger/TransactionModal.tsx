@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
+import { ReconcileWithAccrualsResult } from "../../api/ledger";
 import { pickReceiptFile } from "../../lib/googleDrive";
 import { METHOD_OPTIONS } from "./columns";
 import AccountPicker from "./AccountPicker";
@@ -12,6 +13,7 @@ import {
   SelectCell,
   TextCell,
 } from "./cells";
+import ReconcileAccrualWizard from "./ReconcileAccrualWizard";
 import SplitModal from "./SplitModal";
 import { LedgerEntry, LedgerEntryUpdate, SplitLine } from "./types";
 
@@ -32,10 +34,20 @@ export default function TransactionModal(props: {
   onSplit: (id: number, lines: SplitLine[]) => Promise<LedgerEntry[]>;
   onUnsplit: (parentId: number) => Promise<LedgerEntry>;
   splitHint?: string;
+  // Reconciliation-only: reconcile this actual line against one or more
+  // Accrual entries (e.g. one Zelle payment that was accrued as several
+  // separate expense lines). Omitted entirely on the Accrual page, where
+  // this action doesn't apply.
+  accrualCandidates?: LedgerEntry[];
+  onReconcileWithAccruals?: (
+    actualId: number,
+    accrualIds: number[]
+  ) => Promise<ReconcileWithAccrualsResult>;
 }) {
   const e = props.entry;
   const set = (patch: LedgerEntryUpdate) => props.onUpdate(e.id, patch);
   const [showSplit, setShowSplit] = useState(false);
+  const [showReconcileAccrual, setShowReconcileAccrual] = useState(false);
   const [unsplitting, setUnsplitting] = useState(false);
   const [error, setError] = useState("");
   const [attachingReceipt, setAttachingReceipt] = useState(false);
@@ -123,6 +135,18 @@ export default function TransactionModal(props: {
             <span style={{ color: "var(--muted)", fontSize: 12 }}>
               {props.splitHint ||
                 "For one lump entry that actually covers several people or purchases."}
+            </span>
+          </div>
+        )}
+
+        {e.split_parent_id == null && props.onReconcileWithAccruals && (
+          <div className="toolbar">
+            <button className="btn secondary" onClick={() => setShowReconcileAccrual(true)}>
+              Reconcile against Accrual
+            </button>
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>
+              For a bank payment that was recorded as several separate Accrual entries (e.g. one
+              Zelle payment covering multiple expense lines).
             </span>
           </div>
         )}
@@ -300,6 +324,20 @@ export default function TransactionModal(props: {
             props.onClose();
           }}
           onClose={() => setShowSplit(false)}
+        />
+      )}
+
+      {showReconcileAccrual && props.onReconcileWithAccruals && (
+        <ReconcileAccrualWizard
+          actual={e}
+          accrualCandidates={props.accrualCandidates || []}
+          onSubmit={(accrualIds) => props.onReconcileWithAccruals!(e.id, accrualIds)}
+          onSuccess={() => {
+            setShowReconcileAccrual(false);
+            props.onReload();
+            props.onClose();
+          }}
+          onClose={() => setShowReconcileAccrual(false)}
         />
       )}
     </div>

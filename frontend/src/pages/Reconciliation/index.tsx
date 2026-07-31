@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { accountsApi, ChartAccount } from "../../api/accounts";
+import { accrualApi, AccrualEntry } from "../../api/accrual";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 import { ledgerApi, ReconciliationEntry, ReconciliationEntryUpdate } from "../../api/ledger";
 import { getCurrentFiscalYear, settingsApi } from "../../api/settings";
@@ -62,6 +63,7 @@ export default function Reconciliation() {
   const [entries, setEntries] = useState<ReconciliationEntry[]>([]);
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [accrualCandidates, setAccrualCandidates] = useState<AccrualEntry[]>([]);
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
@@ -80,16 +82,20 @@ export default function Reconciliation() {
 
   async function load(forYear: number) {
     try {
-      const [e, a, b, cutoff] = await Promise.all([
+      const [e, a, b, cutoff, accruals] = await Promise.all([
         ledgerApi.list(forYear),
         accountsApi.listAccounts(),
         bankAccountsApi.list(),
         settingsApi.get("prior_year_end_date"),
+        // Not year-scoped - an accrual older than the actual's own posted
+        // date can still be the one it reconciles against.
+        accrualApi.list(),
       ]);
       setPriorYearEndDate(cutoff.value); // affects columns.ts CY/PY derivation
       setEntries(e);
       setAccounts(a);
       setBankAccounts(b);
+      setAccrualCandidates(accruals);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -420,6 +426,10 @@ export default function Reconciliation() {
           onSplit={(id, lines) => ledgerApi.split(id, lines)}
           onUnsplit={(parentId) => ledgerApi.unsplit(parentId)}
           splitHint="For an aggregated bank line (e.g. a deposit slip covering several checks)."
+          accrualCandidates={accrualCandidates}
+          onReconcileWithAccruals={(actualId, accrualIds) =>
+            ledgerApi.reconcileWithAccruals(actualId, accrualIds)
+          }
         />
       )}
     </div>

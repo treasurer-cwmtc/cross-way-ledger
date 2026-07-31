@@ -19,6 +19,11 @@ export interface SplitGroup {
   children: ReconciliationEntry[];
 }
 
+export interface ReconcileWithAccrualsResult {
+  actual_lines: ReconciliationEntry[];
+  reconciled_accrual_ids: number[];
+}
+
 export const ledgerApi = {
   list: (year?: number) =>
     fetch(`${BASE}/api/reconciliation${year ? `?year=${year}` : ""}`, { headers: authHeaders() }).then(
@@ -62,4 +67,11 @@ export const ledgerApi = {
     fetch(`${BASE}/api/reconciliation/split-group/${parentId}`, {
       headers: authHeaders(),
     }).then(j<SplitGroup>),
+
+  reconcileWithAccruals: (actualId: number, accrualEntryIds: number[]) =>
+    fetch(`${BASE}/api/reconciliation/${actualId}/reconcile-with-accruals`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ accrual_entry_ids: accrualEntryIds }),
+    }).then(j<ReconcileWithAccrualsResult>),
 };
