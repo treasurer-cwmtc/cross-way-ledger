@@ -429,11 +429,17 @@ def test_reconcile_with_accruals_rejects_reimbursement_linked_entries():
         entry = AccrualEntry(description="Linked to reimbursement", amount=-10.0)
         db.add(entry)
         db.flush()
+        # status/total_amount deliberately inert (not "pending" with a real
+        # amount) - dashboard.py's outstanding-reimbursements KPI sums every
+        # pending/approved Reimbursement.total_amount across the whole
+        # shared test DB, so a leftover pending row here would silently
+        # skew a completely unrelated test's assertion (this one bit an
+        # unrelated dashboard test in CI the first time around).
         reimb = Reimbursement(
             submitter_email="reconcile-test@example.com",
             name="reconcile-test@example.com-linked",
-            status="pending",
-            total_amount=-10.0,
+            status="rejected",
+            total_amount=0.0,
         )
         db.add(reimb)
         db.flush()
