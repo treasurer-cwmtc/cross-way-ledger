@@ -313,7 +313,7 @@ def test_marking_paid_sets_accrual_posted_date():
     h = auth_header()
     accrual_id = next(
         e["id"] for e in client.get("/api/accrual", headers=h).json()
-        if e["is_reimbursement"] and e["amount"] == 17.0
+        if e["is_reimbursement"] and e["amount"] == -17.0
     )
     assert client.get("/api/accrual", headers=h).json()
     before = next(e for e in client.get("/api/accrual", headers=h).json() if e["id"] == accrual_id)
@@ -420,7 +420,7 @@ def test_reject_deletes_accrual_entries_and_paid_locks_edits():
     detail = client.get(f"/api/reimbursements/{created['id']}", headers=h).json()
     accrual_id = None
     for e in client.get("/api/accrual", headers=h).json():
-        if e["is_reimbursement"] and e["amount"] == 20.0:
+        if e["is_reimbursement"] and e["amount"] == -20.0:
             accrual_id = e["id"]
     assert accrual_id is not None
 
@@ -455,7 +455,7 @@ def test_reject_deletes_accrual_entries_and_paid_locks_edits():
         )
     assert rejected.status_code == 200, rejected.text
     accrual_amounts = [e["amount"] for e in client.get("/api/accrual", headers=h).json() if e["is_reimbursement"]]
-    assert 33.0 not in accrual_amounts
+    assert -33.0 not in accrual_amounts
     assert detail["status"] == "pending"  # captured before the transitions above
 
 

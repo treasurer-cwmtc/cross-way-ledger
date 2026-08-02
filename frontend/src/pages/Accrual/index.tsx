@@ -6,6 +6,8 @@ import { getCurrentFiscalYear, settingsApi } from "../../api/settings";
 import { COLUMNS, setPriorYearEndDate } from "../ledger/columns";
 import ColumnHealthStrip from "../ledger/ColumnHealthStrip";
 import RegisterRow from "../ledger/RegisterRow";
+import { hasSignWarning } from "../ledger/signWarning";
+import SignWarningChip from "../ledger/SignWarningChip";
 import TransactionModal from "../ledger/TransactionModal";
 import QuickAddModal from "./QuickAddModal";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
@@ -18,6 +20,7 @@ export default function Accrual() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
+  const [signFilterActive, setSignFilterActive] = useState(false);
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [year, setYear] = useState<number | null>(null);
@@ -66,9 +69,10 @@ export default function Accrual() {
   }, [entries]);
 
   const activeColumn = filterColumn ? COLUMNS.find((c) => c.key === filterColumn) : null;
-  const visibleEntries = activeColumn
+  let visibleEntries = activeColumn
     ? entries.filter((e) => !activeColumn.isPopulated(e))
     : entries;
+  if (signFilterActive) visibleEntries = visibleEntries.filter(hasSignWarning);
 
   async function onUpdate(id: number, patch: AccrualEntryUpdate) {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -137,12 +141,27 @@ export default function Accrual() {
         activeKey={filterColumn}
         onToggle={(key) => setFilterColumn((prev) => (prev === key ? null : key))}
       />
+      <SignWarningChip
+        entries={entries}
+        active={signFilterActive}
+        onToggle={() => setSignFilterActive((prev) => !prev)}
+      />
       {activeColumn && (
         <div className="toolbar">
           <span className="pill warn">
             Showing only rows missing {activeColumn.label} ({visibleEntries.length})
           </span>
           <button className="link" onClick={() => setFilterColumn(null)}>
+            Clear filter
+          </button>
+        </div>
+      )}
+      {signFilterActive && (
+        <div className="toolbar">
+          <span className="pill warn">
+            Showing only rows with an unexpected sign for their category ({visibleEntries.length})
+          </span>
+          <button className="link" onClick={() => setSignFilterActive(false)}>
             Clear filter
           </button>
         </div>
