@@ -13,6 +13,8 @@ import {
 import { COLUMNS, setPriorYearEndDate } from "../ledger/columns";
 import ColumnHealthStrip from "../ledger/ColumnHealthStrip";
 import RegisterRow from "../ledger/RegisterRow";
+import { hasSignWarning } from "../ledger/signWarning";
+import SignWarningChip from "../ledger/SignWarningChip";
 import TransactionModal from "../ledger/TransactionModal";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
@@ -66,6 +68,7 @@ export default function Reconciliation() {
   const [accrualCandidates, setAccrualCandidates] = useState<AccrualEntry[]>([]);
   const [error, setError] = useState("");
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
+  const [signFilterActive, setSignFilterActive] = useState(false);
   const [openEntryId, setOpenEntryId] = useState<number | null>(null);
   const [year, setYear] = useState<number | null>(null);
 
@@ -174,6 +177,7 @@ export default function Reconciliation() {
 
   const visibleEntries = useMemo(() => {
     let out = activeColumn ? entries.filter((e) => !activeColumn.isPopulated(e)) : entries;
+    if (signFilterActive) out = out.filter(hasSignWarning);
     out = out.filter((e) => {
       if (!dateMatchesFilter(e.posted_date, datePostedFilter)) return false;
       if (!dateMatchesFilter(e.transaction_date, transactionDateFilter)) return false;
@@ -201,6 +205,7 @@ export default function Reconciliation() {
   }, [
     entries,
     activeColumn,
+    signFilterActive,
     datePostedFilter,
     transactionDateFilter,
     descriptionFilter,
@@ -273,12 +278,27 @@ export default function Reconciliation() {
         activeKey={filterColumn}
         onToggle={(key) => setFilterColumn((prev) => (prev === key ? null : key))}
       />
+      <SignWarningChip
+        entries={entries}
+        active={signFilterActive}
+        onToggle={() => setSignFilterActive((prev) => !prev)}
+      />
       {activeColumn && (
         <div className="toolbar">
           <span className="pill warn">
             Showing only rows missing {activeColumn.label} ({visibleEntries.length})
           </span>
           <button className="link" onClick={() => setFilterColumn(null)}>
+            Clear filter
+          </button>
+        </div>
+      )}
+      {signFilterActive && (
+        <div className="toolbar">
+          <span className="pill warn">
+            Showing only rows with an unexpected sign for their category ({visibleEntries.length})
+          </span>
+          <button className="link" onClick={() => setSignFilterActive(false)}>
             Clear filter
           </button>
         </div>

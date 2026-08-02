@@ -128,13 +128,19 @@ def create_accrual_entries(db: Session, reimbursement: Reimbursement) -> None:
     """Creates one AccrualEntry (is_reimbursement=True, reconciled=False) per
     line and links it back via ReimbursementLine.accrual_entry_id - see
     models.py's Reimbursement docstring for why this happens at submission,
-    not approval."""
+    not approval.
+
+    ReimbursementLine.amount is always a plain positive figure - submitters
+    enter "I spent $40", never a signed number - but every other Actual/
+    Accrual entry in the app stores an outflow as negative (see the
+    SplitModal sign-convention fix, PR #66). -abs() (not a plain negate)
+    guards against a submitter somehow entering a negative number too."""
     for line in reimbursement.lines:
         entry = AccrualEntry(
             transaction_date=line.transaction_date or date.today(),
             account_no=line.account_no,
             description=line.description or f"Reimbursement {reimbursement.name}",
-            amount=line.amount,
+            amount=-abs(line.amount),
             is_reimbursement=True,
             check_invoice_name=reimbursement.submitter_name or reimbursement.submitter_email,
             receipt_file_id=line.receipt_file_id,
