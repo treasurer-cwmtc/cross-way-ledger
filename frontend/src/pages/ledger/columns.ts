@@ -235,4 +235,30 @@ export const COLUMNS: ColumnDef[] = [
   },
 ];
 
+// These columns are frequently and legitimately blank (e.g. Notes, Grouping)
+// or are booleans/derived date parts that don't represent a data-entry gap -
+// flagging them in the health strip just trained people to ignore the chips.
+const HEALTH_CHECK_EXCLUDED = new Set([
+  "reconciled",
+  "is_reimbursement",
+  "check_invoice_name",
+  "notes",
+  "grouping",
+  "statement_item",
+  "statement_detail",
+  "is_youth_chaplain_share",
+  "is_missions",
+  "txn_month_name",
+  "txn_month_year",
+  "txn_cy_py",
+  "posted_month_name",
+  "posted_month_year",
+  "posted_year",
+  "posted_cy_py",
+]);
+
+export const HEALTH_CHECK_COLUMNS: ColumnDef[] = COLUMNS.filter(
+  (c) => !HEALTH_CHECK_EXCLUDED.has(c.key)
+);
+
 export const METHOD_OPTIONS = ["Stripe", "Check", "Debit", "Zelle", "Wire", "Deposit", "Other"];
