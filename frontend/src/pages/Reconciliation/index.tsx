@@ -10,7 +10,7 @@ import {
   TextColumnFilter,
   dateMatchesFilter,
 } from "../../components/ColumnFilter";
-import { COLUMNS, setPriorYearEndDate } from "../ledger/columns";
+import { HEALTH_CHECK_COLUMNS, setPriorYearEndDate } from "../ledger/columns";
 import ColumnHealthStrip from "../ledger/ColumnHealthStrip";
 import RegisterRow from "../ledger/RegisterRow";
 import { hasSignWarning } from "../ledger/signWarning";
@@ -145,7 +145,7 @@ export default function Reconciliation() {
 
   const completeness = useMemo(() => {
     const map = new Map<string, { complete: boolean; missingCount: number }>();
-    for (const col of COLUMNS) {
+    for (const col of HEALTH_CHECK_COLUMNS) {
       const missingCount = entries.filter((e) => !col.isPopulated(e)).length;
       map.set(col.key, { complete: missingCount === 0, missingCount });
     }
@@ -173,7 +173,7 @@ export default function Reconciliation() {
     [entries]
   );
 
-  const activeColumn = filterColumn ? COLUMNS.find((c) => c.key === filterColumn) : null;
+  const activeColumn = filterColumn ? HEALTH_CHECK_COLUMNS.find((c) => c.key === filterColumn) : null;
 
   const visibleEntries = useMemo(() => {
     let out = activeColumn ? entries.filter((e) => !activeColumn.isPopulated(e)) : entries;
@@ -273,7 +273,7 @@ export default function Reconciliation() {
       {error && <div className="error">{error}</div>}
 
       <ColumnHealthStrip
-        columns={COLUMNS}
+        columns={HEALTH_CHECK_COLUMNS}
         completeness={completeness}
         activeKey={filterColumn}
         onToggle={(key) => setFilterColumn((prev) => (prev === key ? null : key))}
