@@ -155,77 +155,98 @@ export default function ReimbursementWizard(props: {
 
       {step === 1 && (
         <>
-          <table>
-            <thead>
-              <tr>
-                <th>Transaction Date</th>
-                <th>Account</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Receipt (required)</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => (
-                <tr key={line.key}>
-                  <td>
-                    <input
-                      type="date"
-                      value={line.transaction_date || ""}
-                      onChange={(e) => updateLine(line.key, { transaction_date: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <AssignedAccountPicker
-                      value={line.account_no}
-                      accounts={props.coas}
-                      onChange={(accountNo) => updateLine(line.key, { account_no: accountNo })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={line.description}
-                      onChange={(e) => updateLine(line.key, { description: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.amount || ""}
-                      onChange={(e) => updateLine(line.key, { amount: Number(e.target.value) })}
-                      style={{ width: 100 }}
-                    />
-                  </td>
-                  <td>
-                    {line.receipt_file_name ? (
-                      line.receipt_web_view_link ? (
-                        <a href={line.receipt_web_view_link} target="_blank" rel="noreferrer">
-                          {line.receipt_file_name}
-                        </a>
-                      ) : (
-                        <span>{line.receipt_file_name}</span>
-                      )
+          {lines.map((line, i) => (
+            <div
+              key={line.key}
+              className="card"
+              style={{ marginBottom: 14, padding: 16, background: "var(--bg-alt, #f8f9fa)" }}
+            >
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <b>Item {i + 1}</b>
+                {lines.length > 1 && (
+                  <button className="link" onClick={() => removeLine(line.key)}>
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              <div className="row" style={{ gap: 16 }}>
+                <label className="field" style={{ maxWidth: 200 }}>
+                  <span>Transaction Date</span>
+                  <input
+                    type="date"
+                    value={line.transaction_date || ""}
+                    onChange={(e) => updateLine(line.key, { transaction_date: e.target.value })}
+                  />
+                </label>
+                <label className="field" style={{ flex: 1 }}>
+                  <span>Account</span>
+                  <AssignedAccountPicker
+                    value={line.account_no}
+                    accounts={props.coas}
+                    onChange={(accountNo) => updateLine(line.key, { account_no: accountNo })}
+                  />
+                </label>
+              </div>
+
+              <div className="row" style={{ gap: 16 }}>
+                <label className="field" style={{ flex: 1 }}>
+                  <span>Description</span>
+                  <input
+                    type="text"
+                    placeholder="What was this for?"
+                    value={line.description}
+                    onChange={(e) => updateLine(line.key, { description: e.target.value })}
+                  />
+                </label>
+                <label className="field" style={{ maxWidth: 160 }}>
+                  <span>Amount</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={line.amount || ""}
+                    onChange={(e) => updateLine(line.key, { amount: Number(e.target.value) })}
+                  />
+                </label>
+              </div>
+
+              <label className="field">
+                <span>Receipt (required)</span>
+                {line.receipt_file_name ? (
+                  <div className="row" style={{ alignItems: "center", gap: 10 }}>
+                    {line.receipt_web_view_link ? (
+                      <a href={line.receipt_web_view_link} target="_blank" rel="noreferrer">
+                        {line.receipt_file_name}
+                      </a>
                     ) : (
-                      <input
-                        type="file"
-                        onChange={(e) => e.target.files?.[0] && attachReceipt(line.key, e.target.files[0])}
-                        disabled={line.uploading}
-                      />
+                      <span>{line.receipt_file_name}</span>
                     )}
-                  </td>
-                  <td>
-                    <button className="link" onClick={() => removeLine(line.key)}>
-                      Remove
+                    <button
+                      className="link"
+                      onClick={() =>
+                        updateLine(line.key, {
+                          receipt_file_id: undefined,
+                          receipt_file_name: undefined,
+                          receipt_web_view_link: undefined,
+                        })
+                      }
+                    >
+                      Change
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                ) : (
+                  <input
+                    type="file"
+                    onChange={(e) => e.target.files?.[0] && attachReceipt(line.key, e.target.files[0])}
+                    disabled={line.uploading}
+                  />
+                )}
+                {line.uploading && <span className="subtitle">Uploading…</span>}
+              </label>
+            </div>
+          ))}
           <button className="btn secondary" onClick={addLine} style={{ marginTop: 10 }}>
             + Add another line
           </button>
