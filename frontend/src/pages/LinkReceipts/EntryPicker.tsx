@@ -5,7 +5,8 @@ import { LinkableEntry } from "./types";
 function labelFor(e: LinkableEntry): string {
   const name = e.check_invoice_name || e.description || "(no description)";
   const ledger = e.source === "reconciliation" ? "Actual" : "Accrual";
-  return `${name} · $${e.amount.toFixed(2)} · ${e.transaction_date || "no date"} · ${ledger}`;
+  const amount = e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 });
+  return `${name} · $${amount} · ${e.transaction_date || "no date"} · ${ledger}`;
 }
 
 /** Type-to-filter picker over the combined Actual+Accrual entry list, same

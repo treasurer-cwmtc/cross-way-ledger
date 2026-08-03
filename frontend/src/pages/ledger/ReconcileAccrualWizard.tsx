@@ -3,7 +3,7 @@ import { ReconcileWithAccrualsResult } from "../../api/ledger";
 import { LedgerEntry } from "./types";
 
 function fmtMoney(n: number): string {
-  return `$${n.toFixed(2)}`;
+  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 }
 
 type Step = "select" | "preview";

@@ -76,15 +76,23 @@ export default function Step4Validate(props: {
         <div className="stats">
           <div className="stat">
             <b style={{ color: totals.incomeOk ? "var(--green)" : "var(--red)" }}>
-              {totals.incomeOk ? "✓" : "✗"} ${totals.income.toFixed(2)}
+              {totals.incomeOk ? "✓" : "✗"} $
+              {totals.income.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </b>
-            <span>Income (raw: ${run.raw_bank_income_total.toFixed(2)})</span>
+            <span>
+              Income (raw: $
+              {run.raw_bank_income_total.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+            </span>
           </div>
           <div className="stat">
             <b style={{ color: totals.expenseOk ? "var(--green)" : "var(--red)" }}>
-              {totals.expenseOk ? "✓" : "✗"} ${totals.expense.toFixed(2)}
+              {totals.expenseOk ? "✓" : "✗"} $
+              {totals.expense.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </b>
-            <span>Expense (raw: ${run.raw_bank_expense_total.toFixed(2)})</span>
+            <span>
+              Expense (raw: $
+              {run.raw_bank_expense_total.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+            </span>
           </div>
         </div>
       </div>

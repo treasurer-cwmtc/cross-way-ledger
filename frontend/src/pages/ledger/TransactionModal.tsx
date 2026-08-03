@@ -34,6 +34,11 @@ export default function TransactionModal(props: {
   onSplit: (id: number, lines: SplitLine[]) => Promise<LedgerEntry[]>;
   onUnsplit: (parentId: number) => Promise<LedgerEntry>;
   splitHint?: string;
+  // The other rows sharing this entry's split_parent_id - shown so it's
+  // obvious which lines a split produced, since they otherwise aren't
+  // grouped together anywhere in the table (sorted/filtered like any
+  // other row).
+  splitSiblings?: LedgerEntry[];
   // Reconciliation-only: reconcile this actual line against one or more
   // Accrual entries (e.g. one Zelle payment that was accrued as several
   // separate expense lines). Omitted entirely on the Accrual page, where
@@ -112,7 +117,7 @@ export default function TransactionModal(props: {
           <div>
             <h3 style={{ margin: 0 }}>{e.description || "Transaction"}</h3>
             <p className="subtitle" style={{ margin: "2px 0 0" }}>
-              ${e.amount.toFixed(2)} · {e.transaction_date || "no date"}
+              ${e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} · {e.transaction_date || "no date"}
             </p>
           </div>
           <button className="link" onClick={props.onClose}>
@@ -121,11 +126,37 @@ export default function TransactionModal(props: {
         </div>
 
         {e.split_parent_id != null ? (
-          <div className="toolbar">
-            <span className="pill warn">Part of a split transaction</span>
-            <button className="link" onClick={undoSplit} disabled={unsplitting}>
-              {unsplitting ? "Undoing…" : "Undo split (merge back into one line)"}
-            </button>
+          <div className="toolbar" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <div className="row" style={{ alignItems: "center" }}>
+              <span className="pill warn">Part of a split transaction</span>
+              <button className="link" onClick={undoSplit} disabled={unsplitting}>
+                {unsplitting ? "Undoing…" : "Undo split (merge back into one line)"}
+              </button>
+            </div>
+            {props.splitSiblings && props.splitSiblings.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 13 }}>
+                <div style={{ color: "var(--muted)", marginBottom: 4 }}>
+                  This split also created {props.splitSiblings.length} other line
+                  {props.splitSiblings.length === 1 ? "" : "s"}:
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {props.splitSiblings.map((s) => (
+                    <li key={s.id}>
+                      {s.description || "(no description)"} — $
+                      {s.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </li>
+                  ))}
+                </ul>
+                <div style={{ marginTop: 4 }}>
+                  <b>
+                    Split total: $
+                    {(
+                      e.amount + props.splitSiblings.reduce((sum, s) => sum + s.amount, 0)
+                    ).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </b>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="toolbar">

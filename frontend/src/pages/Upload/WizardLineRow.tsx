@@ -18,7 +18,7 @@ export default function WizardLineRow(props: {
     <tr className="register-row" onClick={() => props.onOpen(l)}>
       <td>{l.transaction_date}</td>
       <td>{l.bank_description || l.description || <span style={{ color: "var(--muted)" }}>—</span>}</td>
-      <td className="num">{l.amount.toFixed(2)}</td>
+      <td className="num">{l.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
       <td onClick={(e) => e.stopPropagation()} style={{ minWidth: 220 }}>
         <AccountPicker
           value={l.account_no}

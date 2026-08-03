@@ -137,8 +137,13 @@ nav.sidebar-nav button.active {
 }
 
 .app-content {
-  max-width: 1240px;
-  padding: 30px 36px 48px;
+  /* Was capped at 1240px, which forced tables with 6-7 columns into a
+     horizontal scrollbar even on a normal-width monitor, with no real
+     benefit to readability at that width. Let it use whatever room the
+     window actually has, up to a point where line length would get silly
+     on an ultrawide monitor. */
+  max-width: 1800px;
+  padding: 30px 24px 48px;
 }
 
 h1 {

@@ -32,7 +32,7 @@ export default function WizardLineModal(props: {
           <div>
             <h3 style={{ margin: 0 }}>{l.bank_description || l.description || "Line"}</h3>
             <p className="subtitle" style={{ margin: "2px 0 0" }}>
-              ${l.amount.toFixed(2)} · {l.transaction_date || "no date"}
+              ${l.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} · {l.transaction_date || "no date"}
             </p>
           </div>
           <button className="link" onClick={props.onClose}>

@@ -100,7 +100,7 @@ function RegisterRow(props: {
         </td>
       )}
       <td className="num" style={{ whiteSpace: "nowrap" }}>
-        ${e.amount.toFixed(2)}
+        ${e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
       </td>
     </tr>
   );

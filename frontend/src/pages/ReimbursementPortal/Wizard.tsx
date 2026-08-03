@@ -18,10 +18,10 @@ interface WizardLine extends ReimbursementLineIn {
 
 let nextKey = 1;
 
-function emptyLine(coas: ReimbursementAssignment[]): WizardLine {
+function emptyLine(): WizardLine {
   return {
     key: nextKey++,
-    account_no: coas[0]?.account_no || "",
+    account_no: "",
     amount: 0,
     description: "",
     transaction_date: new Date().toISOString().slice(0, 10),
@@ -52,7 +52,7 @@ export default function ReimbursementWizard(props: {
           receipt_file_name: l.receipt_file_name,
           receipt_web_view_link: l.receipt_web_view_link,
         }))
-      : [emptyLine(props.coas)]
+      : [emptyLine()]
   );
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -65,7 +65,7 @@ export default function ReimbursementWizard(props: {
   }
 
   function addLine() {
-    setLines((prev) => [...prev, emptyLine(props.coas)]);
+    setLines((prev) => [...prev, emptyLine()]);
   }
 
   function removeLine(key: number) {
@@ -89,7 +89,9 @@ export default function ReimbursementWizard(props: {
   }
 
   const total = lines.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
-  const canProceed = lines.every((l) => l.account_no && Number(l.amount) > 0 && l.receipt_file_id);
+  const canProceed = lines.every(
+    (l) => l.transaction_date && l.account_no && Number(l.amount) > 0 && l.receipt_file_id
+  );
 
   async function submit() {
     setError("");
@@ -172,15 +174,16 @@ export default function ReimbursementWizard(props: {
 
               <div className="row" style={{ gap: 16 }}>
                 <label className="field" style={{ maxWidth: 200 }}>
-                  <span>Transaction Date</span>
+                  <span>Transaction Date (required)</span>
                   <input
                     type="date"
+                    required
                     value={line.transaction_date || ""}
                     onChange={(e) => updateLine(line.key, { transaction_date: e.target.value })}
                   />
                 </label>
                 <label className="field" style={{ flex: 1 }}>
-                  <span>Account</span>
+                  <span>Account (required)</span>
                   <AssignedAccountPicker
                     value={line.account_no}
                     accounts={props.coas}
@@ -200,11 +203,12 @@ export default function ReimbursementWizard(props: {
                   />
                 </label>
                 <label className="field" style={{ maxWidth: 160 }}>
-                  <span>Amount</span>
+                  <span>Amount (required)</span>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
+                    required
                     placeholder="0.00"
                     value={line.amount || ""}
                     onChange={(e) => updateLine(line.key, { amount: Number(e.target.value) })}

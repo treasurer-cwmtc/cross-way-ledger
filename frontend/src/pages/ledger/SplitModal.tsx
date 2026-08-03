@@ -13,6 +13,10 @@ function blankLine(): DraftLine {
   return { description: "", account_no: "", amount: "" };
 }
 
+function fmtMoney(n: number): string {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2 });
+}
+
 /** Splits one aggregated line (e.g. a lump bank deposit or a lump
  * reimbursement covering several people/purchases) into multiple entries.
  * Shared by Reconciliation and Accrual - `onSubmit` is whichever ledger's
@@ -80,7 +84,7 @@ export default function SplitModal(props: {
           <div>
             <h3 style={{ margin: 0 }}>Split transaction</h3>
             <p className="subtitle" style={{ margin: "2px 0 0" }}>
-              Original: ${e.amount.toFixed(2)} · {e.transaction_date}
+              Original: ${fmtMoney(e.amount)} · {e.transaction_date}
             </p>
           </div>
           <button className="link" onClick={props.onClose}>
@@ -133,7 +137,7 @@ export default function SplitModal(props: {
 
         <div className="toolbar" style={{ marginTop: 16 }}>
           <span style={{ fontSize: 13 }}>
-            Total: <b>${total.toFixed(2)}</b> of ${e.amount.toFixed(2)}
+            Total: <b>${fmtMoney(total)}</b> of ${fmtMoney(e.amount)}
           </span>
           <span
             className="pill"
@@ -142,7 +146,7 @@ export default function SplitModal(props: {
               color: balanced ? "var(--green)" : "var(--red)",
             }}
           >
-            {balanced ? "Balanced" : `${delta > 0 ? "Remaining" : "Over by"} $${Math.abs(delta).toFixed(2)}`}
+            {balanced ? "Balanced" : `${delta > 0 ? "Remaining" : "Over by"} $${fmtMoney(Math.abs(delta))}`}
           </span>
         </div>
         {error && <div className="error">{error}</div>}
