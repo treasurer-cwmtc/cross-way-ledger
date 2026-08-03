@@ -55,7 +55,37 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
       }}
     >
       <img src={logo} alt="Cross Way Mar Thoma Church" style={{ width: 220, maxWidth: "80vw" }} />
-      <div style={{ width: "100%", maxWidth: 360 }}>
+      <div style={{ width: "100%", maxWidth: 360, position: "relative" }}>
+        {busy && (
+          // Google's button completes in its own popup, so control returns
+          // to this page with no navigation - without this overlay, the
+          // 5-10s the backend takes to verify the token and load the
+          // session reads as "it kicked me back to the login screen"
+          // rather than "it's working". Covers the form instead of
+          // unmounting it, since unmounting would drop the Google button's
+          // DOM node out from under the GIS script that rendered into it.
+          <div
+            className="card"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 1,
+              margin: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              padding: "32px 24px",
+            }}
+          >
+            <div className="spinner" aria-hidden="true" />
+            <b>Signing you in…</b>
+            <span className="subtitle" style={{ margin: 0, textAlign: "center" }}>
+              This can take a few seconds. Please don't close this page.
+            </span>
+          </div>
+        )}
         <form className="card" onSubmit={submit}>
         <label className="field">
           <span>Username</span>
