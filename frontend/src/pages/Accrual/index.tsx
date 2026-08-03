@@ -96,6 +96,9 @@ export default function Accrual() {
   }
 
   const openEntry = openEntryId ? entries.find((e) => e.id === openEntryId) || null : null;
+  const openEntrySplitSiblings = openEntry?.split_parent_id
+    ? entries.filter((e) => e.split_parent_id === openEntry.split_parent_id && e.id !== openEntry.id)
+    : undefined;
 
   return (
     <div>
@@ -250,6 +253,7 @@ export default function Accrual() {
           onSplit={(id, lines) => accrualApi.split(id, lines)}
           onUnsplit={(parentId) => accrualApi.unsplit(parentId)}
           splitHint="For one lump entry that actually covers several people or purchases."
+          splitSiblings={openEntrySplitSiblings}
         />
       )}
 

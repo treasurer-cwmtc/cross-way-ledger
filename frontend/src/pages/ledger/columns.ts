@@ -250,6 +250,7 @@ const HEALTH_CHECK_EXCLUDED = new Set([
   "is_missions",
   "txn_month_name",
   "txn_month_year",
+  "txn_year",
   "txn_cy_py",
   "posted_month_name",
   "posted_month_year",

@@ -186,13 +186,13 @@ export default function Step3Reconcile(props: {
                       }
                     >
                       <td>{row.day}</td>
-                      <td className="num">{row.bankTotal.toFixed(2)}</td>
-                      <td className="num">{row.stripeTotal.toFixed(2)}</td>
+                      <td className="num">{row.bankTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="num">{row.stripeTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td
                         className="num"
                         style={{ color: row.variance ? "var(--red)" : undefined }}
                       >
-                        {row.variance.toFixed(2)}
+                        {row.variance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                       <td className="num">{row.count}</td>
                       <td>
@@ -234,7 +234,9 @@ export default function Step3Reconcile(props: {
                                 {row.issueLines.map((l) => (
                                   <tr key={l.id}>
                                     <td>{l.description || l.bank_description}</td>
-                                    <td className="num">{l.amount.toFixed(2)}</td>
+                                    <td className="num">
+                                      {l.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
                                     <td>{l.notes}</td>
                                   </tr>
                                 ))}
@@ -242,8 +244,8 @@ export default function Step3Reconcile(props: {
                             </table>
                           ) : (
                             <p className="subtitle" style={{ margin: "8px 0" }}>
-                              The Stripe total (${row.stripeTotal.toFixed(2)}) no longer matches
-                              the bank's original amount for this day (${row.bankTotal.toFixed(2)})
+                              The Stripe total (${row.stripeTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}) no longer matches
+                              the bank's original amount for this day (${row.bankTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })})
                               - likely because a line's amount was edited after reconciling.
                             </p>
                           )}

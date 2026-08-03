@@ -239,7 +239,9 @@ export default function Budget() {
                     <td>{e.transaction_date || "—"}</td>
                     <td>{e.description || "—"}</td>
                     <td>{e.statement_description || "— uncategorized —"}</td>
-                    <td className="num">${e.amount.toFixed(2)}</td>
+                    <td className="num">
+                      ${e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
                     <td>{e.notes}</td>
                   </tr>
                 ))}

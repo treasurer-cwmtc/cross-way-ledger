@@ -34,7 +34,7 @@ export default function DetailModal(props: {
           <div>
             <h3 style={{ margin: 0 }}>{e.description || "Budget line"}</h3>
             <p className="subtitle" style={{ margin: "2px 0 0" }}>
-              ${e.amount.toFixed(2)} · {e.transaction_date || "no date"}
+              ${e.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} · {e.transaction_date || "no date"}
             </p>
           </div>
           <button className="link" onClick={props.onClose}>

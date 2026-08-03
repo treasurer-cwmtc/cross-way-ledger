@@ -19,8 +19,8 @@ const AMOUNT_KEY = /^amount$/i;
 
 function defaultWidthForKey(key: string): number {
   if (NARROW_KEY.test(key)) return 44;
-  if (WIDE_TEXT_KEY.test(key)) return 280;
-  if (DATE_KEY.test(key)) return 110;
+  if (WIDE_TEXT_KEY.test(key)) return 220;
+  if (DATE_KEY.test(key)) return 100;
   if (AMOUNT_KEY.test(key)) return 100;
   return 140;
 }
