@@ -199,7 +199,7 @@ export default function App() {
 
       <main className="app-main">
         <div className="app-content">
-          {tab === "home" && <Home />}
+          {tab === "home" && <Home onNavigate={setTab} />}
           {tab === "upload" && <Upload />}
           {tab === "reconciliation" && <Reconciliation />}
           {tab === "accrual" && <Accrual />}
