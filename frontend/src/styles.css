@@ -106,6 +106,21 @@ nav.sidebar-nav button:hover {
   color: #fff;
 }
 
+nav.sidebar-nav button.sidebar-group-toggle {
+  justify-content: space-between;
+  padding: 6px 13px 4px;
+  border-radius: 0;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sidebar-text-dim);
+}
+
+nav.sidebar-nav button.sidebar-group-toggle:hover {
+  background: none;
+  color: var(--sidebar-text);
+}
+
 nav.sidebar-nav button.active {
   background: var(--sidebar-active);
   border-left-color: var(--primary);

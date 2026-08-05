@@ -94,10 +94,33 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+const COLLAPSED_GROUPS_KEY = "sidebar-collapsed-groups";
+
+function loadCollapsedGroups(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Overview is always expanded (it's a single Home link, nothing to hide);
+  // every other group's collapsed/expanded state persists across reloads,
+  // same localStorage-backed pattern as the ledger tables' column widths.
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(loadCollapsedGroups);
+
+  useEffect(() => {
+    localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(collapsedGroups));
+  }, [collapsedGroups]);
+
+  function toggleGroup(label: string) {
+    setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
+  }
 
   async function loadMe() {
     if (!auth.token) {
@@ -159,28 +182,57 @@ export default function App() {
               return user.is_admin || user.permissions.includes(item.tab);
             });
             if (items.length === 0) return null;
+            const collapsible = group.label !== "Overview";
+            const collapsed = collapsible && !!collapsedGroups[group.label];
             return (
               <div key={group.label} style={{ marginBottom: 14 }}>
-                <div
-                  style={{
-                    fontSize: 10.5,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                    color: "var(--sidebar-text-dim)",
-                    padding: "6px 13px 4px",
-                  }}
-                >
-                  {group.label}
-                </div>
-                {items.map((item) => (
+                {collapsible ? (
                   <button
-                    key={item.tab}
-                    className={tab === item.tab ? "active" : ""}
-                    onClick={() => setTab(item.tab)}
+                    className="sidebar-group-toggle"
+                    onClick={() => toggleGroup(group.label)}
+                    aria-expanded={!collapsed}
                   >
-                    {item.label}
+                    <span>{group.label}</span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="12"
+                      height="12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                        transition: "transform 0.15s",
+                      }}
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
                   </button>
-                ))}
+                ) : (
+                  <div
+                    style={{
+                      fontSize: 10.5,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      color: "var(--sidebar-text-dim)",
+                      padding: "6px 13px 4px",
+                    }}
+                  >
+                    {group.label}
+                  </div>
+                )}
+                {!collapsed &&
+                  items.map((item) => (
+                    <button
+                      key={item.tab}
+                      className={tab === item.tab ? "active" : ""}
+                      onClick={() => setTab(item.tab)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
               </div>
             );
           })}
