@@ -48,39 +48,41 @@ body {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
   transition: width 0.15s;
 }
 
 .sidebar.sidebar-hidden {
   width: 40px;
-  overflow: visible;
 }
 
+/* Kept fully inside the sidebar's own box (no negative offsets) so it can
+   never push the sidebar into horizontal scroll, and given a solid fill so
+   it reads clearly against the dark background instead of blending in. */
 .sidebar-hide-toggle {
   position: absolute;
-  top: 18px;
-  right: -12px;
-  width: 24px;
-  height: 24px;
+  top: 16px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--sidebar-bg);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 50%;
-  color: var(--sidebar-text-dim);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 7px;
+  color: #fff;
   cursor: pointer;
   z-index: 2;
 }
 
 .sidebar.sidebar-hidden .sidebar-hide-toggle {
   position: static;
-  margin: 18px auto 0;
+  margin: 16px auto 0;
 }
 
 .sidebar-hide-toggle:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .sidebar-brand {
