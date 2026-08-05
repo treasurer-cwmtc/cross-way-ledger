@@ -13,8 +13,8 @@
   --amber: #b45309;
   --sidebar-bg: #0a0f1c;
   --sidebar-bg-alt: #101a2e;
-  --sidebar-text: #9fb0c4;
-  --sidebar-text-dim: #5b6c82;
+  --sidebar-text: #c3d0e0;
+  --sidebar-text-dim: #8a99b0;
   --sidebar-active: #142236;
   --shadow-sm: 0 1px 2px rgba(10, 15, 28, 0.06);
   --shadow-md: 0 4px 16px rgba(10, 15, 28, 0.08);
@@ -143,10 +143,11 @@ nav.sidebar-nav button.sidebar-group-toggle {
   justify-content: space-between;
   padding: 6px 13px 4px;
   border-radius: 0;
-  font-size: 10.5px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--sidebar-text-dim);
+  color: var(--sidebar-text);
 }
 
 nav.sidebar-nav button.sidebar-group-toggle:hover {

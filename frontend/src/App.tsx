@@ -97,17 +97,30 @@ const NAV_GROUPS: NavGroup[] = [
 const COLLAPSED_GROUPS_KEY = "sidebar-collapsed-groups";
 const SIDEBAR_HIDDEN_KEY = "sidebar-hidden";
 
+// First-time visitors (no stored preference yet) get every group collapsed
+// and the whole rail hidden, per the treasurer's request that the default
+// view should show as little chrome as possible - anyone who expands
+// something has that choice remembered from then on.
+function defaultCollapsedGroups(): Record<string, boolean> {
+  const defaults: Record<string, boolean> = {};
+  for (const group of NAV_GROUPS) {
+    if (group.label !== "Overview") defaults[group.label] = true;
+  }
+  return defaults;
+}
+
 function loadCollapsedGroups(): Record<string, boolean> {
   try {
     const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
-    return raw ? JSON.parse(raw) : {};
+    return raw ? JSON.parse(raw) : defaultCollapsedGroups();
   } catch {
-    return {};
+    return defaultCollapsedGroups();
   }
 }
 
 function loadSidebarHidden(): boolean {
-  return localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "1";
+  const raw = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
+  return raw === null ? true : raw === "1";
 }
 
 export default function App() {
@@ -249,10 +262,11 @@ export default function App() {
                 ) : (
                   <div
                     style={{
-                      fontSize: 10.5,
+                      fontSize: 11,
+                      fontWeight: 600,
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
-                      color: "var(--sidebar-text-dim)",
+                      color: "var(--sidebar-text)",
                       padding: "6px 13px 4px",
                     }}
                   >
