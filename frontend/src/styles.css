@@ -48,6 +48,39 @@ body {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  transition: width 0.15s;
+}
+
+.sidebar.sidebar-hidden {
+  width: 40px;
+  overflow: visible;
+}
+
+.sidebar-hide-toggle {
+  position: absolute;
+  top: 18px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sidebar-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  color: var(--sidebar-text-dim);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.sidebar.sidebar-hidden .sidebar-hide-toggle {
+  position: static;
+  margin: 18px auto 0;
+}
+
+.sidebar-hide-toggle:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .sidebar-brand {
