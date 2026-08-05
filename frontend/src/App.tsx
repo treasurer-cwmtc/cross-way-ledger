@@ -95,6 +95,7 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 const COLLAPSED_GROUPS_KEY = "sidebar-collapsed-groups";
+const SIDEBAR_HIDDEN_KEY = "sidebar-hidden";
 
 function loadCollapsedGroups(): Record<string, boolean> {
   try {
@@ -105,6 +106,10 @@ function loadCollapsedGroups(): Record<string, boolean> {
   }
 }
 
+function loadSidebarHidden(): boolean {
+  return localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "1";
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [user, setUser] = useState<User | null>(null);
@@ -113,10 +118,18 @@ export default function App() {
   // every other group's collapsed/expanded state persists across reloads,
   // same localStorage-backed pattern as the ledger tables' column widths.
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(loadCollapsedGroups);
+  // Whole-sidebar hide/show, independent of the per-group collapse above -
+  // lets the whole rail be tucked away to reclaim width, same idea as the
+  // UKG reference screenshots.
+  const [sidebarHidden, setSidebarHidden] = useState<boolean>(loadSidebarHidden);
 
   useEffect(() => {
     localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(collapsedGroups));
   }, [collapsedGroups]);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_HIDDEN_KEY, sidebarHidden ? "1" : "0");
+  }, [sidebarHidden]);
 
   function toggleGroup(label: string) {
     setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -153,12 +166,35 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <img src={logo} alt="Cross Way Mar Thoma Church" />
-        </div>
+      <aside className={sidebarHidden ? "sidebar sidebar-hidden" : "sidebar"}>
+        <button
+          className="sidebar-hide-toggle"
+          onClick={() => setSidebarHidden((v) => !v)}
+          aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+          title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ transform: sidebarHidden ? "rotate(180deg)" : "none" }}
+          >
+            <path d="M15 6l-6 6 6 6" />
+          </svg>
+        </button>
 
-        <nav className="sidebar-nav">
+        {!sidebarHidden && (
+          <>
+            <div className="sidebar-brand">
+              <img src={logo} alt="Cross Way Mar Thoma Church" />
+            </div>
+
+            <nav className="sidebar-nav">
           {NAV_GROUPS.map((group) => {
             const items = group.items.filter((item) => {
               if (item.adminOnly) return user.is_admin;
@@ -247,6 +283,8 @@ export default function App() {
             Log out
           </button>
         </div>
+          </>
+        )}
       </aside>
 
       <main className="app-main">
