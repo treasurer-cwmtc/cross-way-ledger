@@ -467,6 +467,92 @@ table.resizable-cols td {
   font-size: 12px;
 }
 
+/* Home page: "needs attention" banner + shortcut tile grid */
+.home-banner {
+  background: linear-gradient(135deg, var(--sidebar-bg-alt), var(--sidebar-bg));
+  color: #fff;
+  border-radius: 14px;
+  padding: 24px 28px;
+  margin: 4px 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.home-banner-label {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.home-banner-headline {
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.home-banner-side {
+  text-align: right;
+}
+
+.home-banner-side span {
+  display: block;
+  color: var(--sidebar-text);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.home-banner-side b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.home-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.home-shortcut:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.home-shortcut-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
 .error {
   color: var(--red);
   font-size: 13px;
