@@ -4,6 +4,7 @@ import { authApi, User } from "./api/auth";
 import logo from "./assets/cross-way-logo-white.png";
 import Home from "./pages/Home";
 import Upload from "./pages/Upload";
+import StripePage from "./pages/Stripe";
 import Reconciliation from "./pages/Reconciliation";
 import Accrual from "./pages/Accrual";
 import Budget from "./pages/Budget";
@@ -24,6 +25,7 @@ import Reimbursements from "./pages/Reimbursements";
 type Tab =
   | "home"
   | "upload"
+  | "stripe"
   | "reconciliation"
   | "accrual"
   | "budget"
@@ -57,6 +59,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Ledgers",
     items: [
       { tab: "upload", label: "Upload" },
+      { tab: "stripe", label: "Stripe" },
       { tab: "reconciliation", label: "Actual" },
       { tab: "accrual", label: "Accrual" },
       { tab: "budget", label: "Budget" },
@@ -305,6 +308,7 @@ export default function App() {
         <div className="app-content">
           {tab === "home" && <Home onNavigate={setTab} />}
           {tab === "upload" && <Upload />}
+          {tab === "stripe" && <StripePage />}
           {tab === "reconciliation" && <Reconciliation />}
           {tab === "accrual" && <Accrual />}
           {tab === "budget" && <Budget />}

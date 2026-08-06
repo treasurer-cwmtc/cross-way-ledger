@@ -126,7 +126,7 @@ class StripeRow:
         return self.type.lower() in {"payment", "charge"}
 
 
-def _extract_fund_donor(description: str, context_json: str, person_name: str):
+def extract_fund_donor(description: str, context_json: str, person_name: str):
     fund = ""
     donor = ""
     m = _DESC_RE.match(description or "")
@@ -169,7 +169,7 @@ def parse_stripe_csv(text: str) -> list[StripeRow]:
             "planning_center_person_name (metadata)",
             "planning_center_person_name",
         )
-        fund, donor = _extract_fund_donor(description, context, person)
+        fund, donor = extract_fund_donor(description, context, person)
         rows.append(
             StripeRow(
                 id=row_id,

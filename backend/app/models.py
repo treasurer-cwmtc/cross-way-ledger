@@ -267,6 +267,34 @@ class ReconLine(Base):
     run: Mapped[ReconRun] = relationship(back_populates="lines")
 
 
+class StripeTransaction(Base):
+    """Staged Stripe balance-transaction data, pulled automatically via the
+    Stripe API (the "Sync now" button on pages/Stripe, or the nightly
+    scheduled job) - the automated counterpart to a manually-uploaded Stripe
+    CSV. The Upload wizard's merge-stripe step (step 3) reads from this table
+    instead of an uploaded file; nothing here touches the ledger until the
+    treasurer confirms the wizard import, same review step as before.
+    Keyed by Stripe's own transaction id so repeated syncs upsert cleanly."""
+
+    __tablename__ = "ledger_stripe"
+
+    stripe_id: Mapped[str] = mapped_column(String(60), primary_key=True)
+    type: Mapped[str] = mapped_column(String(20), default="")  # payout | payment | charge | ...
+    source: Mapped[str] = mapped_column(String(60), default="")  # py_/ch_/po_ id
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    fee: Mapped[float] = mapped_column(Float, default=0.0)
+    net: Mapped[float] = mapped_column(Float, default=0.0)
+    created: Mapped[str] = mapped_column(String(20), default="")
+    description: Mapped[str] = mapped_column(String(300), default="")
+    transfer: Mapped[str] = mapped_column(String(60), default="")  # payout id grouping
+    transfer_date: Mapped[str] = mapped_column(String(20), default="")
+    fund: Mapped[str] = mapped_column(String(120), default="")
+    donor: Mapped[str] = mapped_column(String(160), default="")
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class BankAccount(Base):
     """A named bank account (e.g. "Chase Operating"). Simple lookup list -
     picked once per Upload run and carried onto every ReconciliationEntry
