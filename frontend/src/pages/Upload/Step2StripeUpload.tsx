@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { reconcileApi, StripeFundCheckItem, StripeFundCheckResult } from "../../api/reconcile";
 import { rulesApi, Rule } from "../../api/rules";
@@ -7,6 +7,8 @@ import AccountPicker from "../ledger/AccountPicker";
 
 export default function Step2StripeUpload(props: {
   accounts: ChartAccount[];
+  stripeFile: File | null;
+  onStripeFileChange: (f: File | null) => void;
   check: StripeFundCheckResult | null;
   onCheckChange: (c: StripeFundCheckResult) => void;
   rulesAdded: Rule[];
@@ -17,11 +19,11 @@ export default function Step2StripeUpload(props: {
   const [error, setError] = useState("");
   const { widths, startResize } = useColumnWidths("upload-step2-stripe-funds");
 
-  async function runCheck() {
+  async function runCheck(file: File) {
     setBusy(true);
     setError("");
     try {
-      props.onCheckChange(await reconcileApi.stripeFundCheck());
+      props.onCheckChange(await reconcileApi.stripeFundCheck(file));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -29,10 +31,14 @@ export default function Step2StripeUpload(props: {
     }
   }
 
-  useEffect(() => {
-    runCheck();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  function onFile(f: File | null) {
+    props.onStripeFileChange(f);
+    if (f) runCheck(f);
+  }
+
+  async function recheck() {
+    if (props.stripeFile) await runCheck(props.stripeFile);
+  }
 
   const check = props.check;
 
@@ -40,14 +46,11 @@ export default function Step2StripeUpload(props: {
     <div>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Stripe transactions</h3>
-        <p className="subtitle" style={{ marginTop: 0 }}>
-          Fund coverage is checked against the Stripe transactions already synced on the{" "}
-          <b>Stripe</b> page. If that data looks out of date, go sync it there first, then come
-          back and re-check below.
-        </p>
-        <button className="btn secondary" onClick={runCheck} disabled={busy}>
-          {busy ? "Checking…" : "Re-check funds"}
-        </button>
+        <label className="field">
+          <span>Stripe transactions CSV</span>
+          <input type="file" accept=".csv" onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
+        </label>
+        {busy && <p className="subtitle">Checking funds…</p>}
         {error && <div className="error">{error}</div>}
       </div>
 
@@ -68,12 +71,8 @@ export default function Step2StripeUpload(props: {
               )}
             </div>
           </div>
-          {check.funds.length === 0 ? (
-            <p className="subtitle">
-              No donation funds found in the synced Stripe data yet.
-            </p>
-          ) : check.all_covered ? (
-            <p className="ok">✓ All funds have a rule.</p>
+          {check.all_covered ? (
+            <p className="ok">✓ All funds in this file have a rule.</p>
           ) : (
             <p className="error">
               ✗ Some funds don't have a rule yet - add one below for each so donations
@@ -106,7 +105,7 @@ export default function Step2StripeUpload(props: {
                   accounts={props.accounts.filter((a) => a.category === "Income")}
                   onRuleAdded={(r) => {
                     props.onRuleAdded(r);
-                    runCheck();
+                    recheck();
                   }}
                 />
               ))}

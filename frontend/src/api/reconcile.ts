@@ -63,6 +63,17 @@ export interface DuplicateCheckResult {
 }
 
 export const reconcileApi = {
+  reconcile: (bankFile: File, stripeFile: File) => {
+    const fd = new FormData();
+    fd.append("bank_file", bankFile);
+    fd.append("stripe_file", stripeFile);
+    return fetch(`${BASE}/api/reconcile`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+    }).then(j<ReconRun>);
+  },
+
   /** Wizard step 1: bank file only - Stripe-payout lines come back as
    * unmatched placeholders, merged in later via mergeStripe(). bankFileLink
    * (if the file was successfully archived to Google Drive first) is
@@ -86,15 +97,20 @@ export const reconcileApi = {
       body: JSON.stringify(patch),
     }).then(j<ReconLine>),
 
-  /** Wizard step 3: match this run's bank-payout placeholders against the
-   * Stripe data already pulled into the ledger_stripe table by a sync (see
-   * pages/Stripe) - no file to upload anymore. Every other line (including
-   * edits from step 1) survives. */
-  mergeStripe: (runId: number) =>
-    fetch(`${BASE}/api/reconcile/${runId}/merge-stripe`, {
+  /** Wizard step 3: match the Stripe file against this run's bank-payout
+   * placeholders. Every other line (including edits from step 1) survives.
+   * stripeFileLink carries the archived-to-Drive copy's link the same way
+   * bankOnly's bankFileLink does. */
+  mergeStripe: (runId: number, stripeFile: File, stripeFileLink?: string) => {
+    const fd = new FormData();
+    fd.append("stripe_file", stripeFile);
+    if (stripeFileLink) fd.append("stripe_file_link", stripeFileLink);
+    return fetch(`${BASE}/api/reconcile/${runId}/merge-stripe`, {
       method: "POST",
       headers: authHeaders(),
-    }).then(j<ReconRun>),
+      body: fd,
+    }).then(j<ReconRun>);
+  },
 
   /** Re-applies bank-keyword rules to still-uncategorized lines - call after
    * adding a rule mid-wizard to recategorize live. */
@@ -104,13 +120,17 @@ export const reconcileApi = {
       headers: authHeaders(),
     }).then(j<ReconRun>),
 
-  /** Wizard step 2: which donation funds in the currently-synced Stripe
-   * data don't yet have a stripe_fund rule. Stateless - no run created. */
-  stripeFundCheck: () =>
-    fetch(`${BASE}/api/reconcile/stripe-fund-check`, {
+  /** Wizard step 2: which donation funds in this Stripe file don't yet have
+   * a stripe_fund rule. Stateless - no run created. */
+  stripeFundCheck: (stripeFile: File) => {
+    const fd = new FormData();
+    fd.append("stripe_file", stripeFile);
+    return fetch(`${BASE}/api/reconcile/stripe-fund-check`, {
       method: "POST",
       headers: authHeaders(),
-    }).then(j<StripeFundCheckResult>),
+      body: fd,
+    }).then(j<StripeFundCheckResult>);
+  },
 
   /** Wizard step 4: which of this run's lines would be skipped as
    * already-imported if pushed to Actual right now. Read-only. */
