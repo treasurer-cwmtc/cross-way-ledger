@@ -16,9 +16,9 @@ LAST_SYNCED_KEY = "stripe_last_synced_at"
 router = APIRouter(prefix="/api/stripe", tags=["stripe"])
 
 
-def _run_sync(db: Session) -> StripeSyncResult:
+def _run_sync(db: Session, days: int | None = None) -> StripeSyncResult:
     try:
-        rows = fetch_recent_transactions()
+        rows = fetch_recent_transactions(lookback_days=days)
     except RuntimeError as e:
         raise HTTPException(400, str(e))
     except Exception as e:  # Stripe SDK errors (bad key, network, rate limit)
@@ -84,7 +84,9 @@ def list_transactions(db: Session = Depends(get_db)) -> StripeTransactionsOut:
     )
     setting = db.get(AppSetting, LAST_SYNCED_KEY)
     return StripeTransactionsOut(
-        transactions=rows, last_synced_at=setting.value if setting else None
+        transactions=rows,
+        last_synced_at=setting.value if setting else None,
+        default_lookback_days=get_settings().stripe_sync_lookback_days,
     )
 
 
@@ -93,8 +95,8 @@ def list_transactions(db: Session = Depends(get_db)) -> StripeTransactionsOut:
     response_model=StripeSyncResult,
     dependencies=[Depends(require_permission("stripe"))],
 )
-def sync_now(db: Session = Depends(get_db)) -> StripeSyncResult:
-    return _run_sync(db)
+def sync_now(days: int | None = None, db: Session = Depends(get_db)) -> StripeSyncResult:
+    return _run_sync(db, days=days)
 
 
 def _verify_sync_secret(x_sync_secret: str = Header(default="")) -> None:

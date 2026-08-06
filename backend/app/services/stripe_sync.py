@@ -42,9 +42,15 @@ def to_stripe_row(t: StripeTransaction) -> StripeRow:
 
 
 def _iso_date(unix_ts: int | None) -> str:
+    """M/D/YYYY (no leading zeros), matching normalize_date()'s output for the
+    CSV path exactly - Stripe's own CSV export uses that format, and several
+    downstream consumers (the wizard's raw ReconLine display, in particular)
+    show this string as-is rather than through a date-parsing function, so
+    API-sourced and CSV-sourced rows need to render identically."""
     if not unix_ts:
         return ""
-    return datetime.fromtimestamp(unix_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+    dt = datetime.fromtimestamp(unix_ts, tz=timezone.utc)
+    return f"{dt.month}/{dt.day}/{dt.year}"
 
 
 def _balance_txn_to_row(txn, transfer: str) -> StripeRow:

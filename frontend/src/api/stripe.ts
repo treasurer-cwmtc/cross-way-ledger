@@ -24,6 +24,7 @@ export interface StripeTransaction {
 export interface StripeTransactionsResult {
   transactions: StripeTransaction[];
   last_synced_at: string | null;
+  default_lookback_days: number;
 }
 
 export interface StripeSyncResult {
@@ -39,8 +40,11 @@ export const stripeApi = {
       j<StripeTransactionsResult>
     ),
 
-  syncNow: () =>
-    fetch(`${BASE}/api/stripe/sync`, {
+  /** days overrides the backend's configured default lookback window for
+   * just this sync - e.g. a one-off historical backfill - without changing
+   * what future "Sync now" clicks default to. */
+  syncNow: (days?: number) =>
+    fetch(`${BASE}/api/stripe/sync${days ? `?days=${days}` : ""}`, {
       method: "POST",
       headers: authHeaders(),
     }).then(j<StripeSyncResult>),
