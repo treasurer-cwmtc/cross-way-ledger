@@ -4,17 +4,12 @@ line editing, merge-stripe, recategorize, stripe-fund-check, duplicate-check.
 Run from the backend/ directory:  python -m pytest
 """
 
+import io
 from pathlib import Path
 
-from test_auth import TestingSession, auth_header, client  # reuse shared TestClient/app setup
-from _stripe_seed import seed_stripe_transactions, seed_stripe_transactions_from_text
+from test_auth import auth_header, client  # reuse the shared TestClient/app setup
 
 FIXTURES = Path(__file__).parent
-
-
-def _seed_stripe(filename: str = "sample_stripe.csv") -> None:
-    with TestingSession() as db:
-        seed_stripe_transactions(db, filename)
 
 
 def _bank_account_id() -> int:
@@ -79,8 +74,12 @@ def test_update_line_edit_survives_merge_stripe():
     assert updated["category"] == "Expense"
     assert updated["matched"] is True
 
-    _seed_stripe()
-    r = client.post(f"/api/reconcile/{run_id}/merge-stripe", headers=h)
+    with open(FIXTURES / "sample_stripe.csv", "rb") as stripe:
+        r = client.post(
+            f"/api/reconcile/{run_id}/merge-stripe",
+            headers=h,
+            files={"stripe_file": ("stripe.csv", stripe, "text/csv")},
+        )
     assert r.status_code == 200, r.text
     merged = r.json()
 
@@ -155,8 +154,12 @@ def test_recategorize_picks_up_new_rule_without_touching_edited_lines():
 
 def test_stripe_fund_check_green_when_all_covered():
     h = auth_header()
-    _seed_stripe()
-    r = client.post("/api/reconcile/stripe-fund-check", headers=h)
+    with open(FIXTURES / "sample_stripe.csv", "rb") as stripe:
+        r = client.post(
+            "/api/reconcile/stripe-fund-check",
+            headers=h,
+            files={"stripe_file": ("stripe.csv", stripe, "text/csv")},
+        )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["all_covered"] is True
@@ -169,13 +172,15 @@ def test_stripe_fund_check_red_when_fund_missing_rule():
         "id,Type,Source,Amount,Fee,Net,Currency,Created (UTC),Available On (UTC),"
         "Description,Transfer,Transfer Date (UTC),Transfer Group,"
         "planning_center_context (metadata),planning_center_person_name (metadata)\n"
-        'txn_made_up_fund_test,payment,py_1,50.00,0,50.00,usd,6/1/2026 0:00,6/1/2026 0:00,'
+        'txn_1,payment,py_1,50.00,0,50.00,usd,6/1/2026 0:00,6/1/2026 0:00,'
         'Donation #1 - Jane Doe - Made Up Fund ($50.00),,,,'
         '"[{""name"":""Made Up Fund"",""cents"":5000}]",\n'
     )
-    with TestingSession() as db:
-        seed_stripe_transactions_from_text(db, csv_text)
-    r = client.post("/api/reconcile/stripe-fund-check", headers=h)
+    r = client.post(
+        "/api/reconcile/stripe-fund-check",
+        headers=h,
+        files={"stripe_file": ("stripe.csv", io.BytesIO(csv_text.encode()), "text/csv")},
+    )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["all_covered"] is False
@@ -186,12 +191,16 @@ def test_stripe_fund_check_red_when_fund_missing_rule():
 def test_duplicate_check_matches_what_import_would_skip():
     h = auth_header()
     bank_account_id = _bank_account_id()
-    _seed_stripe()
 
     # A fresh bank-only + merge-stripe run, imported once.
     run = _bank_only_run()
     run_id = run["id"]
-    client.post(f"/api/reconcile/{run_id}/merge-stripe", headers=h)
+    with open(FIXTURES / "sample_stripe.csv", "rb") as stripe:
+        client.post(
+            f"/api/reconcile/{run_id}/merge-stripe",
+            headers=h,
+            files={"stripe_file": ("stripe.csv", stripe, "text/csv")},
+        )
     client.post(
         f"/api/reconciliation/import-run/{run_id}",
         headers=h,
@@ -202,7 +211,12 @@ def test_duplicate_check_matches_what_import_would_skip():
     # flag every line as a would-be duplicate (same statement re-uploaded).
     run2 = _bank_only_run()
     run2_id = run2["id"]
-    client.post(f"/api/reconcile/{run2_id}/merge-stripe", headers=h)
+    with open(FIXTURES / "sample_stripe.csv", "rb") as stripe:
+        client.post(
+            f"/api/reconcile/{run2_id}/merge-stripe",
+            headers=h,
+            files={"stripe_file": ("stripe.csv", stripe, "text/csv")},
+        )
 
     r = client.get(f"/api/reconcile/{run2_id}/duplicate-check", headers=h)
     assert r.status_code == 200, r.text

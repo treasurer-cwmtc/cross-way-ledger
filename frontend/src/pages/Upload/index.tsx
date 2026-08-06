@@ -19,6 +19,7 @@ export default function Upload() {
 
   const [bankAccountId, setBankAccountId] = useState<number | "">("");
   const [run, setRun] = useState<ReconRun | null>(null);
+  const [stripeFile, setStripeFile] = useState<File | null>(null);
   const [stripeCheck, setStripeCheck] = useState<StripeFundCheckResult | null>(null);
   const [rulesAdded, setRulesAdded] = useState<Rule[]>([]);
   const [importResult, setImportResult] = useState<{
@@ -45,6 +46,7 @@ export default function Upload() {
     setStep(1);
     setMaxStepReached(1);
     setRun(null);
+    setStripeFile(null);
     setStripeCheck(null);
     setRulesAdded([]);
     setImportResult(null);
@@ -54,8 +56,8 @@ export default function Upload() {
     <div>
       <h2 className="page-title">Upload</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        A guided, 4-step import: bank statement, check fund coverage against the synced
-        Stripe transactions, reconcile the two, then validate before pushing to Actual.
+        A guided, 4-step import: bank statement, Stripe transactions, reconcile the two,
+        then validate before pushing to Actual.
       </p>
       {error && <div className="error">{error}</div>}
 
@@ -93,6 +95,8 @@ export default function Upload() {
           {step === 2 && (
             <Step2StripeUpload
               accounts={accounts}
+              stripeFile={stripeFile}
+              onStripeFileChange={setStripeFile}
               check={stripeCheck}
               onCheckChange={setStripeCheck}
               rulesAdded={rulesAdded}
@@ -102,7 +106,12 @@ export default function Upload() {
           )}
 
           {step === 3 && run && (
-            <Step3Reconcile run={run} onRunChange={setRun} onNext={() => goTo(4)} />
+            <Step3Reconcile
+              run={run}
+              stripeFile={stripeFile}
+              onRunChange={setRun}
+              onNext={() => goTo(4)}
+            />
           )}
 
           {step === 4 && run && (

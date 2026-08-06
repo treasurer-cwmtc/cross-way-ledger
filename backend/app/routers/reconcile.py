@@ -8,14 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import require_permission
-from ..models import (
-    CategoryRule,
-    ChartOfAccount,
-    ReconciliationEntry,
-    ReconLine,
-    ReconRun,
-    StripeTransaction,
-)
+from ..models import CategoryRule, ChartOfAccount, ReconciliationEntry, ReconLine, ReconRun
 from ..schemas import (
     DuplicateCheckOut,
     ReconLineOut,
@@ -27,9 +20,8 @@ from ..schemas import (
 )
 from ..services.categorizer import Categorizer
 from ..services.ledger import build_dedup_key, parse_date
-from ..services.parsers import BankRow, parse_bank_csv
-from ..services.reconciler import categorize_bank_only, merge_stripe
-from ..services.stripe_sync import to_stripe_row
+from ..services.parsers import BankRow, parse_bank_csv, parse_stripe_csv
+from ..services.reconciler import categorize_bank_only, merge_stripe, reconcile
 
 router = APIRouter(
     prefix="/api", tags=["reconcile"], dependencies=[Depends(require_permission("upload"))]
@@ -61,13 +53,11 @@ async def _read_csv(file: UploadFile) -> str:
 @router.post("/reconcile", response_model=ReconRunDetail)
 async def run_reconciliation(
     bank_file: UploadFile = File(...),
+    stripe_file: UploadFile | None = File(None),
     bank_file_link: str = Form(""),
+    stripe_file_link: str = Form(""),
     db: Session = Depends(get_db),
 ) -> ReconRun:
-    """Wizard step 1: bank file only. Stripe payout-looking lines become
-    placeholders awaiting merge-stripe (step 3), which now pulls its Stripe
-    data from the synced ledger_stripe table (see pages/Stripe) rather than a
-    second uploaded file."""
     bank_rows = parse_bank_csv(await _read_csv(bank_file))
     if not bank_rows:
         raise HTTPException(400, "Bank CSV had no usable rows.")
@@ -78,12 +68,34 @@ async def run_reconciliation(
 
     raw_income = round(sum(b.amount for b in bank_rows if b.amount > 0), 2)
     raw_expense = round(sum(b.amount for b in bank_rows if b.amount < 0), 2)
-    result = categorize_bank_only(bank_rows, categorizer)
+
+    if stripe_file is None:
+        # Wizard step 1: bank file only - Stripe payout lines become
+        # placeholders awaiting merge-stripe once that file is uploaded.
+        result = categorize_bank_only(bank_rows, categorizer)
+        stripe_filename = ""
+        stripe_line_count = 0
+        matched_payout_count = 0
+        unmatched_stripe_bank_count = 0
+    else:
+        stripe_rows = parse_stripe_csv(await _read_csv(stripe_file))
+        if not stripe_rows:
+            raise HTTPException(400, "Stripe CSV had no usable rows.")
+        result = reconcile(bank_rows, stripe_rows, categorizer)
+        stripe_filename = stripe_file.filename or ""
+        stripe_line_count = result.stripe_line_count
+        matched_payout_count = result.matched_payout_count
+        unmatched_stripe_bank_count = result.unmatched_stripe_bank_count
 
     run = ReconRun(
         bank_filename=bank_file.filename or "",
+        stripe_filename=stripe_filename,
         bank_file_link=bank_file_link,
+        stripe_file_link=stripe_file_link if stripe_file is not None else "",
         bank_line_count=result.bank_line_count,
+        stripe_line_count=stripe_line_count,
+        matched_payout_count=matched_payout_count,
+        unmatched_stripe_bank_count=unmatched_stripe_bank_count,
         raw_bank_income_total=raw_income,
         raw_bank_expense_total=raw_expense,
     )
@@ -123,23 +135,22 @@ def update_line(
 
 
 @router.post("/reconcile/{run_id}/merge-stripe", response_model=ReconRunDetail)
-def merge_stripe_endpoint(run_id: int, db: Session = Depends(get_db)) -> ReconRun:
-    """Wizard step 3: match this run's bank-payout placeholders (from step 1)
-    against the Stripe data already pulled into ledger_stripe by a sync (see
-    pages/Stripe) - leaving every other line, including anything the user has
-    edited, untouched."""
+async def merge_stripe_endpoint(
+    run_id: int,
+    stripe_file: UploadFile = File(...),
+    stripe_file_link: str = Form(""),
+    db: Session = Depends(get_db),
+) -> ReconRun:
+    """Wizard step 3: match the Stripe file against this run's bank-payout
+    placeholders (from step 1), leaving every other line - including
+    anything the user has edited - untouched."""
     run = db.get(ReconRun, run_id)
     if run is None:
         raise HTTPException(404, "Run not found.")
 
-    staged = list(db.scalars(select(StripeTransaction)).all())
-    if not staged:
-        raise HTTPException(
-            400,
-            "No synced Stripe transactions yet - use Sync Now on the Stripe "
-            "page first.",
-        )
-    stripe_rows = [to_stripe_row(t) for t in staged]
+    stripe_rows = parse_stripe_csv(await _read_csv(stripe_file))
+    if not stripe_rows:
+        raise HTTPException(400, "Stripe CSV had no usable rows.")
 
     placeholders = [line for line in run.lines if line.is_stripe_payout]
     placeholder_bank_rows = [
@@ -164,7 +175,8 @@ def merge_stripe_endpoint(run_id: int, db: Session = Depends(get_db)) -> ReconRu
     for out_line in result.lines:
         db.add(ReconLine(run_id=run.id, **out_line.as_dict()))
 
-    run.stripe_filename = "Stripe API sync"
+    run.stripe_filename = stripe_file.filename or ""
+    run.stripe_file_link = stripe_file_link
     run.stripe_line_count = result.stripe_line_count
     run.matched_payout_count = result.matched_payout_count
     run.unmatched_stripe_bank_count = result.unmatched_stripe_bank_count
@@ -206,11 +218,14 @@ def recategorize_endpoint(run_id: int, db: Session = Depends(get_db)) -> ReconRu
 
 
 @router.post("/reconcile/stripe-fund-check", response_model=StripeFundCheckOut)
-def stripe_fund_check(db: Session = Depends(get_db)) -> StripeFundCheckOut:
-    """Wizard step 2: which donation funds in the currently-synced Stripe
-    data (ledger_stripe) don't yet have a stripe_fund rule."""
-    staged = list(db.scalars(select(StripeTransaction)).all())
-    stripe_rows = [to_stripe_row(t) for t in staged]
+async def stripe_fund_check(
+    stripe_file: UploadFile = File(...), db: Session = Depends(get_db)
+) -> StripeFundCheckOut:
+    """Stateless preview for wizard step 2: which donation funds in this
+    Stripe file don't yet have a stripe_fund rule."""
+    stripe_rows = parse_stripe_csv(await _read_csv(stripe_file))
+    if not stripe_rows:
+        raise HTTPException(400, "Stripe CSV had no usable rows.")
 
     rules = list(db.scalars(select(CategoryRule)).all())
     accounts = list(db.scalars(select(ChartOfAccount)).all())

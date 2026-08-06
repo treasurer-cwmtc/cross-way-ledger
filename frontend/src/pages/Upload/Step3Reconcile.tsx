@@ -1,5 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
+import { getCurrentFiscalYear } from "../../api/settings";
+import { uploadBankOrStripeFile } from "../../lib/googleDrive";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 function round2(n: number): number {
@@ -8,6 +10,7 @@ function round2(n: number): number {
 
 export default function Step3Reconcile(props: {
   run: ReconRun;
+  stripeFile: File | null;
   onRunChange: (run: ReconRun) => void;
   onNext: () => void;
 }) {
@@ -23,10 +26,21 @@ export default function Step3Reconcile(props: {
   const run = props.run;
 
   async function doReconcile() {
+    if (!props.stripeFile) return;
     setBusy(true);
     setError("");
+    // Same best-effort Drive archiving as the bank file in Step 1 - a
+    // failure here never blocks the actual merge.
+    let stripeFileLink: string | undefined;
     try {
-      props.onRunChange(await reconcileApi.mergeStripe(run.id));
+      const year = await getCurrentFiscalYear();
+      const archived = await uploadBankOrStripeFile(props.stripeFile, year);
+      stripeFileLink = archived.url;
+    } catch {
+      stripeFileLink = undefined;
+    }
+    try {
+      props.onRunChange(await reconcileApi.mergeStripe(run.id, props.stripeFile, stripeFileLink));
       setDone(true);
     } catch (e) {
       setError((e as Error).message);
@@ -101,7 +115,7 @@ export default function Step3Reconcile(props: {
           dollar amounts line up day by day.
         </p>
         {!done && (
-          <button className="btn" onClick={doReconcile} disabled={busy}>
+          <button className="btn" onClick={doReconcile} disabled={!props.stripeFile || busy}>
             {busy ? "Reconciling…" : "Reconcile"}
           </button>
         )}

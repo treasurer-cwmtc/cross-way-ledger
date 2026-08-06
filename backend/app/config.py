@@ -64,22 +64,6 @@ class Settings(BaseSettings):
     google_drive_root_folder_id: str = ""
     google_drive_impersonate_user: str = "treasurer@crosswaymtc.org"
 
-    # --- Stripe API (automated transaction sync) ---
-    # Empty by default; the Sync/scheduled-sync endpoints return a clear
-    # error until configured, same convention as the Drive/SMTP settings
-    # above. Secret (restricted) API key, not the publishable one.
-    stripe_secret_key: str = ""
-    # Re-pulled and re-upserted (by stripe_id) on every sync, rather than
-    # tracked with an incremental cursor - cheap at this account's volume,
-    # and self-healing if a payout gets amended/refunded after its first
-    # sync. Widen this if a payout ever settles later than that.
-    stripe_sync_lookback_days: int = 30
-    # Shared secret the nightly Cloud Scheduler job presents (as the
-    # X-Sync-Secret header) to call the scheduled-sync endpoint without a
-    # user login - that endpoint has no other auth, so this must be set
-    # before it's reachable in a real environment.
-    stripe_sync_secret: str = ""
-
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
