@@ -202,6 +202,7 @@ class StripeTransactionOut(BaseModel):
 class StripeTransactionsOut(BaseModel):
     transactions: list[StripeTransactionOut]
     last_synced_at: str | None = None
+    default_lookback_days: int
 
 
 class StripeSyncResult(BaseModel):

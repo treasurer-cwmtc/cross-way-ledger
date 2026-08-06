@@ -3,9 +3,12 @@ that pull ledger_stripe from the Stripe API (mocked here) instead of a CSV
 upload, and the fund-check/merge-stripe endpoints that now read from it.
 """
 
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.services.parsers import StripeRow
+from app.services.parsers import StripeRow, parse_stripe_csv
+from app.services.stripe_sync import _balance_txn_to_row
 from test_auth import auth_header, client  # reuse the shared TestClient/app setup
 
 
@@ -73,6 +76,7 @@ def test_sync_now_upserts_and_lists_transactions():
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["last_synced_at"] == result["last_synced_at"]
+    assert body["default_lookback_days"] == 30
     ids = {t["stripe_id"] for t in body["transactions"]}
     assert {"txn_fake_payout_1", "txn_fake_donation_1"} <= ids
 
@@ -86,3 +90,61 @@ def test_sync_now_upserts_and_lists_transactions():
     result2 = r.json()
     assert result2["added"] == 0
     assert result2["updated"] == 2
+
+
+def test_sync_now_passes_custom_days_through_to_fetch():
+    h = auth_header()
+    with patch(
+        "app.routers.stripe_sync.fetch_recent_transactions", return_value=[]
+    ) as mock_fetch:
+        r = client.post("/api/stripe/sync?days=400", headers=h)
+    assert r.status_code == 200, r.text
+    mock_fetch.assert_called_once_with(lookback_days=400)
+
+
+def test_api_path_matches_csv_path_for_the_same_donation():
+    """The whole point of the automated sync is that it's a drop-in
+    replacement for the manual CSV upload - the reconciler must not be able
+    to tell which source a StripeRow came from. Builds both a CSV row and a
+    mocked Stripe API balance transaction representing the SAME underlying
+    donation (same amount/fee/donor/fund/payout), and asserts the two
+    parsing paths agree on every field the reconciler actually reads."""
+    csv_text = (
+        "id,Type,Source,Amount,Fee,Net,Currency,Created (UTC),Available On (UTC),"
+        "Description,Transfer,Transfer Date (UTC),Transfer Group,"
+        "planning_center_context (metadata),planning_center_person_name (metadata)\n"
+        "txn_parity_test,payment,py_parity_test,100.30,0.30,100.00,usd,"
+        "8/6/2026 12:00,8/9/2026 0:00,"
+        'Donation #555 - Parity Donor - Pledges ($100.30),po_parity_payout,'
+        '8/9/2026 0:00,,"[{""name"":""Pledges"",""cents"":10030}]",\n'
+    )
+    csv_row = parse_stripe_csv(csv_text)[0]
+
+    # A mocked Stripe BalanceTransaction for the identical donation - Stripe's
+    # real amounts are integer cents, and `source` is just an id string
+    # (matching the CSV's "Source" column) unless the caller expands it.
+    api_txn = SimpleNamespace(
+        id="txn_parity_test",
+        type="payment",
+        source="py_parity_test",
+        amount=10030,
+        fee=30,
+        net=10000,
+        created=int(datetime(2026, 8, 6, 12, 0, tzinfo=timezone.utc).timestamp()),
+        available_on=int(datetime(2026, 8, 9, tzinfo=timezone.utc).timestamp()),
+        description="Donation #555 - Parity Donor - Pledges ($100.30)",
+    )
+    api_row = _balance_txn_to_row(api_txn, transfer="po_parity_payout")
+
+    assert api_row.id == csv_row.id
+    assert api_row.type == csv_row.type
+    assert api_row.source == csv_row.source
+    assert api_row.amount == csv_row.amount
+    assert api_row.fee == csv_row.fee
+    assert api_row.net == csv_row.net
+    assert api_row.created == csv_row.created
+    assert api_row.transfer == csv_row.transfer
+    assert api_row.transfer_date == csv_row.transfer_date
+    assert api_row.fund == csv_row.fund
+    assert api_row.donor == csv_row.donor
+    assert api_row.is_donation == csv_row.is_donation
