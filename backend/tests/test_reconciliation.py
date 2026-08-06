@@ -4,7 +4,8 @@ from datetime import date
 from pathlib import Path
 
 from app.services.ledger import build_dedup_key
-from test_auth import auth_header, client  # reuse the shared TestClient/app setup
+from test_auth import TestingSession, auth_header, client  # reuse shared TestClient/app setup
+from _stripe_seed import seed_stripe_transactions
 
 FIXTURES = Path(__file__).parent
 
@@ -23,26 +24,25 @@ def test_build_dedup_key_fits_column_even_for_long_bank_descriptions():
 
 
 BANK_FILE_LINK = "https://drive.google.com/file/d/bank-test-id/view"
-STRIPE_FILE_LINK = "https://drive.google.com/file/d/stripe-test-id/view"
+STRIPE_SYNC_LABEL = "Stripe API sync"
 
 
 def _run_upload() -> int:
     h = auth_header()
-    with (
-        open(FIXTURES / "sample_bank.csv", "rb") as bank,
-        open(FIXTURES / "sample_stripe.csv", "rb") as stripe,
-    ):
+    with TestingSession() as db:
+        seed_stripe_transactions(db)
+    with open(FIXTURES / "sample_bank.csv", "rb") as bank:
         r = client.post(
             "/api/reconcile",
             headers=h,
-            files={
-                "bank_file": ("bank.csv", bank, "text/csv"),
-                "stripe_file": ("stripe.csv", stripe, "text/csv"),
-            },
-            data={"bank_file_link": BANK_FILE_LINK, "stripe_file_link": STRIPE_FILE_LINK},
+            files={"bank_file": ("bank.csv", bank, "text/csv")},
+            data={"bank_file_link": BANK_FILE_LINK},
         )
     assert r.status_code == 200, r.text
-    return r.json()["id"]
+    run_id = r.json()["id"]
+    r = client.post(f"/api/reconcile/{run_id}/merge-stripe", headers=h)
+    assert r.status_code == 200, r.text
+    return run_id
 
 
 def _bank_account_id() -> int:
@@ -83,16 +83,15 @@ def test_import_run_dedups_on_reimport():
     assert any(not e["account_no"] for e in imported_entries), "expected an uncategorized line in the fixture"
     assert all(e["notes"] != "Uncategorized - add a rule" for e in imported_entries)
 
-    # Every imported line traces back to the Drive-archived copy of whichever
-    # raw file it actually came from - the bank CSV for plain bank lines, the
-    # Stripe CSV for exploded donation lines - not just whichever file was
-    # uploaded last.
+    # Every imported line traces back to where it actually came from - the
+    # Drive-archived bank CSV for plain bank lines, the Stripe sync for
+    # exploded donation lines - not just whichever source was seen last.
     bank_sourced = [e for e in imported_entries if e["bank_description"] and "stripe" not in e["bank_description"].lower()]
     stripe_sourced = [e for e in imported_entries if "orig co name:stripe" in e["bank_description"].lower()]
     assert bank_sourced and stripe_sourced
     assert all(e["source_file_name"] == "bank.csv" and e["source_file_link"] == BANK_FILE_LINK for e in bank_sourced)
     assert all(
-        e["source_file_name"] == "stripe.csv" and e["source_file_link"] == STRIPE_FILE_LINK
+        e["source_file_name"] == STRIPE_SYNC_LABEL and e["source_file_link"] == ""
         for e in stripe_sourced
     )
 

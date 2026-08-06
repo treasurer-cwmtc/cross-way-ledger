@@ -14,6 +14,7 @@ import ResetPasswordModal from "./ResetPasswordModal";
 // granted one of them silently loses page access.
 const GRANTABLE_PAGES: { keys: string[]; label: string }[] = [
   { keys: ["upload"], label: "Upload" },
+  { keys: ["stripe"], label: "Stripe" },
   { keys: ["reconciliation"], label: "Actual" },
   { keys: ["accrual"], label: "Accrual" },
   { keys: ["budget"], label: "Budget" },

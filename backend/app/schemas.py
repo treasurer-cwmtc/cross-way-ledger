@@ -181,6 +181,36 @@ class DuplicateCheckOut(BaseModel):
     count: int
 
 
+class StripeTransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    stripe_id: str
+    type: str
+    source: str
+    amount: float
+    fee: float
+    net: float
+    created: str
+    description: str
+    transfer: str
+    transfer_date: str
+    fund: str
+    donor: str
+    synced_at: datetime
+
+
+class StripeTransactionsOut(BaseModel):
+    transactions: list[StripeTransactionOut]
+    last_synced_at: str | None = None
+
+
+class StripeSyncResult(BaseModel):
+    fetched: int
+    added: int
+    updated: int
+    last_synced_at: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
