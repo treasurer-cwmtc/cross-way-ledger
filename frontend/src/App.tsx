@@ -5,6 +5,7 @@ import logo from "./assets/cross-way-logo-white.png";
 import Home from "./pages/Home";
 import Upload from "./pages/Upload";
 import StripePage from "./pages/Stripe";
+import BankTransactions from "./pages/BankTransactions";
 import Reconciliation from "./pages/Reconciliation";
 import Accrual from "./pages/Accrual";
 import Budget from "./pages/Budget";
@@ -26,6 +27,7 @@ type Tab =
   | "home"
   | "upload"
   | "stripe"
+  | "plaid"
   | "reconciliation"
   | "accrual"
   | "budget"
@@ -60,6 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { tab: "upload", label: "Upload" },
       { tab: "stripe", label: "Stripe" },
+      { tab: "plaid", label: "Bank Transactions" },
       { tab: "reconciliation", label: "Actual" },
       { tab: "accrual", label: "Accrual" },
       { tab: "budget", label: "Budget" },
@@ -309,6 +312,7 @@ export default function App() {
           {tab === "home" && <Home onNavigate={setTab} />}
           {tab === "upload" && <Upload />}
           {tab === "stripe" && <StripePage />}
+          {tab === "plaid" && <BankTransactions />}
           {tab === "reconciliation" && <Reconciliation />}
           {tab === "accrual" && <Accrual />}
           {tab === "budget" && <Budget />}

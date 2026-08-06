@@ -15,6 +15,7 @@ import ResetPasswordModal from "./ResetPasswordModal";
 const GRANTABLE_PAGES: { keys: string[]; label: string }[] = [
   { keys: ["upload"], label: "Upload" },
   { keys: ["stripe"], label: "Stripe" },
+  { keys: ["plaid"], label: "Bank Transactions" },
   { keys: ["reconciliation"], label: "Actual" },
   { keys: ["accrual"], label: "Accrual" },
   { keys: ["budget"], label: "Budget" },
