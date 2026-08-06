@@ -50,6 +50,7 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 GRANTABLE_PERMISSIONS = {
     "upload",
     "stripe",
+    "plaid",
     "reconciliation",
     "accrual",
     "budget",

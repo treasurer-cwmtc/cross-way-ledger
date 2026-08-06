@@ -80,6 +80,18 @@ class Settings(BaseSettings):
     # before it's reachable in a real environment.
     stripe_sync_secret: str = ""
 
+    # --- Plaid API (automated Chase bank sync) ---
+    # Empty by default; the Link/sync endpoints return a clear error until
+    # configured, same convention as every other integration above. Get
+    # client_id/secret from dashboard.plaid.com - sandbox and production use
+    # different secrets under the same client_id.
+    plaid_client_id: str = ""
+    plaid_secret: str = ""
+    # "sandbox" (fake banks/data, free, no real billing risk) or
+    # "production" (real Chase, real Plaid billing) - see
+    # plaid.Environment.{Sandbox,Production} in services/plaid_client.py.
+    plaid_env: str = "sandbox"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

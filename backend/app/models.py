@@ -295,6 +295,71 @@ class StripeTransaction(Base):
     )
 
 
+class PlaidItem(Base):
+    """One connected bank login (Plaid calls this an "Item") - created once
+    when the treasurer completes the Plaid Link flow (pages/Bank). Holds the
+    long-lived access_token needed for every subsequent sync, and the
+    cursor transactions/sync needs to fetch only what's new since last time.
+
+    access_token is a real credential (it's what lets us read this bank
+    connection's transactions) - stored here rather than Secret Manager
+    because it's per-connection user data, not a single static app secret;
+    protected the same way the rest of this database is (Cloud SQL IAM auth,
+    encryption at rest, backups), not by any extra app-level encryption."""
+
+    __tablename__ = "ledger_plaid_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    item_id: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    access_token: Mapped[str] = mapped_column(String(120))
+    institution_name: Mapped[str] = mapped_column(String(120), default="")
+    # None until the first successful sync; passed back to transactions/sync
+    # on every later call so it only returns what changed.
+    cursor: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class PlaidTransaction(Base):
+    """Staged Chase bank transaction data, pulled automatically via the
+    Plaid API (Sync now on the Bank Transactions page) - the automated
+    counterpart to a manually-exported Chase CSV. Deliberately shaped to
+    match that CSV's own columns (see BankRow in services/parsers.py:
+    details/posting_date/description/amount/type) rather than Plaid's own
+    field names, so this data can eventually feed the same Upload wizard
+    bank-reconciliation pipeline a manual CSV does, without a second
+    parallel code path - the same reasoning as StripeTransaction mirroring
+    StripeRow. `amount` is normalized to that same convention (positive =
+    deposit) even though Plaid's own sign convention is the opposite.
+
+    Plaid doesn't expose Chase's own internal Type codes (ACH_CREDIT,
+    DEBIT_CARD, etc.) - `details`/`type` are the closest equivalents Plaid's
+    categorization gives us (derived from amount sign / payment channel),
+    not a byte-for-byte match to what Chase's own CSV export would say
+    there. Keyed by Plaid's own transaction id so repeated syncs upsert
+    cleanly; a transaction Plaid later retracts (e.g. a pending charge that
+    never posted) is flagged via `removed` rather than deleted outright."""
+
+    __tablename__ = "ledger_plaid"
+
+    plaid_transaction_id: Mapped[str] = mapped_column(String(60), primary_key=True)
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("ledger_plaid_items.item_id"), index=True
+    )
+    account_id: Mapped[str] = mapped_column(String(60), default="")  # which linked account
+    details: Mapped[str] = mapped_column(String(20), default="")  # DEBIT | CREDIT
+    posting_date: Mapped[str] = mapped_column(String(20), default="")
+    description: Mapped[str] = mapped_column(String(300), default="")
+    amount: Mapped[float] = mapped_column(Float, default=0.0)  # positive = deposit
+    type: Mapped[str] = mapped_column(String(60), default="")
+    pending: Mapped[bool] = mapped_column(default=False)
+    removed: Mapped[bool] = mapped_column(default=False)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class BankAccount(Base):
     """A named bank account (e.g. "Chase Operating"). Simple lookup list -
     picked once per Upload run and carried onto every ReconciliationEntry

@@ -19,6 +19,7 @@ from .routers import (
     donors,
     general_ledger,
     income_statement,
+    plaid_sync,
     pledge_campaigns,
     reconcile,
     reconciliation,
@@ -76,6 +77,7 @@ app.include_router(donations.router)
 app.include_router(sheets_export.router)
 app.include_router(reimbursements.router)
 app.include_router(stripe_sync.router)
+app.include_router(plaid_sync.router)
 
 
 @app.exception_handler(IntegrityError)

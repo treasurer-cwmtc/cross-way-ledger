@@ -212,6 +212,54 @@ class StripeSyncResult(BaseModel):
     last_synced_at: str
 
 
+class PlaidLinkTokenOut(BaseModel):
+    link_token: str
+
+
+class PlaidExchangeIn(BaseModel):
+    public_token: str
+    institution_name: str = ""
+
+
+class PlaidItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    item_id: str
+    institution_name: str
+    created_at: datetime
+
+
+class PlaidTransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    plaid_transaction_id: str
+    item_id: str
+    account_id: str
+    details: str
+    posting_date: str
+    description: str
+    amount: float
+    type: str
+    pending: bool
+    removed: bool
+    synced_at: datetime
+
+
+class PlaidTransactionsOut(BaseModel):
+    items: list[PlaidItemOut]
+    transactions: list[PlaidTransactionOut]
+    last_synced_at: str | None = None
+
+
+class PlaidSyncResult(BaseModel):
+    fetched: int
+    added: int
+    modified: int
+    removed: int
+    last_synced_at: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

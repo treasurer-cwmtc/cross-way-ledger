@@ -11,3 +11,4 @@ google-api-python-client==2.154.0
 requests==2.34.2
 alembic==1.14.0
 stripe==11.4.1
+plaid-python==42.0.0
