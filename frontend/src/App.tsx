@@ -4,6 +4,7 @@ import { authApi, User } from "./api/auth";
 import logo from "./assets/cross-way-logo-white.png";
 import Home from "./pages/Home";
 import Upload from "./pages/Upload";
+import Reconcile from "./pages/Reconcile";
 import StripePage from "./pages/Stripe";
 import BankTransactions from "./pages/BankTransactions";
 import Reconciliation from "./pages/Reconciliation";
@@ -26,6 +27,7 @@ import Reimbursements from "./pages/Reimbursements";
 type Tab =
   | "home"
   | "upload"
+  | "reconcile-wizard"
   | "stripe"
   | "plaid"
   | "reconciliation"
@@ -67,6 +69,7 @@ const NAV_GROUPS: NavGroup[] = [
       // treasurer ever needs the manual-CSV path again (e.g. Stripe or
       // Plaid access is lost).
       // { tab: "upload", label: "Upload" },
+      { tab: "reconcile-wizard", label: "Reconciliation" },
       { tab: "stripe", label: "Stripe" },
       { tab: "plaid", label: "Bank Transactions" },
       { tab: "reconciliation", label: "Actual" },
@@ -224,6 +227,12 @@ export default function App() {
             const items = group.items.filter((item) => {
               if (item.adminOnly) return user.is_admin;
               if (item.tab === "home") return true;
+              // Shares the (deprecated, hidden) Upload wizard's own
+              // "upload" permission - same backend endpoints
+              // (/api/reconcile/*), just a different frontend entry point.
+              if (item.tab === "reconcile-wizard") {
+                return user.is_admin || user.permissions.includes("upload");
+              }
               // The single Campaign Status entry covers three underlying
               // permission keys (its Status/Details sub-tabs) - show it if
               // the user holds any one of them.
@@ -317,6 +326,7 @@ export default function App() {
         <div className="app-content">
           {tab === "home" && <Home onNavigate={setTab} />}
           {tab === "upload" && <Upload />}
+          {tab === "reconcile-wizard" && <Reconcile />}
           {tab === "stripe" && <StripePage />}
           {tab === "plaid" && <BankTransactions />}
           {tab === "reconciliation" && <Reconciliation />}
