@@ -510,8 +510,21 @@ All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.
   + a separate Stripe-fee expense line instead.
 - Seed keyword/fund rules are guesses — review on the Rules tab.
 - Not yet built (candidate next steps): saved run history UI, roster-based donor
-  normalization, direct export to the accounting system, automated Stripe/Chase
-  pulls instead of manual CSV upload.
+  normalization, direct export to the accounting system.
+- **Automated Stripe/Chase pulls** — built, as of 2026-08. Both now sync into
+  their own staging tables (`ledger_stripe`, `ledger_plaid`) instead of
+  requiring a manual CSV export — see
+  [docs/guides/stripe-sync.md](guides/stripe-sync.md) and
+  [docs/guides/bank-transactions-plaid-sync.md](guides/bank-transactions-plaid-sync.md),
+  and [ARCHITECTURE.md § 4d](ARCHITECTURE.md#4d-automated-bankpayment-sync-staging-tables-stripe-plaid)
+  for how they're built. The Chase side (Plaid) is still Sandbox-only,
+  pending a production pricing decision
+  ([issue #103](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/103)).
+  Wiring both staging tables into this Upload wizard as a direct
+  alternative to a manual CSV upload — the literal "replace manual CSV
+  upload" ask this section originally described — is tracked separately as
+  [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105),
+  not yet done.
 
 ### Authentication (built)
 

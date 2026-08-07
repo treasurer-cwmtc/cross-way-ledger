@@ -38,7 +38,7 @@ The mirror image of splitting: one bank line that actually settles *several* Acc
 
 Like a split, nothing is actually deleted: the original actual line and the consumed accrual entries are hidden (not hard-deleted), preserving the audit trail and preventing a re-imported bank statement from recreating the actual line as a duplicate.
 
-An Accrual entry linked to a reimbursement can only be reconciled once its reimbursement request is **Paid** or **Rejected** — a still-pending request can still be edited or rejected, which would change or remove the same accrual entry out from under the reconciliation.
+An Accrual entry linked to a [reimbursement](reimbursements.md) can only be reconciled once its reimbursement request is **Paid** or **Rejected** — a still-pending request can still be edited or rejected, which would change or remove the same accrual entry out from under the reconciliation.
 
 ### Attaching a receipt
 
