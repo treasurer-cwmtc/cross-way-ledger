@@ -189,7 +189,13 @@ export default function App() {
     setTab("home");
   }
 
-  if (loading) return <div className="app-shell">Loading…</div>;
+  if (loading)
+    return (
+      <div className="app-loading">
+        <div className="spinner" aria-hidden="true" />
+        <span>Loading…</span>
+      </div>
+    );
   if (!user) return <Login onSuccess={loadMe} />;
 
   return (
