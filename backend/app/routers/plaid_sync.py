@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..database import get_db
 from ..deps import require_permission, User
 from ..models import AppSetting, PlaidItem, PlaidTransaction
@@ -18,9 +19,12 @@ from ..services import plaid_client
 
 LAST_SYNCED_KEY = "plaid_last_synced_at"
 
-router = APIRouter(
-    prefix="/api/plaid", tags=["plaid"], dependencies=[Depends(require_permission("plaid"))]
-)
+# No router-level permission dependency (unlike most routers) - the
+# scheduled-sync endpoint below needs to be reachable by the nightly Cloud
+# Scheduler job, which has no user login to present. Every other route
+# below declares require_permission("plaid") individually instead - same
+# shape as routers/stripe_sync.py.
+router = APIRouter(prefix="/api/plaid", tags=["plaid"])
 
 
 def _plaid_error_response(e: Exception) -> HTTPException:
@@ -38,7 +42,11 @@ def link_token(user: User = Depends(require_permission("plaid"))) -> PlaidLinkTo
     return PlaidLinkTokenOut(link_token=token)
 
 
-@router.post("/exchange", response_model=PlaidItemOut)
+@router.post(
+    "/exchange",
+    response_model=PlaidItemOut,
+    dependencies=[Depends(require_permission("plaid"))],
+)
 def exchange(payload: PlaidExchangeIn, db: Session = Depends(get_db)) -> PlaidItem:
     try:
         access_token, item_id = plaid_client.exchange_public_token(payload.public_token)
@@ -64,7 +72,11 @@ def exchange(payload: PlaidExchangeIn, db: Session = Depends(get_db)) -> PlaidIt
     return item
 
 
-@router.delete("/items/{item_db_id}", status_code=204)
+@router.delete(
+    "/items/{item_db_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission("plaid"))],
+)
 def disconnect_item(item_db_id: int, db: Session = Depends(get_db)) -> None:
     item = db.get(PlaidItem, item_db_id)
     if item is None:
@@ -80,7 +92,11 @@ def disconnect_item(item_db_id: int, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
-@router.get("/transactions", response_model=PlaidTransactionsOut)
+@router.get(
+    "/transactions",
+    response_model=PlaidTransactionsOut,
+    dependencies=[Depends(require_permission("plaid"))],
+)
 def list_transactions(db: Session = Depends(get_db)) -> PlaidTransactionsOut:
     items = list(db.scalars(select(PlaidItem).order_by(PlaidItem.created_at.desc())).all())
     transactions = list(
@@ -130,11 +146,13 @@ def _sync_one_item(db: Session, item: PlaidItem) -> tuple[int, int, int]:
     return added, modified, removed
 
 
-@router.post("/sync", response_model=PlaidSyncResult)
-def sync_now(db: Session = Depends(get_db)) -> PlaidSyncResult:
+def _run_sync(db: Session) -> PlaidSyncResult:
+    """Shared by both sync_now and scheduled_sync below - syncs every
+    connected item and stamps LAST_SYNCED_KEY. Callers decide separately
+    what "no connected items yet" should mean (a user clicking Sync now
+    wants a clear error; a nightly job finding nothing connected yet
+    should just no-op quietly rather than fail every night)."""
     items = list(db.scalars(select(PlaidItem)).all())
-    if not items:
-        raise HTTPException(400, "No connected bank account yet - connect one first.")
 
     total_added = total_modified = total_removed = 0
     for item in items:
@@ -162,3 +180,37 @@ def sync_now(db: Session = Depends(get_db)) -> PlaidSyncResult:
         removed=total_removed,
         last_synced_at=now_iso,
     )
+
+
+@router.post(
+    "/sync",
+    response_model=PlaidSyncResult,
+    dependencies=[Depends(require_permission("plaid"))],
+)
+def sync_now(db: Session = Depends(get_db)) -> PlaidSyncResult:
+    if not db.scalars(select(PlaidItem)).first():
+        raise HTTPException(400, "No connected bank account yet - connect one first.")
+    return _run_sync(db)
+
+
+def _verify_plaid_sync_secret(x_sync_secret: str = Header(default="")) -> None:
+    """Guards the scheduled endpoint in place of a user login - same
+    pattern as stripe_sync.py's _verify_sync_secret. Configuring
+    plaid_sync_secret is required before this endpoint does anything; it's
+    otherwise always rejected, never open-by-default."""
+    settings = get_settings()
+    if not settings.plaid_sync_secret or x_sync_secret != settings.plaid_sync_secret:
+        raise HTTPException(403, "Invalid or missing sync secret.")
+
+
+@router.post(
+    "/scheduled-sync",
+    response_model=PlaidSyncResult,
+    dependencies=[Depends(_verify_plaid_sync_secret)],
+)
+def scheduled_sync(db: Session = Depends(get_db)) -> PlaidSyncResult:
+    # No connected items yet is a legitimate, common state here (unlike
+    # Stripe, which can always call the API directly) - a nightly job
+    # running before anyone has connected a bank account isn't an error,
+    # it just has nothing to do.
+    return _run_sync(db)

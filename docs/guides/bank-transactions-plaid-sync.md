@@ -39,6 +39,12 @@ Unlike Stripe (where "days back" is a value our own code controls on every sync)
 
 The app requests Plaid's maximum (**730 days**, roughly 24 months) every time someone clicks Connect bank, so a fresh connection should reach back about two years. If a connection was made before this was in place, it may only go back to Plaid's much shorter default (**90 days**) instead - if your data doesn't reach back as far as expected, that's almost certainly why. The fix is to **Disconnect** that connection and **Connect bank** again - the new Link session will request the full 730 days from the start. Whatever real Chase history falls outside even a 730-day window still has to come from a manual CSV upload through the [Upload Wizard](bank-reconciliation-upload-wizard.md), the same as before Plaid existed - there's no way to widen a Plaid connection's window beyond the original request, even after reconnecting.
 
+**One more wrinkle right after connecting**: Plaid pulls that full history in the background on its own schedule, not instantly - the very first Sync now right after Connect bank can come back with a surprisingly small number of transactions while Plaid is still fetching the rest from Chase. If that happens, just wait a few minutes and click Sync now again; the count should jump. See [issue #111](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/111) for the longer-term fix (a webhook so the app knows automatically instead of needing a manual re-click).
+
+## Automatic scheduling
+
+A nightly sync (Cloud Scheduler, prod only - dev intentionally stays manual-only, same policy as Stripe) pulls whatever's new on every connected account, no clicking required. It calls the same underlying sync logic as the Sync now button, so it's covered by the same duplicate-protection guarantee described in [Architecture](../ARCHITECTURE.md#4d-automated-bankpayment-sync-staging-tables-stripe-plaid) - running the nightly job on top of a manual sync from earlier the same day is always safe.
+
 ## What's next
 
 Wiring this staging table into the Upload Wizard, so it becomes a true reconciliation source alongside Stripe instead of a separate page you browse independently, is deliberately deferred until the Connect/Sync flow above has proven itself — see [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105).

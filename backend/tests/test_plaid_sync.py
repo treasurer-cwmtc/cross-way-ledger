@@ -69,6 +69,20 @@ def test_endpoints_require_auth():
     assert client.post("/api/plaid/sync").status_code == 401
 
 
+def test_scheduled_sync_rejects_missing_or_wrong_secret():
+    # No login required at all for this endpoint (unlike every other route
+    # above) - it's the nightly Cloud Scheduler job's entry point, gated
+    # purely by the X-Sync-Secret header. Same shape as Stripe's
+    # /api/stripe/scheduled-sync.
+    assert client.post("/api/plaid/scheduled-sync").status_code == 403
+    assert (
+        client.post(
+            "/api/plaid/scheduled-sync", headers={"X-Sync-Secret": "wrong"}
+        ).status_code
+        == 403
+    )
+
+
 def test_sync_now_requires_a_connected_account_first():
     # A fresh admin session with no connected item yet - this test runs
     # standalone so it doesn't assume ordering against the connect test.

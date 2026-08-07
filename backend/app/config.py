@@ -91,6 +91,12 @@ class Settings(BaseSettings):
     # "production" (real Chase, real Plaid billing) - see
     # plaid.Environment.{Sandbox,Production} in services/plaid_client.py.
     plaid_env: str = "sandbox"
+    # Shared secret the nightly Cloud Scheduler job presents (as the
+    # X-Sync-Secret header) to call /api/plaid/scheduled-sync without a
+    # user login - same pattern as stripe_sync_secret above, but a
+    # separate value so the two integrations' secrets can be rotated
+    # independently.
+    plaid_sync_secret: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

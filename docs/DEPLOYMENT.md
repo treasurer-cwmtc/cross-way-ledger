@@ -198,7 +198,10 @@ All sensitive configuration lives in **Secret Manager**, never in the repository
 | `ledger-smtp-password` | App Password for the `noreply@crosswaymtc.org` mailbox that sends Reimbursements emails (OTP codes, notifications) - **one shared secret**, not per-environment, since dev and prod send through the same real mailbox |
 | `ledger-reporting-password-prod` | Password for the `ledger_reporting` read-only Postgres role external BI tools (Looker Studio, Sheets) connect with |
 | `ledger-stripe-secret-key` | Stripe's secret (restricted) API key for the automated sync - **one shared secret**, not per-environment; both dev and prod sync against the same real Stripe account |
-| `ledger-plaid-client-id-dev` / `ledger-plaid-secret-dev` | Plaid API credentials for the automated Chase sync - **dev only today**. Both point at Plaid's **Sandbox** environment (`PLAID_ENV=sandbox`, the app's default) - no production counterpart exists yet, pending the pricing/production-access decision in [issue #103](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/103). When production credentials are added later, mirror this as `ledger-plaid-secret-prod` (same `client_id` works across environments, only the `secret` differs by environment) with `PLAID_ENV=production` set only on the prod backend. |
+| `ledger-stripe-sync-secret` | Shared secret the nightly Stripe Cloud Scheduler job presents as `X-Sync-Secret` - **prod only**, dev has no scheduled job |
+| `ledger-plaid-client-id-dev` / `ledger-plaid-secret-dev` | Plaid API credentials for dev - always point at Plaid's **Sandbox** environment (`PLAID_ENV=sandbox`, the app's default), never real Chase data |
+| `ledger-plaid-secret-prod` | Plaid's **Production** secret (same `client_id` as dev - only the `secret` differs by environment) - prod runs `PLAID_ENV=production` against the real Chase account |
+| `ledger-plaid-sync-secret` | Shared secret the nightly Plaid Cloud Scheduler job presents as `X-Sync-Secret` - **prod only**, same pattern as Stripe's, deliberately a separate value so the two integrations' secrets rotate independently |
 
 > **Cloud Run only re-reads a secret injected as an environment variable at
 > container *startup*, not live** - unlike secret *volumes*, pointing
