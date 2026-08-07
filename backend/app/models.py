@@ -354,7 +354,12 @@ class PlaidTransaction(Base):
     account_id: Mapped[str] = mapped_column(String(60), default="")  # which linked account
     details: Mapped[str] = mapped_column(String(20), default="")  # DEBIT | CREDIT
     posting_date: Mapped[str] = mapped_column(String(20), default="")
-    description: Mapped[str] = mapped_column(String(300), default="")
+    # Text, not String(300) - a real Plaid merchant description hit
+    # StringDataRightTruncation against String(300) in production (see
+    # issue tracking this in git history). Text matches the precedent set
+    # by other potentially-long free-text bank fields (e.g. ledger_actual's
+    # bank_description) rather than guessing at another fixed width.
+    description: Mapped[str] = mapped_column(Text, default="")
     amount: Mapped[float] = mapped_column(Float, default=0.0)  # positive = deposit
     type: Mapped[str] = mapped_column(String(60), default="")
     pending: Mapped[bool] = mapped_column(default=False)
