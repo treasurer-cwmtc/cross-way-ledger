@@ -1,5 +1,20 @@
 # Bank Reconciliation: The Upload Wizard
 
+> **⚠️ Deprecated.** This page is hidden from the sidebar as of 2026-08 in
+> favor of the automated Stripe/Plaid sync (see
+> [Stripe: Automated Transaction Sync](stripe-sync.md) and
+> [Bank Transactions: Automated Chase Sync (Plaid)](bank-transactions-plaid-sync.md))
+> and a new Reconciliation page (tracked in
+> [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105),
+> not yet built) that will replace its first two steps with those
+> automated syncs. **Nothing was deleted** -
+> the wizard, its code, and its route all still work; only the nav button
+> was removed (`frontend/src/App.tsx`, `NAV_GROUPS`). If Stripe or Plaid
+> access is ever lost or paused for any reason, re-adding that one nav
+> entry brings this page straight back as a fully manual fallback. This
+> guide is kept for that reason - everything below still describes the
+> real, working wizard.
+
 *A guided, 4-step walkthrough of the **Upload** tab — how a bank statement and a Stripe export become clean, categorized entries in the Actual ledger.*
 
 **Required permission:** `Upload`

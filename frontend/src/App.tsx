@@ -60,7 +60,13 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Ledgers",
     items: [
-      { tab: "upload", label: "Upload" },
+      // "Upload" is deliberately hidden from nav (deprecated in favor of
+      // the automated Stripe/Plaid sync + the upcoming Reconciliation
+      // page, see issue #105) but the tab/route/component below are left
+      // fully intact - re-adding this one line brings it back if the
+      // treasurer ever needs the manual-CSV path again (e.g. Stripe or
+      // Plaid access is lost).
+      // { tab: "upload", label: "Upload" },
       { tab: "stripe", label: "Stripe" },
       { tab: "plaid", label: "Bank Transactions" },
       { tab: "reconciliation", label: "Actual" },
