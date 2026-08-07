@@ -398,6 +398,27 @@ erDiagram
   the opposite of this app's (positive = deposit); `plaid_txn_to_fields()`
   negates it on the way in, so nothing downstream needs to know Plaid's
   convention exists.
+- **How duplicate syncs are prevented, for both integrations**: every row
+  is keyed by the provider's own unique transaction id (`stripe_id` /
+  `plaid_transaction_id`, each the table's primary key), and every sync is
+  an **upsert** - look up by that id, update the existing row if found,
+  insert only if not. Neither integration ever blindly `INSERT`s. This is
+  what makes it safe to click Sync now repeatedly, run the nightly
+  scheduled job on top of a manual sync that just happened, or re-run a
+  large backfill after fixing a bug partway through (see the
+  `StringDataRightTruncation` incident referenced in
+  [STATUS.md](STATUS.md)) - none of these can ever create a second row for
+  a transaction already synced. The two providers reach that guarantee
+  differently: Stripe has no concept of "since last time," so the sync
+  re-fetches the *entire* lookback window every call and relies purely on
+  the upsert-by-`stripe_id` to make that idempotent; Plaid's own
+  cursor-based API does the "what changed" filtering server-side, and the
+  upsert-by-id is then just a safety net on top of that. **This only
+  covers the two staging tables themselves** - it says nothing about
+  duplicates once this data is later imported into a real ledger (Actual),
+  which has its own separate dedup mechanism
+  (`ledger_actual.dedup_key`) that doesn't apply here yet; see
+  [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105).
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "18px"}}}%%

@@ -20,7 +20,7 @@ Click **Connect bank**. This opens Plaid's own secure widget (called "Link") —
 
 ## Syncing data
 
-- **Sync now** pulls new and changed transactions since the last sync, using Plaid's cursor-based sync — it always resumes exactly where the last sync left off, rather than re-scanning a fixed date window like Stripe's does.
+- **Sync now** pulls new and changed transactions since the last sync, using Plaid's cursor-based sync — it always resumes exactly where the last sync left off, rather than re-scanning a fixed date window like Stripe's does. Every transaction is keyed by Plaid's own transaction id, so running Sync now repeatedly (or the connection lagging, then catching up) never creates duplicate rows — an already-seen transaction just gets its existing row refreshed in place instead of a new one added.
 - **Last refreshed**, right-aligned in the toolbar, shows how long ago the most recent sync finished.
 - A sync message below the toolbar confirms what happened (e.g. *"Synced 49 transactions (49 new, 0 updated, 0 removed)"*). A transaction that's later retracted by the bank (e.g. a pending charge that never posted) is flagged as removed rather than deleted outright, so it disappears from the normal view but isn't silently erased from history.
 - **Disconnect**, next to the connected institution's name, removes the connection — this actually calls Plaid's API to release the connection, not just deletes the local record, which matters because Plaid keeps billing for a connection it still considers active even if the app stops calling it.

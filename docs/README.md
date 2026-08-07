@@ -19,6 +19,7 @@ Step-by-step guides for using the application — written for treasurers, bookke
 | **[Chart of Accounts & Rules](guides/chart-of-accounts-and-rules.md)** | The 3-level account hierarchy and automatic categorization rules |
 | **[Pledge Campaigns](guides/pledge-campaigns.md)** | The 5-step campaign import wizard, plus the Status and Details dashboards |
 | **[Donors & Link Receipts](guides/donors-and-receipts.md)** | The shared donor list and bulk-attaching receipts from Google Drive |
+| **[Reimbursements](guides/reimbursements.md)** | The public submitter portal (email + one-time code login), the treasurer's review queue, and how it links to Accrual |
 | **[Administration: Users, Permissions & Config](guides/administration.md)** | Adding users, granting permissions, and app-wide settings |
 
 ## For engineers & administrators
