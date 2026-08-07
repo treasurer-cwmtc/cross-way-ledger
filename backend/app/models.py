@@ -279,7 +279,11 @@ class StripeTransaction(Base):
     __tablename__ = "ledger_stripe"
 
     stripe_id: Mapped[str] = mapped_column(String(60), primary_key=True)
-    type: Mapped[str] = mapped_column(String(20), default="")  # payout | payment | charge | ...
+    # Stripe's real balance-transaction type values go past 20 chars over a
+    # wide enough date range (e.g. "connect_collection_transfer",
+    # "issuing_authorization_hold") - widened from String(20) after a real
+    # 750-day backfill hit StringDataRightTruncation (issue #107).
+    type: Mapped[str] = mapped_column(String(60), default="")  # payout | payment | charge | ...
     source: Mapped[str] = mapped_column(String(60), default="")  # py_/ch_/po_ id
     amount: Mapped[float] = mapped_column(Float, default=0.0)
     fee: Mapped[float] = mapped_column(Float, default=0.0)
