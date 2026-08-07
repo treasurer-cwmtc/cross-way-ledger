@@ -19,8 +19,19 @@ from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchan
 from plaid.model.item_remove_request import ItemRemoveRequest
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
+from plaid.model.link_token_transactions import LinkTokenTransactions
 from plaid.model.products import Products
 from plaid.model.transactions_sync_request import TransactionsSyncRequest
+
+# Plaid defaults a new Link session's transaction history to 90 days unless
+# told otherwise - discovered the hard way when a real Chase connection on
+# prod only pulled data back to "May" instead of the ~24 months expected.
+# 730 is Plaid's documented maximum for days_requested. This only affects
+# *new* connections going forward - an already-connected Item's history
+# depth was locked in at its own original Link session and can't be
+# widened after the fact; the fix for an existing under-scoped connection
+# is to disconnect and reconnect.
+_TRANSACTIONS_DAYS_REQUESTED = 730
 
 from ..config import get_settings
 from .parsers import BankRow
@@ -55,6 +66,7 @@ def create_link_token(user_id: str) -> str:
         country_codes=[CountryCode("US")],
         user=LinkTokenCreateRequestUser(client_user_id=user_id),
         products=[Products("transactions")],
+        transactions=LinkTokenTransactions(days_requested=_TRANSACTIONS_DAYS_REQUESTED),
     )
     response = client.link_token_create(request)
     return response.link_token
