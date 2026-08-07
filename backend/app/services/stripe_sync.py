@@ -12,19 +12,24 @@ depends on to match a bank deposit to its underlying donations.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import stripe
 
 from ..config import get_settings
 from ..models import StripeTransaction
-from .parsers import StripeRow, extract_fund_donor
+from .parsers import StripeRow, extract_fund_donor, parse_fund_breakdown
 
 
 def to_stripe_row(t: StripeTransaction) -> StripeRow:
     """Adapts a staged (already-synced) row back into the StripeRow shape
     the reconciler's merge_stripe()/reconcile() functions expect, so the
     wizard treats API-sourced and CSV-sourced data identically."""
+    try:
+        fund_breakdown = [tuple(pair) for pair in json.loads(t.fund_breakdown_json or "[]")]
+    except (ValueError, TypeError):
+        fund_breakdown = []
     return StripeRow(
         id=t.stripe_id,
         type=t.type,
@@ -38,6 +43,7 @@ def to_stripe_row(t: StripeTransaction) -> StripeRow:
         transfer_date=t.transfer_date,
         fund=t.fund,
         donor=t.donor,
+        fund_breakdown=fund_breakdown,
     )
 
 
@@ -55,9 +61,22 @@ def _iso_date(unix_ts: int | None) -> str:
 
 def _balance_txn_to_row(txn, transfer: str) -> StripeRow:
     description = txn.description or ""
-    fund, donor = extract_fund_donor(description, "", "")
     source = txn.source
     source_id = getattr(source, "id", source) or ""
+    # `source` is only a full Charge/Refund object (with `.metadata`) when
+    # fetch_recent_transactions() asked for it via expand=["data.source"] -
+    # a plain balance-transaction listing only gives back the id string.
+    # Planning Center's own Stripe integration stamps the same two metadata
+    # keys the CSV export's "planning_center_context (metadata)" and
+    # "planning_center_person_name (metadata)" columns come from, so this
+    # gives the live sync path the same structured multi-fund breakdown the
+    # CSV path always had access to (see issue #124 - previously this path
+    # never even tried, and was 100% reliant on the fragile description
+    # regex, which garbles a split-fund gift into one string).
+    metadata = getattr(source, "metadata", None) or {}
+    context_json = metadata.get("planning_center_context", "")
+    person_name = metadata.get("planning_center_person_name", "")
+    fund, donor = extract_fund_donor(description, context_json, person_name)
     return StripeRow(
         id=txn.id,
         type=txn.type,
@@ -71,6 +90,7 @@ def _balance_txn_to_row(txn, transfer: str) -> StripeRow:
         transfer_date=_iso_date(txn.available_on),
         fund=fund,
         donor=donor,
+        fund_breakdown=parse_fund_breakdown(context_json),
     )
 
 
@@ -93,7 +113,12 @@ def fetch_recent_transactions(lookback_days: int | None = None) -> list[StripeRo
         payout_txn = stripe.BalanceTransaction.retrieve(payout.balance_transaction)
         rows.append(_balance_txn_to_row(payout_txn, transfer=payout.id))
 
-        swept = stripe.BalanceTransaction.list(payout=payout.id, limit=100)
+        # expand=["data.source"] embeds the underlying Charge/Refund object
+        # (with its .metadata) instead of just an id string - required for
+        # _balance_txn_to_row() to read the Planning Center fund breakdown.
+        swept = stripe.BalanceTransaction.list(
+            payout=payout.id, limit=100, expand=["data.source"]
+        )
         for txn in swept.auto_paging_iter():
             if txn.id == payout_txn.id:
                 continue  # the payout's own transaction, already added above

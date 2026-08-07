@@ -183,6 +183,37 @@ def test_stripe_fund_check_red_when_fund_missing_rule():
     assert made_up["has_rule"] is False
 
 
+def test_stripe_fund_check_lists_split_fund_gift_as_separate_funds():
+    # Before issue #124's fix, a gift split across multiple funds in one
+    # checkout showed up as one garbled combined "fund" (all the names and
+    # dollar amounts concatenated) instead of each fund appearing on its
+    # own row.
+    h = auth_header()
+    csv_text = (
+        "id,Type,Source,Amount,Fee,Net,Currency,Created (UTC),Available On (UTC),"
+        "Description,Transfer,Transfer Date (UTC),Transfer Group,"
+        "planning_center_context (metadata),planning_center_person_name (metadata)\n"
+        'txn_split_fund_check,payment,py_split_1,4500.00,0,4500.00,usd,'
+        '6/1/2026 0:00,6/1/2026 0:00,'
+        '"Donation #1 - Jane Doe - Building Fund ($4,000.00) Made Up Split Fund ($500.00)",'
+        ',,,"[{""name"":""Building Fund"",""cents"":400000},'
+        '{""name"":""Made Up Split Fund"",""cents"":50000}]",\n'
+    )
+    with TestingSession() as db:
+        seed_stripe_transactions_from_text(db, csv_text)
+    r = client.post("/api/reconcile/stripe-fund-check", headers=h)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    fund_names = {item["fund"] for item in body["funds"]}
+    # Each designated fund is its own entry - no garbled combined string.
+    assert "Building Fund" in fund_names
+    assert "Made Up Split Fund" in fund_names
+    assert not any("($4,000.00)" in name for name in fund_names)
+    made_up = next(item for item in body["funds"] if item["fund"] == "Made Up Split Fund")
+    assert made_up["has_rule"] is False
+    assert body["all_covered"] is False
+
+
 def test_duplicate_check_matches_what_import_would_skip():
     h = auth_header()
     bank_account_id = _bank_account_id()

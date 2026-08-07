@@ -143,8 +143,9 @@ A pure staging table - nothing here touches a real ledger by itself.
 | `description` | string(300) | default `""` | Includes the donor/fund text the reconciler parses out (e.g. `"Donation #999 - Jane Doe - Pledges ($100.30)"`). |
 | `transfer` | string(60) | default `""` | The payout id a donation was swept into - groups individual donations under their payout. |
 | `transfer_date` | string(20) | default `""` | |
-| `fund` | string(120) | default `""` | Parsed from `description`. |
+| `fund` | string(120) | default `""` | Parsed from `description`/metadata. For a gift split across multiple funds in one checkout, this is a comma-joined display list (e.g. `"Building Fund, General Missions"`) - see `fund_breakdown_json` for the real per-fund data used to categorize/post it. |
 | `donor` | string(160) | default `""` | Parsed from `description`. |
+| `fund_breakdown_json` | text | default `""` | JSON list of `[fund name, dollar amount]` pairs when a donation is split across multiple funds (from Planning Center's `planning_center_context` Stripe metadata) - empty for an ordinary single-fund donation. Drives the reconciler splitting a split-gift's net amount proportionally across each fund's own account instead of posting it all to one (see [issue #124](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/124)). |
 | `synced_at` | datetime (tz-aware) | server default: now, updates on write | When this row was last pulled from Stripe. |
 
 ---

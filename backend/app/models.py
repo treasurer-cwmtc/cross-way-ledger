@@ -294,6 +294,15 @@ class StripeTransaction(Base):
     transfer_date: Mapped[str] = mapped_column(String(20), default="")
     fund: Mapped[str] = mapped_column(String(120), default="")
     donor: Mapped[str] = mapped_column(String(160), default="")
+    # The full itemized fund/amount breakdown as a JSON list of [name,
+    # dollars] pairs, when a single donation is a gift split across
+    # multiple funds in one checkout - empty string for an ordinary
+    # single-fund donation (use `fund` as-is then). Populated from Planning
+    # Center's own `planning_center_context` Stripe metadata - see
+    # services/parsers.py's parse_fund_breakdown() and issue #124 (posting
+    # a split gift's full amount to whichever single fund matched first was
+    # a real mis-posting risk, not just a cosmetic label issue).
+    fund_breakdown_json: Mapped[str] = mapped_column(Text, default="")
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

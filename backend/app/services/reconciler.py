@@ -95,6 +95,77 @@ def _categorize_bank_row(bank: BankRow, categorizer: Categorizer) -> OutputLine:
     )
 
 
+def _donation_lines(
+    d: StripeRow, bank: BankRow, categorizer: Categorizer
+) -> list[OutputLine]:
+    """One or more OutputLines for a single Stripe donation. Ordinarily
+    that's just one line - but a donor can split a single gift across
+    multiple funds in one checkout (Planning Center Giving), and posting
+    the *entire* net amount to whichever one fund happened to match first
+    was a real mis-posting risk (see issue #124), not just a cosmetic
+    label issue in the old Fund coverage check display. When
+    `d.fund_breakdown` has more than one designated fund, each fund's own
+    share of the net amount is posted to its own account instead."""
+    if len(d.fund_breakdown) <= 1:
+        cat = categorizer.categorize_fund(d.fund)
+        return [
+            OutputLine(
+                source="stripe",
+                transaction_date=d.created,
+                posted_date=bank.posting_date,
+                description=d.donor or d.description,
+                statement_description=cat.statement_description,
+                account_no=cat.account_no,
+                category=cat.category or "Income",
+                method="Stripe",
+                amount=round(d.net, 2),
+                reference=d.id,
+                bank_description=bank.description,
+                matched=True,
+                notes="" if cat.account_no else f"No fund rule for '{d.fund}'",
+            )
+        ]
+
+    # Split gift: prorate the net amount (gross minus Stripe's fee) across
+    # each designated fund by its share of the *gross* breakdown total, so
+    # the fee gets absorbed proportionally rather than dumped on one fund.
+    # The last line absorbs any leftover rounding cent(s) so the split
+    # always sums to exactly d.net, matching what actually hit the bank.
+    gross_total = sum(amount for _, amount in d.fund_breakdown)
+    lines: list[OutputLine] = []
+    running = 0.0
+    for i, (fund_name, gross_amount) in enumerate(d.fund_breakdown):
+        cat = categorizer.categorize_fund(fund_name)
+        if i == len(d.fund_breakdown) - 1:
+            net_amount = round(d.net - running, 2)
+        else:
+            share = (gross_amount / gross_total) if gross_total else 0.0
+            net_amount = round(d.net * share, 2)
+            running += net_amount
+        lines.append(
+            OutputLine(
+                source="stripe",
+                transaction_date=d.created,
+                posted_date=bank.posting_date,
+                description=d.donor or d.description,
+                statement_description=cat.statement_description,
+                account_no=cat.account_no,
+                category=cat.category or "Income",
+                method="Stripe",
+                amount=net_amount,
+                reference=d.id,
+                bank_description=bank.description,
+                matched=True,
+                notes=(
+                    f"Split gift ({i + 1} of {len(d.fund_breakdown)}): '{fund_name}'"
+                    if cat.account_no
+                    else f"No fund rule for '{fund_name}' (split gift {i + 1} of {len(d.fund_breakdown)})"
+                ),
+            )
+        )
+    return lines
+
+
 def _categorize_stripe_payout_row(
     bank: BankRow,
     payouts: list[StripeRow],
@@ -147,25 +218,8 @@ def _categorize_stripe_payout_row(
     lines: list[OutputLine] = []
     donation_total = 0.0
     for d in donations:
-        cat = categorizer.categorize_fund(d.fund)
         donation_total += d.net
-        lines.append(
-            OutputLine(
-                source="stripe",
-                transaction_date=d.created,
-                posted_date=bank.posting_date,
-                description=d.donor or d.description,
-                statement_description=cat.statement_description,
-                account_no=cat.account_no,
-                category=cat.category or "Income",
-                method="Stripe",
-                amount=round(d.net, 2),
-                reference=d.id,
-                bank_description=bank.description,
-                matched=True,
-                notes="" if cat.account_no else f"No fund rule for '{d.fund}'",
-            )
-        )
+        lines.extend(_donation_lines(d, bank, categorizer))
     delta = round(bank.amount - donation_total, 2)
     if abs(delta) >= 0.01:
         lines.append(

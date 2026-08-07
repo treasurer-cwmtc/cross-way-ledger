@@ -4,6 +4,7 @@ stripe_id, so it's safe to call more than once across test functions that
 share one un-reset DB - mirrors the real sync endpoint's own upsert
 semantics)."""
 
+import json
 from pathlib import Path
 
 from app.models import StripeTransaction
@@ -34,6 +35,7 @@ def seed_stripe_transactions_from_text(db, csv_text: str) -> None:
                 transfer_date=row.transfer_date,
                 fund=row.fund,
                 donor=row.donor,
+                fund_breakdown_json=json.dumps(row.fund_breakdown) if row.fund_breakdown else "",
             )
         )
     db.commit()

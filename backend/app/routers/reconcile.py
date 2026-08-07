@@ -313,9 +313,22 @@ def stripe_fund_check(db: Session = Depends(get_db)) -> StripeFundCheckOut:
     accounts = list(db.scalars(select(ChartOfAccount)).all())
     categorizer = Categorizer(rules, accounts)
 
-    funds = sorted({r.fund for r in stripe_rows if r.is_donation and r.fund})
+    # A donation split across multiple funds in one checkout lists each
+    # designated fund here individually (via fund_breakdown), not the
+    # single combined `fund` string - see issue #124, where a split gift's
+    # funds got garbled into one unreadable (and, worse, mis-postable)
+    # value instead of being recognized as separate funds.
+    funds: set[str] = set()
+    for r in stripe_rows:
+        if not r.is_donation:
+            continue
+        if r.fund_breakdown:
+            funds.update(name for name, _ in r.fund_breakdown)
+        elif r.fund:
+            funds.add(r.fund)
+
     items = []
-    for fund in funds:
+    for fund in sorted(funds):
         cat = categorizer.categorize_fund(fund)
         items.append(
             StripeFundCheckItem(
