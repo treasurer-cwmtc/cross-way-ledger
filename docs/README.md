@@ -11,7 +11,8 @@ Step-by-step guides for using the application — written for treasurers, bookke
 | Guide | Covers |
 | --- | --- |
 | **[Getting Started](guides/getting-started.md)** | Signing in, navigating the app, and the golden rule behind every number it shows |
-| **[Bank Reconciliation & Upload Wizard](guides/bank-reconciliation-upload-wizard.md)** *(deprecated — hidden from nav, kept for reference)* | The 4-step wizard that turns a bank statement + Stripe export into reconciled ledger entries; being replaced by the automated Stripe/Plaid syncs below plus a new Reconciliation page ([issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105)) |
+| **[Reconciliation](guides/reconciliation.md)** | The current 4-step guided flow: pick a date range, sync Stripe/Bank Transactions, then the same reconcile/validate logic as before |
+| **[Bank Reconciliation & Upload Wizard](guides/bank-reconciliation-upload-wizard.md)** *(deprecated — hidden from nav, kept for reference)* | The original 4-step wizard that turns a bank statement + Stripe export into reconciled ledger entries; replaced by Reconciliation above |
 | **[Stripe: Automated Transaction Sync](guides/stripe-sync.md)** | Syncing donations/payouts directly from Stripe's API instead of a manual CSV export |
 | **[Bank Transactions: Automated Chase Sync (Plaid)](guides/bank-transactions-plaid-sync.md)** | Connecting Chase via Plaid and syncing transactions automatically (currently Sandbox-only) |
 | **[Ledgers: Actual, Accrual, Budget, Restricted Net Assets](guides/ledgers.md)** | The four core ledgers — editing entries, splitting lines, attaching receipts |

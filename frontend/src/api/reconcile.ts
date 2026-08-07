@@ -62,6 +62,11 @@ export interface DuplicateCheckResult {
   count: number;
 }
 
+export interface SyncStatus {
+  bank_last_posted: string | null;
+  stripe_last_posted: string | null;
+}
+
 export const reconcileApi = {
   /** Wizard step 1: bank file only - Stripe-payout lines come back as
    * unmatched placeholders, merged in later via mergeStripe(). bankFileLink
@@ -118,6 +123,26 @@ export const reconcileApi = {
     fetch(`${BASE}/api/reconcile/${runId}/duplicate-check`, {
       headers: authHeaders(),
     }).then(j<DuplicateCheckResult>),
+
+  /** Reconciliation page step 1: the most recent transaction date already
+   * sitting in each staging table (ledger_plaid / ledger_stripe), to help
+   * pick where the date range should start. */
+  syncStatus: () =>
+    fetch(`${BASE}/api/reconcile/sync-status`, { headers: authHeaders() }).then(
+      j<SyncStatus>
+    ),
+
+  /** Reconciliation page step 1/2: builds a run from the already-synced
+   * ledger_plaid staging table for the chosen date range, instead of a
+   * manual bank-file upload - same downstream shape as bankOnly() above
+   * (Stripe-payout lines come back as unmatched placeholders, merged in
+   * via mergeStripe() exactly like the old CSV-upload path). Dates are
+   * plain YYYY-MM-DD strings (e.g. from an <input type="date">). */
+  fromBankSync: (startDate: string, endDate: string) =>
+    fetch(
+      `${BASE}/api/reconcile/from-bank-sync?start_date=${startDate}&end_date=${endDate}`,
+      { method: "POST", headers: authHeaders() }
+    ).then(j<ReconRun>),
 
   exportUrl: (runId: number) => `${BASE}/api/runs/${runId}/export.csv`,
 
