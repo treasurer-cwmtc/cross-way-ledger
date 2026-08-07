@@ -65,6 +65,10 @@ export interface DuplicateCheckResult {
 export interface SyncStatus {
   bank_last_posted: string | null;
   stripe_last_posted: string | null;
+  /** Latest posted_date already sitting in ledger_actual - i.e. where a
+   * prior reconciliation actually left off, distinct from the two staging
+   * dates above (which just reflect the most recent sync). */
+  actual_last_posted: string | null;
 }
 
 export const reconcileApi = {

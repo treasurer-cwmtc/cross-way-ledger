@@ -35,6 +35,39 @@ def test_sync_status_reports_latest_date_from_each_staging_table():
     assert body["stripe_last_posted"]
 
 
+def test_sync_status_reports_no_actual_last_posted_when_nothing_reconciled_yet():
+    _seed_bank()
+    h = auth_header()
+    r = client.get("/api/reconcile/sync-status", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["actual_last_posted"] is None
+
+
+def test_sync_status_reports_latest_actual_posted_date_distinct_from_staging_dates():
+    # A prior reconciliation already pushed one entry through to ledger_actual
+    # - actual_last_posted should reflect that (where a prior reconciliation
+    # left off), independent of whatever the staging tables' own latest
+    # dates happen to be.
+    with TestingSession() as db:
+        from datetime import date
+
+        from app.models import ReconciliationEntry
+
+        db.add(
+            ReconciliationEntry(
+                posted_date=date(2026, 6, 1),
+                description="Prior reconciliation",
+                dedup_key="test-actual-last-posted",
+                amount=10.0,
+            )
+        )
+        db.commit()
+    h = auth_header()
+    r = client.get("/api/reconcile/sync-status", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["actual_last_posted"] == "2026-06-01"
+
+
 def test_from_bank_sync_requires_valid_dates():
     h = auth_header()
     r = client.post(

@@ -164,10 +164,16 @@ class ReconRunOut(BaseModel):
 class SyncStatusOut(BaseModel):
     """Powers the new Reconciliation page's Step 1 date-range picker - the
     most recent date already present in each staging table, so the
-    treasurer can see where to start the range from without guessing."""
+    treasurer can see where to start the range from without guessing.
+    actual_last_posted is a different thing from the two staging dates
+    above - it's the latest posted_date already sitting in ledger_actual
+    (i.e. the last date actually reconciled and pushed through, not just
+    synced), so the treasurer knows exactly where a prior reconciliation
+    left off."""
 
     bank_last_posted: str | None = None
     stripe_last_posted: str | None = None
+    actual_last_posted: str | None = None
 
 
 class ReconRunDetail(ReconRunOut):
