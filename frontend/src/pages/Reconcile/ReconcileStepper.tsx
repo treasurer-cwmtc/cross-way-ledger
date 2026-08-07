@@ -1,16 +1,19 @@
 const STEPS = [
   { key: 1, label: "Date range" },
-  { key: 2, label: "Sync" },
-  { key: 3, label: "Reconcile" },
-  { key: 4, label: "Data validation" },
+  { key: 2, label: "Review" },
+  { key: 3, label: "Check Stripe funds" },
+  { key: 4, label: "Reconcile" },
+  { key: 5, label: "Data validation" },
 ] as const;
 
-/** Same 4-step progress header as pages/Upload/WizardStepper.tsx, just with
- * this page's own step labels (steps 3-4 reuse that page's actual Step3/
- * Step4 components, but this page's own steps 1-2 replace the file-upload
- * ones with a date range + sync step) - kept as its own copy rather than
- * making the shared one take a labels prop, so the (deprecated, kept only
- * as a manual fallback) Upload wizard's file stays untouched. */
+/** Same progress-header pattern as pages/Upload/WizardStepper.tsx, with
+ * this page's own step labels (steps 4-5 reuse that page's actual Step3/
+ * Step4 components unmodified; steps 1-3 replace the file-upload ones with
+ * date range + sync, bank-line review, and Stripe fund-coverage check -
+ * see issue #122, these were dropped when the page was first built and
+ * are restored here) - kept as its own copy rather than making the shared
+ * one take a labels prop, so the (deprecated, kept only as a manual
+ * fallback) Upload wizard's file stays untouched. */
 export default function ReconcileStepper(props: {
   step: number;
   maxStepReached: number;

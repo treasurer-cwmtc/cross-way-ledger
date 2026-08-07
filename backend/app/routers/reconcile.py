@@ -84,8 +84,20 @@ def sync_status(db: Session = Depends(get_db)) -> SyncStatusOut:
             return None
         return max(parsed, key=lambda pair: pair[0])[1]
 
+    # ledger_actual.posted_date is a real Date column (unlike the two above,
+    # which are still raw M/D/YYYY strings) - a plain MAX() works directly,
+    # same pattern as dashboard.py's last_posted_date.
+    actual_last_posted = db.scalar(
+        select(ReconciliationEntry.posted_date)
+        .where(ReconciliationEntry.posted_date.is_not(None))
+        .order_by(ReconciliationEntry.posted_date.desc())
+        .limit(1)
+    )
+
     return SyncStatusOut(
-        bank_last_posted=_latest(bank_dates), stripe_last_posted=_latest(stripe_dates)
+        bank_last_posted=_latest(bank_dates),
+        stripe_last_posted=_latest(stripe_dates),
+        actual_last_posted=actual_last_posted.isoformat() if actual_last_posted else None,
     )
 
 
