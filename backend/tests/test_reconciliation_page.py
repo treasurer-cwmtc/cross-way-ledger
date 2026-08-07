@@ -35,27 +35,25 @@ def test_sync_status_reports_latest_date_from_each_staging_table():
     assert body["stripe_last_posted"]
 
 
-def test_sync_status_reports_no_actual_last_posted_when_nothing_reconciled_yet():
-    _seed_bank()
-    h = auth_header()
-    r = client.get("/api/reconcile/sync-status", headers=h)
-    assert r.status_code == 200, r.text
-    assert r.json()["actual_last_posted"] is None
-
-
 def test_sync_status_reports_latest_actual_posted_date_distinct_from_staging_dates():
-    # A prior reconciliation already pushed one entry through to ledger_actual
-    # - actual_last_posted should reflect that (where a prior reconciliation
-    # left off), independent of whatever the staging tables' own latest
-    # dates happen to be.
+    # This test suite shares one DB across the whole pytest session (see
+    # test_auth.py's module-level drop_all/create_all) - other test files
+    # collected earlier may have already pushed entries into ledger_actual,
+    # so this can't assert against an empty table or a fixed absolute date.
+    # Instead: insert a row dated far enough in the future to guarantee it's
+    # the new max, and confirm the endpoint picks it up - proving
+    # actual_last_posted reflects ledger_actual specifically (where a prior
+    # reconciliation left off), independent of whatever the staging tables'
+    # own latest dates happen to be.
+    from datetime import date
+
+    from app.models import ReconciliationEntry
+
+    far_future = date(2099, 1, 1)
     with TestingSession() as db:
-        from datetime import date
-
-        from app.models import ReconciliationEntry
-
         db.add(
             ReconciliationEntry(
-                posted_date=date(2026, 6, 1),
+                posted_date=far_future,
                 description="Prior reconciliation",
                 dedup_key="test-actual-last-posted",
                 amount=10.0,
@@ -65,7 +63,7 @@ def test_sync_status_reports_latest_actual_posted_date_distinct_from_staging_dat
     h = auth_header()
     r = client.get("/api/reconcile/sync-status", headers=h)
     assert r.status_code == 200, r.text
-    assert r.json()["actual_last_posted"] == "2026-06-01"
+    assert r.json()["actual_last_posted"] == far_future.isoformat()
 
 
 def test_from_bank_sync_requires_valid_dates():
