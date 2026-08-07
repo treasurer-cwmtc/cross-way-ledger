@@ -33,6 +33,12 @@ Same interaction pattern as every other table in the app and the Stripe page spe
 
 Plaid's own sign convention is the opposite of every other page in this app (Plaid: positive = money leaving the account). The sync normalizes this automatically on the way in, so a deposit always shows as positive here, exactly like every other ledger and the Stripe page — you never need to think about Plaid's convention.
 
+## How far back a connection reaches
+
+Unlike Stripe (where "days back" is a value our own code controls on every sync), Plaid decides how much transaction history to hand over the moment an account is first connected, based on how much history was *requested* during that Connect bank flow - and that depth is locked in for the life of that connection, not something a later Sync now can widen.
+
+The app requests Plaid's maximum (**730 days**, roughly 24 months) every time someone clicks Connect bank, so a fresh connection should reach back about two years. If a connection was made before this was in place, it may only go back to Plaid's much shorter default (**90 days**) instead - if your data doesn't reach back as far as expected, that's almost certainly why. The fix is to **Disconnect** that connection and **Connect bank** again - the new Link session will request the full 730 days from the start. Whatever real Chase history falls outside even a 730-day window still has to come from a manual CSV upload through the [Upload Wizard](bank-reconciliation-upload-wizard.md), the same as before Plaid existed - there's no way to widen a Plaid connection's window beyond the original request, even after reconnecting.
+
 ## What's next
 
 Wiring this staging table into the Upload Wizard, so it becomes a true reconciliation source alongside Stripe instead of a separate page you browse independently, is deliberately deferred until the Connect/Sync flow above has proven itself — see [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105).
