@@ -628,7 +628,17 @@ table.resizable-cols td {
 }
 
 .table-wrap {
-  max-height: 520px;
+  /* Was a flat 520px regardless of window size, which left a large empty
+     gap below the table on any screen taller than a laptop - scale with
+     the viewport instead so it actually uses the room available. 340px is
+     a rough allowance for everything that typically sits above a table
+     (page title/subtitle, toolbar row(s), card padding) plus the page's
+     own bottom padding; not exact for every page (some have an extra
+     strip/card above the table), just close enough that there's rarely
+     leftover dead space, and never so tight it overflows on a short
+     window thanks to the min-height floor below. */
+  max-height: calc(100vh - 340px);
+  min-height: 320px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
