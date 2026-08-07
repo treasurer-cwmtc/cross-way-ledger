@@ -174,7 +174,12 @@ function FundRow(props: {
       </td>
       <td>
         {props.item.has_rule ? (
-          props.item.account_no
+          <>
+            {props.item.account_no}
+            {props.item.account_name && (
+              <span style={{ color: "var(--muted)" }}> — {props.item.account_name}</span>
+            )}
+          </>
         ) : (
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <AccountPicker value={accountNo} accounts={props.accounts} onChange={setAccountNo} />

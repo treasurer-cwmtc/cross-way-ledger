@@ -50,6 +50,7 @@ export interface StripeFundCheckItem {
   fund: string;
   has_rule: boolean;
   account_no: string;
+  account_name: string;
 }
 
 export interface StripeFundCheckResult {

@@ -184,6 +184,10 @@ class StripeFundCheckItem(BaseModel):
     fund: str
     has_rule: bool
     account_no: str
+    # The account's own statement_description (same "name" AccountPicker
+    # shows everywhere else, e.g. "I101728 - Restricted Gifts") - blank
+    # when has_rule is False, since there's no account to name yet.
+    account_name: str = ""
 
 
 class StripeFundCheckOut(BaseModel):

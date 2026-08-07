@@ -24,7 +24,7 @@ function fmtRelative(iso: string): string {
 }
 
 type HomeTab =
-  | "upload"
+  | "reconcile-wizard"
   | "reconciliation"
   | "accrual"
   | "reimbursements"
@@ -32,7 +32,9 @@ type HomeTab =
   | "income-statement";
 
 const SHORTCUTS: { tab: HomeTab; label: string; icon: (p: { size?: number }) => JSX.Element }[] = [
-  { tab: "upload", label: "Upload bank file", icon: (p) => <UploadIcon width={p.size} height={p.size} /> },
+  // Upload is deprecated/hidden from nav (see issue #105) - this shortcut
+  // points at its replacement instead.
+  { tab: "reconcile-wizard", label: "Reconciliation", icon: (p) => <UploadIcon width={p.size} height={p.size} /> },
   { tab: "reconciliation", label: "Actual ledger", icon: (p) => <TableIcon width={p.size} height={p.size} /> },
   { tab: "accrual", label: "Accrual ledger", icon: (p) => <PlusCircleIcon width={p.size} height={p.size} /> },
   { tab: "reimbursements", label: "Reimbursements", icon: (p) => <ReceiptIcon width={p.size} height={p.size} /> },

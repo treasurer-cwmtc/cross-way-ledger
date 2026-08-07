@@ -4,6 +4,7 @@ line editing, merge-stripe, recategorize, stripe-fund-check, duplicate-check.
 Run from the backend/ directory:  python -m pytest
 """
 
+import json
 from pathlib import Path
 
 from test_auth import TestingSession, auth_header, client  # reuse shared TestClient/app setup
@@ -212,6 +213,57 @@ def test_stripe_fund_check_lists_split_fund_gift_as_separate_funds():
     made_up = next(item for item in body["funds"] if item["fund"] == "Made Up Split Fund")
     assert made_up["has_rule"] is False
     assert body["all_covered"] is False
+
+
+def test_stripe_fund_check_self_heals_legacy_garbled_split_fund_rows():
+    # Simulates a row synced *before* issue #124's fix - garbled combined
+    # `fund` string, no fund_breakdown_json ever captured (since that
+    # column/logic didn't exist yet). A fresh sync wouldn't touch it
+    # (outside any lookback window), so stripe-fund-check itself has to
+    # recover what it can from the still-stored description + amount.
+    from app.models import StripeTransaction
+
+    with TestingSession() as db:
+        db.add(
+            StripeTransaction(
+                stripe_id="txn_legacy_garbled",
+                type="payment",
+                source="py_legacy_garbled",
+                amount=1050.27,
+                fee=0.0,
+                net=1050.27,
+                created="6/1/2026",
+                description=(
+                    "Donation #1 - Jane Doe - Pledges ($1,000.27) Sunday Offertory"
+                ),
+                transfer="",
+                transfer_date="",
+                fund="Pledges ($1,000.27) Sunday Offertory",  # the old garbled value
+                donor="Jane Doe",
+                fund_breakdown_json="",  # never captured pre-fix
+            )
+        )
+        db.commit()
+
+    h = auth_header()
+    r = client.post("/api/reconcile/stripe-fund-check", headers=h)
+    assert r.status_code == 200, r.text
+    fund_names = {item["fund"] for item in r.json()["funds"]}
+    assert "Pledges" in fund_names
+    assert "Sunday Offertory" in fund_names
+    assert not any("($1,000.27)" in name for name in fund_names)
+
+    # And the underlying row is actually fixed, not just fixed-looking in
+    # this one response - the garbled fund string and empty breakdown
+    # don't come back on a second call.
+    with TestingSession() as db:
+        stored = db.get(StripeTransaction, "txn_legacy_garbled")
+        assert stored.fund == "Pledges, Sunday Offertory"
+        assert stored.fund_breakdown_json
+        assert json.loads(stored.fund_breakdown_json) == [
+            ["Pledges", 1000.27],
+            ["Sunday Offertory", 50.0],
+        ]
 
 
 def test_duplicate_check_matches_what_import_would_skip():

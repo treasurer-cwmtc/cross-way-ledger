@@ -162,6 +162,49 @@ def parse_fund_breakdown(context_json: str) -> list[tuple[str, float]]:
     return out
 
 
+# Matches each explicit "Fund Name ($amount)" segment inside an
+# already-garbled multi-fund tail (see extract_fund_donor above) - used
+# only by parse_fund_breakdown_from_description() below, the fallback for
+# rows synced *before* issue #124's fix, which never captured PCO's
+# context_json metadata and so can't be recovered any other way.
+_FUND_AMOUNT_RE = re.compile(r"(?P<name>[^($]+?)\s*\(\$(?P<amt>[\d,]+\.\d{2})\)")
+
+
+def parse_fund_breakdown_from_description(description: str, gross_amount: float) -> list[tuple[str, float]]:
+    """Reconstructs a split-fund breakdown purely from the stored
+    description text and the transaction's own gross amount - a fallback
+    for rows synced before issue #124's fix, when no context_json metadata
+    was ever captured and re-syncing wouldn't touch them (they're outside
+    any lookback window). PCO's donation descriptions for a split gift list
+    every fund but the last with its own "($amount)", then a final bare
+    fund name with no amount - its share is whatever's left of the gross
+    total. Returns [] when the description doesn't show this pattern (a
+    single-fund donation, or text that doesn't parse cleanly - safer to
+    leave those alone than guess)."""
+    m = _DESC_RE.match(description or "")
+    if not m:
+        return []
+    tail = m.group("fund")
+    explicit = list(_FUND_AMOUNT_RE.finditer(tail))
+    if not explicit:
+        return []
+    breakdown: list[tuple[str, float]] = []
+    named_total = 0.0
+    for em in explicit:
+        name = em.group("name").strip()
+        if not name:
+            continue
+        amt = parse_amount(em.group("amt"))
+        breakdown.append((name, amt))
+        named_total += amt
+    remainder_name = tail[explicit[-1].end():].strip(" -,")
+    if remainder_name:
+        remainder_amt = round(gross_amount - named_total, 2)
+        if remainder_amt > 0:
+            breakdown.append((remainder_name, remainder_amt))
+    return breakdown if len(breakdown) > 1 else []
+
+
 def extract_fund_donor(description: str, context_json: str, person_name: str):
     fund = ""
     donor = ""
