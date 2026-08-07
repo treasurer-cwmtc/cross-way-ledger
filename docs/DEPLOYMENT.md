@@ -228,6 +228,19 @@ gcloud secrets versions access latest --secret=ledger-db-url-prod
 > gcloud secrets create my-secret --data-file=$path
 > ```
 
+> **Generating a random secret in PowerShell 5.1**: `[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)` doesn't exist in this Windows PowerShell's older .NET Framework - it fails with `MethodNotFound`, but critically **`gcloud secrets create`'s own error output can scroll past unnoticed**, leaving `$bytes` silently all-zero and uploading a predictable, non-random "secret" that looks successful. This actually happened in production for both `ledger-stripe-sync-secret` and `ledger-plaid-sync-secret` before being caught and rotated. Use the PS 5.1-compatible API instead:
+> ```powershell
+> $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+> $bytes = New-Object byte[] 32
+> $rng.GetBytes($bytes)
+> $syncSecret = [Convert]::ToBase64String($bytes)
+> ```
+> After creating or rotating any secret this way, sanity-check it's actually random *without ever printing the value itself* - compare its SHA-256 hash to the known all-zero-32-bytes hash (`51643eac...`) rather than eyeballing it:
+> ```bash
+> gcloud secrets versions access latest --secret=my-secret | sha256sum
+> ```
+> Also worth knowing: **`gcloud scheduler jobs describe` and `create` both print header values in full plaintext** - there is no built-in masking, despite how it might look at a glance (a would-be-masked-looking `X-Sync-Secret: AAAA...=` in old output was actually the real broken all-zero secret, not gcloud redacting it). Never rely on `describe`'s default output to "verify" a secret-bearing scheduler job - discard its stdout (`*> $null` in PowerShell) and confirm success with a `--format` that only selects non-secret fields instead, e.g. `--format="value(name,state,schedule,httpTarget.uri)"`.
+
 ## 8. Backups & disaster recovery
 
 Both Cloud SQL instances have **automated daily backups and point-in-time recovery enabled**, with 7-day retention:
