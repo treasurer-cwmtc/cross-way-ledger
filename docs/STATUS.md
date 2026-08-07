@@ -3,8 +3,8 @@
 _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/cross-way-ledger
-**Last updated:** 2026-07-26 (table rename to standardized names, IAM database
-access, automated backups, and a full documentation overhaul)
+**Last updated:** 2026-08-06 (automated Stripe sync + redesign, Reimbursements
+module shipped, Plaid Sandbox bank sync, and a documentation refresh to match)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack), **[ARCHITECTURE.md](ARCHITECTURE.md)**
@@ -34,6 +34,62 @@ a description of what's running today. For the current, accurate picture:
 
 Recent milestones, most recent first:
 
+- ✅ **Plaid Sandbox bank sync** - new **Bank Transactions** page. "Connect
+  bank" (Plaid Link) + "Sync now" (cursor-based `transactions/sync`) pull
+  Chase-shaped transaction data into a new `ledger_plaid`/`ledger_plaid_items`
+  staging table, mirroring the Stripe sync pattern below column-for-column
+  with `BankRow` (see [ARCHITECTURE.md](ARCHITECTURE.md#4d-automated-bankpayment-sync-staging-tables-stripe-plaid)).
+  Verified end-to-end live against real Plaid Sandbox on dev - connected a
+  fake test bank, synced 49 fake transactions, correct amount-sign
+  normalization (Plaid's convention is inverted from this app's) and date
+  formatting. **Sandbox only** - see
+  [issue #103](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/103)
+  for the production pricing/decision path (Plaid's Trial plan, launched
+  April 2026, may cover this app's 1-Item usage for free - worth checking
+  before requesting a paid quote). Docs:
+  [guides/bank-transactions-plaid-sync.md](guides/bank-transactions-plaid-sync.md).
+  **Gotcha worth remembering**: Cloud Run only re-reads a secret-backed env
+  var at container *startup*, not live, even when pointed at `:latest` - a
+  secret rotation needs a forced new revision (`gcloud run services
+  update` with the same `--update-secrets` flag) to actually take effect.
+  See [DEPLOYMENT.md § 7](DEPLOYMENT.md#7-secrets).
+- ✅ **Automated Stripe sync** - "Sync now" (and a future scheduled job, see
+  [issue #100](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/100))
+  pulls donations/payouts directly from Stripe's API into a new
+  `ledger_stripe` staging table, replacing the manual CSV export for
+  everyday use. Verified byte-identical to the manual CSV path via a
+  dedicated parity test - a real date-format bug was caught and fixed by
+  that test before shipping. Stripe page redesigned: sortable/filterable
+  table, days-back control, detail modal, live-ticking "last refreshed."
+  Docs: [guides/stripe-sync.md](guides/stripe-sync.md). Historical
+  backfill (2025+) is unblocked but not yet run - see
+  [issue #101](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/101).
+  Both Stripe and Plaid staging tables were deliberately shaped to match
+  the Upload Wizard's existing manual-CSV row types specifically so wiring
+  them in as a reconciliation source (replacing the manual upload step
+  entirely) is a small follow-up, not a new parallel path - tracked as
+  [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105),
+  not yet started.
+- ✅ **Reimbursements module** - a full second authentication/authorization
+  layer (email + one-time code, gated against an imported Planning Center
+  People export) for a public submitter portal, separate from the app's
+  own user/permission system. Submitters pick from Chart-of-Accounts lines
+  they've been pre-authorized against, itemize a request with receipts
+  (uploaded to Google Drive via the runtime service account, no stored
+  key), and the treasurer reviews/approves/pays from inside the app.
+  Status lifecycle Pending → Approved → Paid (or Rejected), with each
+  transition creating/removing the matching Accrual entry automatically.
+  Shipped and verified live on dev; **not yet promoted to prod** - see
+  [issue #62](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/62).
+- ✅ **Accrual: reconcile-against-Accrual** - the mirror image of splitting
+  an Actual line: one bank line that actually settles several Accrual
+  entries at once (e.g. a lump-sum reimbursement) can now be matched
+  against multiple Accrual entries in one guided flow, replacing the
+  original Actual line with one row per matched entry while preserving the
+  audit trail (nothing hard-deleted, same as split/undo-split). Also
+  shipped this stretch: quick-add/edit/split/undo-split for Accrual,
+  Restricted Net Assets, and Budget, and inline test-data entry points for
+  Chart of Accounts/Rules.
 - ✅ **Full documentation overhaul** - user-facing runbooks added under
   `docs/guides/` for every page and wizard, `docs/README.md` added as a
   navigation hub, `DEPLOYMENT.md` rewritten for GCP, root `README.md`
@@ -242,32 +298,46 @@ started:
 
 ## Next steps (GitHub issues)
 
-> The DigitalOcean droplet plan below (creating droplets, `provision-vps.sh`,
-> a staging environment) was **abandoned** in favor of the GCP Cloud Run +
-> Cloud SQL migration - see "Current state" at the top of this file. Both
-> items are left here for historical continuity with the issue tracker, not
-> as live todos.
+The list below is the real, current set of open issues as of this update -
+see [the tracker itself](https://github.com/treasurer-cwmtc/cross-way-ledger/issues)
+for the latest.
 
+> The DigitalOcean droplet plan mentioned further down this file (creating
+> droplets, `provision-vps.sh`, a staging environment) was **abandoned** in
+> favor of the GCP Cloud Run + Cloud SQL migration - see "Current state" at
+> the top of this file. That section is left for historical continuity with
+> the issue tracker, not as a live todo.
+
+- **[#105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105)
+  Wire `ledger_stripe`/`ledger_plaid` into the Upload Wizard** as a
+  reconciliation source, replacing the manual CSV upload step entirely -
+  the natural next step once both staging-table syncs (above) were
+  verified working. Not started.
+- **[#103](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/103)
+  Plaid production decision** - Sandbox build fully verified; blocked on
+  checking Plaid Trial-plan eligibility / getting a production pricing
+  quote, per the treasurer's <$10/month condition.
+- **[#100](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/100)
+  Scheduled Stripe sync** (Cloud Scheduler, prod-only) - not started; "Sync
+  now" is fully manual today.
+- **[#101](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/101)
+  Backfill historical Stripe data (2025+)** - unblocked (the days-back
+  input shipped), not yet actually run.
+- **[#87](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/87)
+  Automated regression testing** (backend pytest expansion + Playwright
+  E2E) - explicitly deferred earlier, still open.
+- **[#62](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/62)
+  Promote Reimbursements to production** - shipped and verified on dev
+  only; prod Cloud Run doesn't yet have the SMTP/Drive env vars wired in.
+- **[#6](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/6)
+  Confirm Net vs gross+fee handling**, **[#5](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/5)
+  Automated Stripe & Chase pulls** (substantially done - see the milestone
+  above and #105 for what's left), **[#4](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/4)
+  Direct export to the accounting system**, **[#2](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/2)
+  Saved run history UI** — unchanged, still open.
 - ~~**Actually create the DigitalOcean droplets and deploy**~~ — superseded;
   GCP dev and prod are live instead (see [DEPLOYMENT.md](DEPLOYMENT.md)).
-- ~~**Add a smoke-test job to `deploy.yml`** between `deploy-staging` and the
-  prod approval gate~~ — the actual pipeline that shipped is
-  `build → deploy-dev → deploy-prod` (manual approval gate), with no
-  separate staging environment; a smoke-test job here would be genuinely
-  useful to add to today's pipeline, but framed against `deploy-dev`, not
-  the retired `deploy-staging`.
-- **#7 CI/CD auto-deploy** — done, but via GCP Cloud Run, not a VPS. Close
-  this issue.
-- **Auditor-specific screens** (phase 4 of the finance-UI push) — a
-  read-only, audit-focused view.
-- **#2 Saved run history UI**, **#3 Roster-based donor normalization**,
-  **#4 Direct export to the accounting system**, **#5 Automated Stripe &
-  Chase pulls**, **#6 Confirm Net vs gross+fee handling** — unchanged from
-  before, still open.
-- **Chart of Accounts CSV bulk import**, **Reconciliation follow-ups**,
-  **Wire up Frequency / Audit Validation**, **Add missing Stripe fund
-  rules** — unchanged from before, still open (see prior revisions of this
-  file in git history for the full detail on each).
+- ~~**#7 CI/CD auto-deploy**~~ — done, via GCP Cloud Run. Closed.
 
 ---
 

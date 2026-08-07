@@ -119,6 +119,83 @@ Named bank account lookup (e.g. "Chase Operating").
 
 ---
 
+## `ledger_stripe`
+
+Staged Stripe balance-transaction data, pulled automatically via the Stripe
+API (the "Sync now" button on the [Stripe page](guides/stripe-sync.md), or a
+future nightly scheduled job - see [issue #100](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/100)).
+The automated counterpart to a manually-uploaded Stripe CSV - shaped to
+match that CSV's own parsed row (`StripeRow` in
+`backend/app/services/parsers.py`) column-for-column, not Stripe's raw API
+field names, so it can feed the same Upload Wizard reconciliation step a
+manual CSV always has (see [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105)).
+A pure staging table - nothing here touches a real ledger by itself.
+
+| Column | Type | Constraints | Description |
+| --- | --- | --- | --- |
+| `stripe_id` | string(60) | PK | Stripe's own transaction id - re-syncing the same transaction upserts in place rather than duplicating. |
+| `type` | string(20) | default `""` | `payout`, `payment`, `charge`, etc. |
+| `source` | string(60) | default `""` | The underlying Stripe object id (`py_...`/`ch_...`/`po_...`). |
+| `amount` | float | default `0.0` | |
+| `fee` | float | default `0.0` | Stripe's processing fee. |
+| `net` | float | default `0.0` | `amount` minus `fee` - what actually settles. |
+| `created` | string(20) | default `""` | Plain date string (`M/D/YYYY`), matching the manual CSV's format - not a real `Date` column, same convention as `upload_lines`. |
+| `description` | string(300) | default `""` | Includes the donor/fund text the reconciler parses out (e.g. `"Donation #999 - Jane Doe - Pledges ($100.30)"`). |
+| `transfer` | string(60) | default `""` | The payout id a donation was swept into - groups individual donations under their payout. |
+| `transfer_date` | string(20) | default `""` | |
+| `fund` | string(120) | default `""` | Parsed from `description`. |
+| `donor` | string(160) | default `""` | Parsed from `description`. |
+| `synced_at` | datetime (tz-aware) | server default: now, updates on write | When this row was last pulled from Stripe. |
+
+---
+
+## `ledger_plaid_items`
+
+One connected bank login ("Item," in Plaid's terminology) - created once
+when someone completes the Plaid Link flow on the
+[Bank Transactions page](guides/bank-transactions-plaid-sync.md). Holds the
+long-lived credential every subsequent sync needs, and the cursor that lets
+`transactions/sync` fetch only what changed since last time instead of
+re-scanning everything.
+
+| Column | Type | Constraints | Description |
+| --- | --- | --- | --- |
+| `id` | integer | PK, auto-increment | |
+| `item_id` | string(60) | UK, indexed | Plaid's own identifier for this connection. |
+| `access_token` | string(200) | NOT NULL | The real, long-lived credential that authorizes every sync - per-connection user data, not a static app secret, so it lives here (protected the same way the rest of the database is - Cloud SQL IAM auth, encryption at rest, backups) rather than in Secret Manager. |
+| `institution_name` | string(120) | default `""` | e.g. "Chase" - shown in the UI's connected-accounts list. |
+| `cursor` | text | nullable | Plaid's resume point for `transactions/sync` - `NULL` until the first sync. |
+| `created_at` | datetime (tz-aware) | server default: now | |
+
+---
+
+## `ledger_plaid`
+
+Staged Chase bank transaction data, pulled automatically via the Plaid API
+(the "Sync now" button on the [Bank Transactions page](guides/bank-transactions-plaid-sync.md)).
+Deliberately shaped to match a manually-exported Chase CSV's own columns
+(`BankRow` in `backend/app/services/parsers.py` -
+`details`/`posting_date`/`description`/`amount`/`type`) rather than Plaid's
+own field names, for the same reason as `ledger_stripe` above. `amount` is
+normalized to this app's own convention (positive = deposit) even though
+Plaid's own sign convention is the opposite.
+
+| Column | Type | Constraints | Description |
+| --- | --- | --- | --- |
+| `plaid_transaction_id` | string(60) | PK | Plaid's own transaction id - repeated syncs upsert cleanly. |
+| `item_id` | string(60) | FK -> `ledger_plaid_items.item_id`, indexed | Which connection this transaction came from. |
+| `account_id` | string(60) | default `""` | Which linked account under that connection (a Plaid Item can cover multiple accounts). |
+| `details` | string(20) | default `""` | `DEBIT` or `CREDIT` - derived from `amount`'s sign after normalization, since Plaid doesn't expose Chase's own internal type codes. |
+| `posting_date` | string(20) | default `""` | Plain date string (`M/D/YYYY`), matching the manual CSV's format - not a real `Date` column. |
+| `description` | string(300) | default `""` | |
+| `amount` | float | default `0.0` | Positive = deposit (normalized on ingest - see above). |
+| `type` | string(60) | default `""` | Plaid's best-effort spending category (e.g. `FOOD_AND_DRINK`) - not a byte-for-byte match to what Chase's own CSV export would say here, just the closest equivalent Plaid's categorization gives. |
+| `pending` | boolean | default `false` | |
+| `removed` | boolean | default `false` | Set (not deleted) if Plaid later retracts a transaction it previously reported - e.g. a pending charge that never posted. Preserves history rather than silently erasing it. |
+| `synced_at` | datetime (tz-aware) | server default: now, updates on write | |
+
+---
+
 ## `upload_runs`
 
 One Upload wizard run - the *ephemeral preview*, not the persistent ledger.

@@ -196,6 +196,22 @@ All sensitive configuration lives in **Secret Manager**, never in the repository
 | `ledger-secret-key-dev` / `-prod` | JWT signing key |
 | `ledger-admin-password-dev` / `-prod` | Seed admin account password |
 | `ledger-smtp-password` | App Password for the `noreply@crosswaymtc.org` mailbox that sends Reimbursements emails (OTP codes, notifications) - **one shared secret**, not per-environment, since dev and prod send through the same real mailbox |
+| `ledger-reporting-password-prod` | Password for the `ledger_reporting` read-only Postgres role external BI tools (Looker Studio, Sheets) connect with |
+| `ledger-stripe-secret-key` | Stripe's secret (restricted) API key for the automated sync - **one shared secret**, not per-environment; both dev and prod sync against the same real Stripe account |
+| `ledger-plaid-client-id-dev` / `ledger-plaid-secret-dev` | Plaid API credentials for the automated Chase sync - **dev only today**. Both point at Plaid's **Sandbox** environment (`PLAID_ENV=sandbox`, the app's default) - no production counterpart exists yet, pending the pricing/production-access decision in [issue #103](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/103). When production credentials are added later, mirror this as `ledger-plaid-secret-prod` (same `client_id` works across environments, only the `secret` differs by environment) with `PLAID_ENV=production` set only on the prod backend. |
+
+> **Cloud Run only re-reads a secret injected as an environment variable at
+> container *startup*, not live** - unlike secret *volumes*, pointing
+> `--update-secrets` at `:latest` does **not** make a running instance pick
+> up a new secret version on its own. After rotating any secret above,
+> force a new revision so it actually takes effect:
+> ```bash
+> gcloud run services update ledger-backend-dev \
+>   --region us-south1 --project cross-way-ledger \
+>   --update-secrets="PLAID_CLIENT_ID=ledger-plaid-client-id-dev:latest,PLAID_SECRET=ledger-plaid-secret-dev:latest"
+> ```
+> (Re-running the exact `--update-secrets` command that's already in place
+> is enough to force the restart - the flag doesn't need to change.)
 
 To read a secret:
 

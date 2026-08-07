@@ -12,6 +12,8 @@ Step-by-step guides for using the application — written for treasurers, bookke
 | --- | --- |
 | **[Getting Started](guides/getting-started.md)** | Signing in, navigating the app, and the golden rule behind every number it shows |
 | **[Bank Reconciliation & Upload Wizard](guides/bank-reconciliation-upload-wizard.md)** | The 4-step wizard that turns a bank statement + Stripe export into reconciled ledger entries |
+| **[Stripe: Automated Transaction Sync](guides/stripe-sync.md)** | Syncing donations/payouts directly from Stripe's API instead of a manual CSV export |
+| **[Bank Transactions: Automated Chase Sync (Plaid)](guides/bank-transactions-plaid-sync.md)** | Connecting Chase via Plaid and syncing transactions automatically (currently Sandbox-only) |
 | **[Ledgers: Actual, Accrual, Budget, Restricted Net Assets](guides/ledgers.md)** | The four core ledgers — editing entries, splitting lines, attaching receipts |
 | **[Reporting: General Ledger & Income Statement](guides/reporting.md)** | The combined ledger view, the Plan-vs-Actual report, and exporting to Excel |
 | **[Chart of Accounts & Rules](guides/chart-of-accounts-and-rules.md)** | The 3-level account hierarchy and automatic categorization rules |
