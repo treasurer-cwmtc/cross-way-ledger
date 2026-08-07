@@ -161,6 +161,15 @@ class ReconRunOut(BaseModel):
     bank_totals_by_day: dict[str, float] = {}
 
 
+class SyncStatusOut(BaseModel):
+    """Powers the new Reconciliation page's Step 1 date-range picker - the
+    most recent date already present in each staging table, so the
+    treasurer can see where to start the range from without guessing."""
+
+    bank_last_posted: str | None = None
+    stripe_last_posted: str | None = None
+
+
 class ReconRunDetail(ReconRunOut):
     lines: list[ReconLineOut] = []
 

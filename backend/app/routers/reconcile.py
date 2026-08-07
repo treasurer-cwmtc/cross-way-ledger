@@ -11,6 +11,7 @@ from ..deps import require_permission
 from ..models import (
     CategoryRule,
     ChartOfAccount,
+    PlaidTransaction,
     ReconciliationEntry,
     ReconLine,
     ReconRun,
@@ -24,10 +25,12 @@ from ..schemas import (
     ReconRunOut,
     StripeFundCheckItem,
     StripeFundCheckOut,
+    SyncStatusOut,
 )
 from ..services.categorizer import Categorizer
 from ..services.ledger import build_dedup_key, parse_date
 from ..services.parsers import BankRow, parse_bank_csv
+from ..services.plaid_client import to_bank_row
 from ..services.reconciler import categorize_bank_only, merge_stripe
 from ..services.stripe_sync import to_stripe_row
 
@@ -56,6 +59,88 @@ async def _read_csv(file: UploadFile) -> str:
         return raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         return raw.decode("latin-1")
+
+
+@router.get("/reconcile/sync-status", response_model=SyncStatusOut)
+def sync_status(db: Session = Depends(get_db)) -> SyncStatusOut:
+    """The most recent transaction date already sitting in each staging
+    table (not when a sync last *ran* - see /api/plaid/transactions and
+    /api/stripe/transactions for that) - powers the new Reconciliation
+    page's date-range picker. Dates are plain M/D/YYYY strings (matching
+    the manual-CSV convention everywhere else in this schema), so max() at
+    the SQL level would sort them wrong - fetched and compared with
+    parse_date() in Python instead. Cheap: only the date column, not full
+    rows."""
+    bank_dates = [
+        d for (d,) in db.execute(
+            select(PlaidTransaction.posting_date).where(PlaidTransaction.removed.is_(False))
+        ).all()
+    ]
+    stripe_dates = [d for (d,) in db.execute(select(StripeTransaction.created)).all()]
+
+    def _latest(raw_dates: list[str]) -> str | None:
+        parsed = [(parse_date(d), d) for d in raw_dates if parse_date(d)]
+        if not parsed:
+            return None
+        return max(parsed, key=lambda pair: pair[0])[1]
+
+    return SyncStatusOut(
+        bank_last_posted=_latest(bank_dates), stripe_last_posted=_latest(stripe_dates)
+    )
+
+
+@router.post("/reconcile/from-bank-sync", response_model=ReconRunDetail)
+def start_from_bank_sync(
+    start_date: str, end_date: str, db: Session = Depends(get_db)
+) -> ReconRun:
+    """The Reconciliation page's Step 1, replacing a manual bank-file
+    upload with the already-synced ledger_plaid staging table - same
+    downstream shape as run_reconciliation() below (categorize_bank_only(),
+    a fresh ReconRun), just a different source for the BankRow list.
+    start_date/end_date are plain YYYY-MM-DD strings from the frontend's
+    date picker."""
+    start = parse_date(start_date)
+    end = parse_date(end_date)
+    if start is None or end is None:
+        raise HTTPException(400, "start_date/end_date must be valid dates.")
+
+    staged = list(
+        db.scalars(
+            select(PlaidTransaction).where(PlaidTransaction.removed.is_(False))
+        ).all()
+    )
+    bank_rows: list[BankRow] = []
+    for t in staged:
+        d = parse_date(t.posting_date)
+        if d is not None and start <= d <= end:
+            bank_rows.append(to_bank_row(t))
+
+    if not bank_rows:
+        raise HTTPException(
+            400,
+            "No synced bank transactions in that date range - use Sync now "
+            "on the Bank Transactions page first, or widen the range.",
+        )
+
+    rules = list(db.scalars(select(CategoryRule)).all())
+    accounts = list(db.scalars(select(ChartOfAccount)).all())
+    categorizer = Categorizer(rules, accounts)
+
+    raw_income = round(sum(b.amount for b in bank_rows if b.amount > 0), 2)
+    raw_expense = round(sum(b.amount for b in bank_rows if b.amount < 0), 2)
+    result = categorize_bank_only(bank_rows, categorizer)
+
+    run = ReconRun(
+        bank_filename=f"Bank Transactions (synced, {start_date} to {end_date})",
+        bank_line_count=result.bank_line_count,
+        raw_bank_income_total=raw_income,
+        raw_bank_expense_total=raw_expense,
+    )
+    run.lines = [ReconLine(**line.as_dict()) for line in result.lines]
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return run
 
 
 @router.post("/reconcile", response_model=ReconRunDetail)
