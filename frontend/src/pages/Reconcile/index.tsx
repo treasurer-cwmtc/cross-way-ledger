@@ -3,12 +3,12 @@ import { accountsApi, ChartAccount } from "../../api/accounts";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
 import { ReconRun, StripeFundCheckResult } from "../../api/reconcile";
 import { Rule } from "../../api/rules";
-import Step3Reconcile from "../Upload/Step3Reconcile";
 import Step4Validate from "../Upload/Step4Validate";
 import ReconcileStepper from "./ReconcileStepper";
 import Step1DateRange, { isoDaysAgo } from "./Step1DateRange";
 import Step2Categorize from "./Step2Categorize";
 import Step3FundCheck from "./Step3FundCheck";
+import Step4Reconcile from "./Step4Reconcile";
 
 /** Replaces the (deprecated, hidden-from-nav) Upload wizard's manual
  * file-upload steps with the automated Stripe/Plaid sync - every review
@@ -126,7 +126,7 @@ export default function Reconcile() {
           )}
 
           {step === 4 && run && (
-            <Step3Reconcile run={run} onRunChange={setRun} onNext={() => goTo(5)} />
+            <Step4Reconcile run={run} onRunChange={setRun} onNext={() => goTo(5)} />
           )}
 
           {step === 5 && run && (

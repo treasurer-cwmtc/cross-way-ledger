@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -29,7 +30,7 @@ from ..schemas import (
 )
 from ..services.categorizer import Categorizer
 from ..services.ledger import build_dedup_key, parse_date
-from ..services.parsers import BankRow, parse_bank_csv
+from ..services.parsers import BankRow, parse_bank_csv, parse_fund_breakdown_from_description
 from ..services.plaid_client import to_bank_row
 from ..services.reconciler import categorize_bank_only, merge_stripe
 from ..services.stripe_sync import to_stripe_row
@@ -307,6 +308,28 @@ def stripe_fund_check(db: Session = Depends(get_db)) -> StripeFundCheckOut:
     """Wizard step 2: which donation funds in the currently-synced Stripe
     data (ledger_stripe) don't yet have a stripe_fund rule."""
     staged = list(db.scalars(select(StripeTransaction)).all())
+
+    # Self-heal rows synced before issue #124's fix: they never captured
+    # PCO's context_json metadata, so a split gift is still sitting there
+    # with the old garbled combined `fund` string and an empty
+    # fund_breakdown_json - a fresh Stripe sync won't touch them either
+    # (they're outside any lookback window). Every time the fund check
+    # runs, reconstruct what can be recovered purely from the already-
+    # stored description + amount and persist it, so the data actually
+    # gets cleaned up instead of staying garbled forever.
+    healed = False
+    for t in staged:
+        if t.fund_breakdown_json or t.type.lower() not in {"payment", "charge"}:
+            continue
+        breakdown = parse_fund_breakdown_from_description(t.description, t.amount)
+        if len(breakdown) <= 1:
+            continue
+        t.fund = ", ".join(name for name, _ in breakdown)
+        t.fund_breakdown_json = json.dumps(breakdown)
+        healed = True
+    if healed:
+        db.commit()
+
     stripe_rows = [to_stripe_row(t) for t in staged]
 
     rules = list(db.scalars(select(CategoryRule)).all())
@@ -332,7 +355,10 @@ def stripe_fund_check(db: Session = Depends(get_db)) -> StripeFundCheckOut:
         cat = categorizer.categorize_fund(fund)
         items.append(
             StripeFundCheckItem(
-                fund=fund, has_rule=bool(cat.account_no), account_no=cat.account_no
+                fund=fund,
+                has_rule=bool(cat.account_no),
+                account_no=cat.account_no,
+                account_name=cat.statement_description,
             )
         )
     return StripeFundCheckOut(
