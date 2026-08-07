@@ -115,6 +115,14 @@ class StripeRow:
     transfer_date: str
     fund: str
     donor: str
+    # The full itemized fund/amount breakdown when a single donation is
+    # split across multiple funds in one checkout (e.g. Planning Center
+    # Giving's multi-fund gifts) - (fund name, dollar amount) pairs, in
+    # order, summing to this row's net amount. Empty for an ordinary
+    # single-fund donation (use `fund`/`net` as-is then). See issue #124:
+    # posting a split gift's full amount to whichever single fund matched
+    # first was a real mis-posting risk, not just a cosmetic label issue.
+    fund_breakdown: list[tuple[str, float]] = field(default_factory=list)
     raw: dict = field(default_factory=dict)
 
     @property
@@ -126,6 +134,34 @@ class StripeRow:
         return self.type.lower() in {"payment", "charge"}
 
 
+def parse_fund_breakdown(context_json: str) -> list[tuple[str, float]]:
+    """Parses the *full* itemized fund/amount breakdown out of Planning
+    Center's `planning_center_context` metadata (a JSON list of
+    {"name": ..., "cents": ...} objects) - one entry per fund a donor
+    designated in a single gift. Unlike extract_fund_donor's single-fund
+    fallback (which only ever looked at the first item), this returns every
+    designated fund so a split gift can be posted to each of its actual
+    accounts instead of all-or-nothing. See issue #124."""
+    if not context_json:
+        return []
+    try:
+        items = json.loads(context_json)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(items, list):
+        return []
+    out: list[tuple[str, float]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).strip()
+        cents = item.get("cents")
+        if not name or not isinstance(cents, (int, float)) or isinstance(cents, bool):
+            continue
+        out.append((name, round(cents / 100, 2)))
+    return out
+
+
 def extract_fund_donor(description: str, context_json: str, person_name: str):
     fund = ""
     donor = ""
@@ -133,13 +169,18 @@ def extract_fund_donor(description: str, context_json: str, person_name: str):
     if m:
         donor = m.group("donor").strip()
         fund = m.group("fund").strip()
-    if not fund and context_json:
-        try:
-            items = json.loads(context_json)
-            if isinstance(items, list) and items and isinstance(items[0], dict):
-                fund = str(items[0].get("name", "")).strip()
-        except (ValueError, TypeError):
-            pass
+    breakdown = parse_fund_breakdown(context_json)
+    if len(breakdown) > 1:
+        # A split gift across multiple funds - the regex above can't tell
+        # separate "Fund Name ($amount)" segments apart from one another and
+        # garbles the whole tail into one string (see issue #124), so
+        # override with a clean, readable list from PCO's own structured
+        # metadata instead. This `fund` string is display-only from here on;
+        # the real per-fund split for categorization/posting is driven by
+        # parse_fund_breakdown() at the row-building call site, not this.
+        fund = ", ".join(name for name, _ in breakdown)
+    elif not fund and breakdown:
+        fund = breakdown[0][0]
     if person_name:
         donor = person_name.strip()
     return fund, donor
@@ -186,6 +227,7 @@ def parse_stripe_csv(text: str) -> list[StripeRow]:
                 ),
                 fund=fund,
                 donor=donor,
+                fund_breakdown=parse_fund_breakdown(context),
                 raw=dict(raw),
             )
         )

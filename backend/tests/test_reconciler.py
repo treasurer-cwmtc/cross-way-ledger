@@ -13,8 +13,15 @@ from app.database import Base
 from app.models import CategoryRule, ChartOfAccount
 from app.seed import seed
 from app.services.categorizer import Categorizer
-from app.services.parsers import parse_bank_csv, parse_stripe_csv
-from app.services.reconciler import reconcile
+from app.services.parsers import (
+    BankRow,
+    StripeRow,
+    extract_fund_donor,
+    parse_bank_csv,
+    parse_fund_breakdown,
+    parse_stripe_csv,
+)
+from app.services.reconciler import merge_stripe, reconcile
 
 from _db_safety import assert_safe_test_database
 
@@ -111,6 +118,120 @@ def test_bank_keyword_categorization():
     # here is blank; test_bank_keyword_rule_description_fills_description
     # covers the rule-provides-one case.
     assert all(l.description == "" for l in bank_lines)
+
+
+def test_parse_fund_breakdown_returns_every_designated_fund():
+    # Real shape of Planning Center's `planning_center_context` metadata for
+    # a gift split across three funds (see issue #124).
+    context = (
+        '[{"name":"Building Fund","cents":400000},'
+        '{"name":"General Missions","cents":50000},'
+        '{"name":"Sunday School","cents":50000}]'
+    )
+    assert parse_fund_breakdown(context) == [
+        ("Building Fund", 4000.0),
+        ("General Missions", 500.0),
+        ("Sunday School", 500.0),
+    ]
+
+
+def test_parse_fund_breakdown_handles_missing_or_malformed_json():
+    assert parse_fund_breakdown("") == []
+    assert parse_fund_breakdown("not json") == []
+    assert parse_fund_breakdown('{"not": "a list"}') == []
+
+
+def test_extract_fund_donor_split_gift_uses_clean_joined_name_not_garbled_regex_match():
+    # Before issue #124's fix, the regex swallowed this whole tail into one
+    # garbled "fund" string ("Building Fund ($4,000.00) General Missions
+    # ($500.00) Sunday School") since it only expects a single fund/amount.
+    description = (
+        "Donation #382021408 - Jane Doe - Building Fund ($4,000.00) "
+        "General Missions ($500.00) Sunday School"
+    )
+    context = (
+        '[{"name":"Building Fund","cents":400000},'
+        '{"name":"General Missions","cents":50000},'
+        '{"name":"Sunday School","cents":50000}]'
+    )
+    fund, donor = extract_fund_donor(description, context, "")
+    assert fund == "Building Fund, General Missions, Sunday School"
+    assert donor == "Jane Doe"
+
+
+def test_extract_fund_donor_single_fund_unaffected_by_breakdown_change():
+    # A single-fund donation must categorize identically to before - the
+    # breakdown override in extract_fund_donor only kicks in for len > 1.
+    fund, donor = extract_fund_donor(
+        "Donation #382021408 - Christy Philips - Sunday Offertory ($40.30)",
+        '[{"name":"Sunday Offertory","cents":4030}]',
+        "",
+    )
+    assert fund == "Sunday Offertory"
+    assert donor == "Christy Philips"
+
+
+def test_split_fund_donation_posts_to_each_funds_own_account():
+    # Confirms the actual accounting fix, not just the display fix: a gift
+    # split across two funds must produce two separate reconciled lines,
+    # each posted to its own fund's account with its own proportional
+    # share of the net amount - not the entire amount landing on whichever
+    # fund happened to match first (the real mis-posting risk in #124).
+    db = make_session()
+    try:
+        categorizer = Categorizer(
+            list(db.scalars(select(CategoryRule)).all()),
+            list(db.scalars(select(ChartOfAccount)).all()),
+        )
+        payout = StripeRow(
+            id="txn_payout_split",
+            type="payout",
+            source="po_split1",
+            amount=-49.50,
+            fee=0.0,
+            net=-49.50,
+            created="6/1/2026",
+            description="STRIPE PAYOUT",
+            transfer="po_split1",
+            transfer_date="6/1/2026",
+            fund="",
+            donor="",
+        )
+        donation = StripeRow(
+            id="txn_donation_split",
+            type="payment",
+            source="py_split1",
+            amount=50.0,
+            fee=0.5,
+            net=49.5,
+            created="5/30/2026",
+            description=(
+                "Donation #1 - Jane Doe - Pledges ($30.00) Sunday Offertory ($20.00)"
+            ),
+            transfer="po_split1",
+            transfer_date="6/1/2026",
+            fund="Pledges, Sunday Offertory",
+            donor="Jane Doe",
+            fund_breakdown=[("Pledges", 30.0), ("Sunday Offertory", 20.0)],
+        )
+        bank_row = BankRow(
+            details="",
+            posting_date="6/1/2026",
+            description="STRIPE TRANSFER",
+            amount=49.50,
+            type="ACH_CREDIT",
+        )
+        result = merge_stripe([bank_row], [payout, donation], categorizer)
+        stripe_lines = [l for l in result.lines if l.source == "stripe"]
+        assert len(stripe_lines) == 2  # no adjustment line - the split sums exactly
+        by_account = {l.account_no: l for l in stripe_lines}
+        assert by_account["I101010"].amount == 29.7  # Pledges - 60% share of net
+        assert by_account["I101210"].amount == 19.8  # Sunday Offertory - remainder
+        assert round(sum(l.amount for l in stripe_lines), 2) == 49.5
+        assert "Split gift" in by_account["I101010"].notes
+        assert "Split gift" in by_account["I101210"].notes
+    finally:
+        db.close()
 
 
 def test_bank_keyword_rule_description_fills_description():

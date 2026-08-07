@@ -8,8 +8,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.services.parsers import StripeRow, parse_stripe_csv
-from app.services.stripe_sync import _balance_txn_to_row
-from test_auth import auth_header, client  # reuse the shared TestClient/app setup
+from app.services.stripe_sync import _balance_txn_to_row, to_stripe_row
+from app.models import StripeTransaction
+from test_auth import TestingSession, auth_header, client  # reuse shared TestClient/app setup
 
 
 def _fake_rows() -> list[StripeRow]:
@@ -148,3 +149,81 @@ def test_api_path_matches_csv_path_for_the_same_donation():
     assert api_row.fund == csv_row.fund
     assert api_row.donor == csv_row.donor
     assert api_row.is_donation == csv_row.is_donation
+
+
+def test_balance_txn_to_row_reads_split_fund_breakdown_from_expanded_source_metadata():
+    # A real expanded balance transaction (expand=["data.source"], see
+    # fetch_recent_transactions) embeds the underlying Charge object, whose
+    # .metadata carries the same "planning_center_context"/
+    # "planning_center_person_name" keys the CSV export's columns come from
+    # - this is what lets the live sync path (previously always passing
+    # empty context, see issue #124) recognize a split-fund gift too.
+    source = SimpleNamespace(
+        id="py_split_api",
+        metadata={
+            "planning_center_context": (
+                '[{"name":"Building Fund","cents":400000},'
+                '{"name":"General Missions","cents":50000}]'
+            ),
+            "planning_center_person_name": "Jane Doe",
+        },
+    )
+    api_txn = SimpleNamespace(
+        id="txn_split_api",
+        type="payment",
+        source=source,
+        amount=450000,
+        fee=0,
+        net=450000,
+        created=int(datetime(2026, 8, 6, tzinfo=timezone.utc).timestamp()),
+        available_on=int(datetime(2026, 8, 9, tzinfo=timezone.utc).timestamp()),
+        description="Donation #1 - Jane Doe - Building Fund ($4,000.00) General Missions ($500.00)",
+    )
+    row = _balance_txn_to_row(api_txn, transfer="po_split_api")
+    assert row.donor == "Jane Doe"
+    assert row.fund == "Building Fund, General Missions"
+    assert row.fund_breakdown == [("Building Fund", 4000.0), ("General Missions", 500.0)]
+
+
+def test_sync_now_persists_and_round_trips_fund_breakdown():
+    h = auth_header()
+    split_row = StripeRow(
+        id="txn_split_persist",
+        type="payment",
+        source="py_split_persist",
+        amount=4500.0,
+        fee=0.0,
+        net=4500.0,
+        created="2026-08-06",
+        description="Donation #2 - Jane Doe - Building Fund ($4,000.00) General Missions ($500.00)",
+        transfer="po_split_persist",
+        transfer_date="2026-08-09",
+        fund="Building Fund, General Missions",
+        donor="Jane Doe",
+        fund_breakdown=[("Building Fund", 4000.0), ("General Missions", 500.0)],
+    )
+    with patch(
+        "app.routers.stripe_sync.fetch_recent_transactions", return_value=[split_row]
+    ):
+        r = client.post("/api/stripe/sync", headers=h)
+    assert r.status_code == 200, r.text
+
+    with TestingSession() as db:
+        stored = db.get(StripeTransaction, "txn_split_persist")
+        assert stored is not None
+        assert stored.fund_breakdown_json
+        row_back = to_stripe_row(stored)
+        assert row_back.fund_breakdown == [("Building Fund", 4000.0), ("General Missions", 500.0)]
+
+    # A repeat sync (upsert path, not create) must also persist it.
+    with patch(
+        "app.routers.stripe_sync.fetch_recent_transactions", return_value=[split_row]
+    ):
+        r = client.post("/api/stripe/sync", headers=h)
+    assert r.status_code == 200, r.text
+    with TestingSession() as db:
+        stored = db.get(StripeTransaction, "txn_split_persist")
+        assert to_stripe_row(stored).fund_breakdown == [
+            ("Building Fund", 4000.0),
+            ("General Missions", 500.0),
+        ]

@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -27,6 +28,7 @@ def _run_sync(db: Session, days: int | None = None) -> StripeSyncResult:
     added = 0
     updated = 0
     for row in rows:
+        fund_breakdown_json = json.dumps(row.fund_breakdown) if row.fund_breakdown else ""
         existing = db.get(StripeTransaction, row.id)
         if existing is None:
             db.add(
@@ -43,6 +45,7 @@ def _run_sync(db: Session, days: int | None = None) -> StripeSyncResult:
                     transfer_date=row.transfer_date,
                     fund=row.fund,
                     donor=row.donor,
+                    fund_breakdown_json=fund_breakdown_json,
                 )
             )
             added += 1
@@ -58,6 +61,7 @@ def _run_sync(db: Session, days: int | None = None) -> StripeSyncResult:
             existing.transfer_date = row.transfer_date
             existing.fund = row.fund
             existing.donor = row.donor
+            existing.fund_breakdown_json = fund_breakdown_json
             updated += 1
 
     now_iso = datetime.now(tz=timezone.utc).isoformat()
