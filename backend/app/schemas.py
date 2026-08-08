@@ -578,6 +578,52 @@ class RestrictedTransferEntryUpdate(BaseModel):
     notes: str | None = None
 
 
+class AssetOut(BaseModel):
+    id: int
+    purchase_date: date | None
+    category: str
+    item: str
+    count: int
+    cost: float
+    # count * cost - derived live, never stored, same pattern as every
+    # other computed field in this app (e.g. ChartOfAccount's statement_*
+    # properties).
+    total: float
+    notes: str
+    receipt_file_id: str
+    receipt_file_name: str
+    receipt_web_view_link: str
+
+
+class AssetCreate(BaseModel):
+    purchase_date: date | None = None
+    category: str = ""
+    item: str = ""
+    count: int = 1
+    cost: float = 0.0
+    notes: str = ""
+    receipt_file_id: str = ""
+    receipt_file_name: str = ""
+    receipt_web_view_link: str = ""
+
+
+class AssetUpdate(BaseModel):
+    purchase_date: date | None = None
+    category: str | None = None
+    item: str | None = None
+    count: int | None = None
+    cost: float | None = None
+    notes: str | None = None
+    receipt_file_id: str | None = None
+    receipt_file_name: str | None = None
+    receipt_web_view_link: str | None = None
+
+
+class AssetImportResult(BaseModel):
+    imported: int
+    skipped: int
+
+
 class BudgetCopyYearResult(BaseModel):
     copied: int
 

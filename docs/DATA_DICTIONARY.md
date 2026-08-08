@@ -343,6 +343,32 @@ synthesizes the two per-account lines from it at read time.
 
 ---
 
+## `ledger_assets`
+
+A simple, standalone equipment/inventory reference list - mirrors the
+treasurer's existing "Equipment List" Google Sheet. Deliberately **not**
+linked to Chart of Accounts or General Ledger; a purchase is recorded
+separately (in Actual/Accrual) when bought, this table just tracks what's
+actually owned. `category` is free text with a frontend typeahead of
+previously-used values, not a fixed enum. See issue #113.
+
+| Column | Type | Constraints | Description |
+| --- | --- | --- | --- |
+| `id` | integer | PK, auto-increment | |
+| `purchase_date` | date | nullable | |
+| `category` | string(120) | default `""` | Free text - e.g. Audio, Video, Network, Kitchen, Portable, Parsonage, Computer, matching the source sheet's real-world usage. |
+| `item` | string(300) | default `""` | |
+| `count` | integer | default `1` | |
+| `cost` | float | default `0.0` | Per-item cost. |
+| `notes` | text | default `""` | |
+| `receipt_file_id` / `receipt_file_name` / `receipt_web_view_link` | string(200) / string(300) / text | default `""` | Same Google Drive receipt attachment shape as Actual/Accrual - picked into a new "Asset Library" folder sitting directly under Drive's root (no year subfolder, since equipment isn't "per fiscal year" the way a transaction is). |
+| `created_at` | datetime (tz-aware) | server default: now | |
+
+_No `total` column - like every other computed field in this schema, it's
+derived live (`count x cost`) rather than stored._
+
+---
+
 ## Pledge Campaigns domain
 
 | Table | Was | Purpose |

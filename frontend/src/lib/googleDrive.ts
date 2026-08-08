@@ -374,3 +374,26 @@ export async function pickReceiptFile(opts?: { year?: number }): Promise<PickedF
   }
   return openPicker(token, uploadFolderId);
 }
+
+/** "<ROOT>/Asset Library" - deliberately sitting directly under the root,
+ * not inside a year folder like every other receipt, since an asset
+ * (equipment) isn't "per fiscal year" the way a transaction is - see
+ * issue #113. */
+async function getAssetLibraryFolder(token: string): Promise<string> {
+  await ensureRootAccess(token);
+  return getOrCreateFolder("Asset Library", ROOT_FOLDER_ID, token);
+}
+
+/** Same Picker flow as pickReceiptFile, filed into "Asset Library" instead
+ * of a year folder - used by the Asset Ledger's receipt attach button. */
+export async function pickAssetReceiptFile(): Promise<PickedFile | null> {
+  await ensurePickerApiLoaded();
+  const token = await getAccessToken();
+  let uploadFolderId: string | null = null;
+  try {
+    uploadFolderId = await getAssetLibraryFolder(token);
+  } catch {
+    uploadFolderId = null;
+  }
+  return openPicker(token, uploadFolderId);
+}

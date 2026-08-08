@@ -916,3 +916,35 @@ class ReimbursementLine(Base):
     @validates("account_no")
     def _validate_account_no(self, key, value):
         return _normalize_account_no(self, key, value)
+
+
+class Asset(Base):
+    """A simple equipment/inventory reference list - mirrors the
+    treasurer's existing "Equipment List" Google Sheet (Purchase Date,
+    Category, Item, Count, Cost, with Total derived as Count x Cost, same
+    live-derive-don't-store pattern every other ledger in this schema
+    uses). Deliberately standalone - not linked to Chart of Accounts or
+    General Ledger; a purchase is recorded there separately when bought,
+    this is just what's actually owned. category is free text rather than
+    a fixed enum (the frontend offers a typeahead of previously-used
+    values instead). See issue #113."""
+
+    __tablename__ = "ledger_assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    category: Mapped[str] = mapped_column(String(120), default="")
+    item: Mapped[str] = mapped_column(String(300), default="")
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    cost: Mapped[float] = mapped_column(Float, default=0.0)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    # Same Google Drive receipt attachment shape as every other ledger here
+    # - picked via the browser-side Picker (lib/googleDrive.ts), into a new
+    # "Asset Library" folder sitting directly under the root (no year
+    # subfolder - assets aren't "per fiscal year" the way transactions are).
+    receipt_file_id: Mapped[str] = mapped_column(String(200), default="")
+    receipt_file_name: Mapped[str] = mapped_column(String(300), default="")
+    receipt_web_view_link: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

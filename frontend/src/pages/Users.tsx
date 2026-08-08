@@ -20,6 +20,7 @@ const GRANTABLE_PAGES: { keys: string[]; label: string }[] = [
   { keys: ["accrual"], label: "Accrual" },
   { keys: ["budget"], label: "Budget" },
   { keys: ["restricted-net-assets"], label: "Restricted Net Assets" },
+  { keys: ["assets"], label: "Assets" },
   { keys: ["general-ledger"], label: "General Ledger" },
   { keys: ["income-statement"], label: "Income Statement" },
   { keys: ["rules"], label: "Rules" },

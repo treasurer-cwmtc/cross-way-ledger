@@ -275,3 +275,50 @@ def parse_stripe_csv(text: str) -> list[StripeRow]:
             )
         )
     return rows
+
+
+# --------------------------------------------------------------------------- #
+# Asset Ledger import (mirrors the treasurer's existing Equipment List sheet)
+# --------------------------------------------------------------------------- #
+@dataclass
+class AssetRow:
+    purchase_date: str  # raw M/D/YYYY-ish string, same convention as BankRow/
+    # StripeRow above - the router parses it into a real date at write time.
+    category: str
+    item: str
+    count: int
+    cost: float
+
+
+def parse_asset_csv(text: str) -> list[AssetRow]:
+    """Parses an export of the Equipment List sheet - Purchase Date,
+    Category, Item, Count, Cost, plus a Total column (Count x Cost) that's
+    ignored here since it's derived, not stored, same as everywhere else
+    in this app. A row with no Item and no Category is skipped - the
+    sheet's own running-grand-total row has neither, so this naturally
+    excludes it without needing to special-case a specific row position."""
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        return []
+    lowmap = _lower_map(reader.fieldnames)
+    rows: list[AssetRow] = []
+    for raw in reader:
+        category = _get(raw, lowmap, "Category")
+        item = _get(raw, lowmap, "Item")
+        if not category and not item:
+            continue
+        count_raw = _get(raw, lowmap, "Count", "Qty", "Quantity")
+        try:
+            count = int(float(count_raw)) if count_raw else 1
+        except ValueError:
+            count = 1
+        rows.append(
+            AssetRow(
+                purchase_date=normalize_date(_get(raw, lowmap, "Purchase Date", "Date")),
+                category=category,
+                item=item,
+                count=count,
+                cost=parse_amount(_get(raw, lowmap, "Cost")),
+            )
+        )
+    return rows

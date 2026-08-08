@@ -66,6 +66,7 @@ GRANTABLE_PERMISSIONS = {
     "pledge-campaign-actuals",
     "donors",
     "reimbursements",
+    "assets",
 }
 
 
