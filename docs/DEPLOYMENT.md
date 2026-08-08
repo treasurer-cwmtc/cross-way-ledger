@@ -205,6 +205,7 @@ All sensitive configuration lives in **Secret Manager**, never in the repository
 | `ledger-pco-app-id` / `ledger-pco-secret` | Planning Center Personal Access Token (App ID + Secret, HTTP Basic Auth) for the People + Giving API syncs - **one shared secret pair**, not per-environment; both dev and prod sync against the same real Planning Center account |
 | `ledger-pco-people-sync-secret` | Shared secret the nightly People Cloud Scheduler job presents as `X-Sync-Secret` on `POST /api/reimbursements/pco-people/scheduled-sync` - **prod only**, dev has no scheduled job |
 | `ledger-pco-giving-sync-secret` | Shared secret the nightly Giving Cloud Scheduler job presents as `X-Sync-Secret` on `POST /api/pledge-campaigns/donors/scheduled-sync` and `POST /api/donations/scheduled-sync` (one secret covers both Giving endpoints) - **prod only**, same pattern as Stripe/Plaid's |
+| `ledger-pco-pledge-form-sync-secret` | Shared secret the nightly Pledge Form Cloud Scheduler job presents as `X-Sync-Secret` on `POST /api/pledge-campaigns/pledges/scheduled-sync` (one job loops every campaign with a form configured) - **prod only**, same pattern as the other PCO/Stripe/Plaid secrets |
 
 > **Cloud Run only re-reads a secret injected as an environment variable at
 > container *startup*, not live** - unlike secret *volumes*, pointing
