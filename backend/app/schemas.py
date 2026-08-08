@@ -942,6 +942,7 @@ class PcoPersonOut(BaseModel):
     name: str
     email: str
     phone_number: str
+    status: str
 
 
 class PcoPeopleImportSummary(BaseModel):

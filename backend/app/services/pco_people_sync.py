@@ -1,12 +1,17 @@
-"""Pulls active People from the live PCO People API - the automated
-counterpart to `services.reimbursements.parse_pco_people_csv`'s manual-
-upload path. Produces the same `PcoPersonRow` shape so the router's upsert
-logic (see routers/reimbursements.py) treats API-sourced and CSV-sourced
-rows identically.
+"""Pulls People from the live PCO People API - the automated counterpart to
+`services.reimbursements.parse_pco_people_csv`'s manual-upload path.
+Produces the same `PcoPersonRow` shape so the router's upsert logic (see
+routers/reimbursements.py) treats API-sourced and CSV-sourced rows
+identically.
 
-Only status=active people are pulled - this table is the Reimbursements
-portal's login allowlist, and someone who's left the church shouldn't be
-able to log in just because they were never removed from PCO. See
+Every person is pulled regardless of status (active, inactive, etc.) - the
+Planning Center > People page shows real status per person, so a treasurer
+can browse everyone, not just who's currently active. This table is still
+the Reimbursements portal's login allowlist, but that gate now checks
+status="active" explicitly (see services.reimbursements.
+is_allowed_reimbursement_submitter) rather than relying on this sync to
+only ever import active people - someone who's left the church still can't
+log in just because their PCO row hasn't been deleted. See
 https://developer.planning.center/docs/#/apps/people/2024-08-08/vertices/person
 """
 
@@ -59,11 +64,13 @@ def _primary_phone(included_by_id: dict, relationships: dict) -> str:
     return ""
 
 
-def fetch_active_people() -> list[PcoPersonRow]:
+def fetch_people() -> list[PcoPersonRow]:
+    """Every Person in the account, any status - no `where[status]` filter
+    (see module docstring for why)."""
     rows: list[PcoPersonRow] = []
     for person, included_by_id in paginate_with_included(
         "/people/v2/people",
-        params={"where[status]": "active", "include": "emails,phone_numbers"},
+        params={"include": "emails,phone_numbers"},
     ):
         attrs = person.get("attributes", {})
         rels = person.get("relationships", {})
@@ -73,6 +80,7 @@ def fetch_active_people() -> list[PcoPersonRow]:
                 name=attrs.get("name") or "",
                 email=_primary_email(included_by_id, rels),
                 phone_number=_primary_phone(included_by_id, rels),
+                status=attrs.get("status") or "",
             )
         )
     return rows

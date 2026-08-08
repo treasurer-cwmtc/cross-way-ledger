@@ -15,7 +15,7 @@ PERSON_B = PcoPersonRow(person_id="9102", name="Bea B", email="bea@example.com",
 def _sync_people():
     h = auth_header()
     with patch(
-        "app.routers.reimbursements.pco_people_sync.fetch_active_people",
+        "app.routers.reimbursements.pco_people_sync.fetch_people",
         return_value=[PERSON_A, PERSON_B],
     ):
         r = client.post("/api/reimbursements/pco-people/sync", headers=h)
@@ -107,7 +107,7 @@ def test_get_current_submitter_revoked_immediately_when_removed_from_gate_list()
 
     admin_h = auth_header()
     with patch(
-        "app.routers.reimbursements.pco_people_sync.fetch_active_people",
+        "app.routers.reimbursements.pco_people_sync.fetch_people",
         return_value=[PERSON_A, PERSON_B],
     ), patch(
         "app.routers.reimbursements.pco_people_sync.fetch_list_member_ids",
