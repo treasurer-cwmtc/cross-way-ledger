@@ -1,3 +1,6 @@
+import csv
+import io
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -90,32 +93,29 @@ async def import_assets(
     Date, Category, Item, Count, Cost columns - Total is derived, not
     imported). No dedup - unlike the transaction ledgers, there's no
     natural unique key for an equipment line, so re-importing the same
-    export creates a second copy of everything. Skips a row entirely
-    rather than guessing when it has neither a category nor an item -
-    that's exactly the shape of the sheet's own running-grand-total row."""
+    export creates a second copy of everything. parse_asset_csv() already
+    drops a row with neither a category nor an item (that's exactly the
+    shape of the sheet's own running-grand-total row) - skipped here is
+    just the raw-row count minus what came back importable, so it's
+    still reported accurately."""
     raw = await file.read()
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         text = raw.decode("latin-1")
 
+    total_raw_rows = sum(1 for _ in csv.DictReader(io.StringIO(text)))
     rows = parse_asset_csv(text)
-    imported = 0
-    skipped = 0
     for row in rows:
-        purchase_date = parse_date(row.purchase_date)
-        if not row.item and not row.category:
-            skipped += 1
-            continue
         db.add(
             Asset(
-                purchase_date=purchase_date,
+                purchase_date=parse_date(row.purchase_date),
                 category=row.category,
                 item=row.item,
                 count=row.count,
                 cost=row.cost,
             )
         )
-        imported += 1
     db.commit()
-    return AssetImportResult(imported=imported, skipped=skipped)
+    imported = len(rows)
+    return AssetImportResult(imported=imported, skipped=max(total_raw_rows - imported, 0))
