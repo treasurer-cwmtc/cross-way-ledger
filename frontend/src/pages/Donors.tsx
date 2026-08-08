@@ -187,7 +187,7 @@ export default function Donors() {
         The donor list from the Giving App, synced live - shared across any reporting that needs
         it. {donors.length} donors on file. Click a row for full detail and gift history.
       </p>
-      <div className="row" style={{ alignItems: "center", marginBottom: 12 }}>
+      <div className="toolbar">
         <button className="btn" onClick={syncNow} disabled={syncing}>
           {syncing ? "Syncing…" : "Sync now"}
         </button>
