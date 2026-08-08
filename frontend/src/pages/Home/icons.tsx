@@ -72,3 +72,27 @@ export function PlusCircleIcon(props: SVGProps<SVGSVGElement>) {
     </Base>
   );
 }
+
+/** Balance scale - reconciliation is fundamentally "does side A match side
+ * B", so a scale reads more clearly than the generic upload glyph it used
+ * to share with the deprecated Upload wizard. */
+export function ScaleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M12 3v18M8 21h8" />
+      <path d="M5 6h14M5 6l3.2 6a3 3 0 0 1-6.4 0L5 6ZM19 6l-3.2 6a3 3 0 0 0 6.4 0L19 6Z" />
+    </Base>
+  );
+}
+
+/** Clock face - accrual entries are recognized before cash actually moves
+ * (a timing concept), which a clock communicates better than a bare plus
+ * sign that reads as "add new" rather than "accrued over time". */
+export function ClockIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3.2 2" />
+    </Base>
+  );
+}
