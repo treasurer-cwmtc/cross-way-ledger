@@ -720,6 +720,7 @@ class PledgeCampaignOut(BaseModel):
     goal_amount: float
     starting_balance: float
     is_active: bool
+    pco_form_id: str
 
 
 class PledgeCampaignCreate(BaseModel):
@@ -734,6 +735,11 @@ class PledgeCampaignUpdate(BaseModel):
     goal_amount: float | None = None
     starting_balance: float | None = None
     is_active: bool | None = None
+    # Set by the wizard's "Sync from a Planning Center Form" flow (see
+    # PUT /{campaign_id}/pledge-form-mapping, which sets this together with
+    # the field mapping) - exposed here too so it can be cleared back to ""
+    # (switch back to manual CSV) independently of the mapping.
+    pco_form_id: str | None = None
 
 
 class DonorOut(BaseModel):
@@ -975,6 +981,45 @@ class GivingPersonLinkOut(BaseModel):
 
 class GivingPersonLinkUpdate(BaseModel):
     person_id: str | None = None  # null clears a manual link back to unmatched
+
+
+class PcoFormOption(BaseModel):
+    id: str
+    name: str
+    active: bool
+
+
+class PcoFormFieldOption(BaseModel):
+    id: str
+    label: str
+    field_type: str
+
+
+class PledgeFormMappingOut(BaseModel):
+    campaign_id: int
+    initial_amount_field_id: str
+    due_date_field_id: str
+    monthly_amount_field_id: str
+    contact_method_field_id: str
+
+
+class PledgeFormMappingUpdate(BaseModel):
+    # Saving a mapping always sets/changes which form the campaign syncs
+    # from too (see routers/pledge_campaigns.py's set_pledge_form_mapping,
+    # which writes this onto PledgeCampaign.pco_form_id in the same call) -
+    # a mapping with no form behind it isn't meaningful on its own.
+    form_id: str
+    initial_amount_field_id: str = ""
+    due_date_field_id: str = ""
+    monthly_amount_field_id: str = ""
+    contact_method_field_id: str = ""
+
+
+class PledgeFormSyncSummary(BaseModel):
+    campaign_id: int
+    pledges_imported: int
+    pledges_matched: int
+    pledges_unmatched: int
 
 
 class ReimbursementAssignmentOut(BaseModel):

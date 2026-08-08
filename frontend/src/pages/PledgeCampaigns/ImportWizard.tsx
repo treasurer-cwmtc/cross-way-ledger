@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { pledgeCampaignsApi, PledgeCampaign, PledgeDashboard, Pledge } from "../../api/pledgeCampaigns";
+import {
+  pledgeCampaignsApi,
+  PledgeCampaign,
+  PledgeDashboard,
+  Pledge,
+  PcoFormOption,
+  PcoFormFieldOption,
+  PledgeFormSyncSummary,
+} from "../../api/pledgeCampaigns";
 import { donationsApi, FundSummary } from "../../api/donations";
 import { uploadCampaignImportFile, PickedFile } from "../../lib/googleDrive";
 import { getCurrentFiscalYear } from "../../api/settings";
@@ -295,6 +303,13 @@ export default function ImportWizard() {
     updated_pledges: Pledge[];
   } | null>(null);
 
+  useEffect(() => {
+    // Prefill the fund selector from whatever's already saved on the
+    // campaign - both the CSV path and the form-sync path below share this
+    // one selector, so the fund only needs choosing once.
+    setFundName(campaign?.fund_name || "");
+  }, [campaign?.id]);
+
   async function runPledgeImport() {
     if (!campaignId || !fundName || !pledgeFile) return;
     setBusy(true);
@@ -312,6 +327,98 @@ export default function ImportWizard() {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // --- Step 3: sync pledges from a live Planning Center Form ---
+  const [pcoForms, setPcoForms] = useState<PcoFormOption[] | null>(null);
+  const [showFormPicker, setShowFormPicker] = useState(false);
+  const [pickedFormId, setPickedFormId] = useState("");
+  const [formFields, setFormFields] = useState<PcoFormFieldOption[] | null>(null);
+  const [initialAmountFieldId, setInitialAmountFieldId] = useState("");
+  const [dueDateFieldId, setDueDateFieldId] = useState("");
+  const [monthlyAmountFieldId, setMonthlyAmountFieldId] = useState("");
+  const [contactMethodFieldId, setContactMethodFieldId] = useState("");
+  const [mappingSaving, setMappingSaving] = useState(false);
+  const [formSyncing, setFormSyncing] = useState(false);
+  const [formSyncSummary, setFormSyncSummary] = useState<PledgeFormSyncSummary | null>(null);
+
+  useEffect(() => {
+    if (step !== 3) return;
+    pledgeCampaignsApi.listPcoForms().then(setPcoForms).catch((err) => setError((err as Error).message));
+  }, [step]);
+
+  useEffect(() => {
+    // Once a campaign is already synced from a form, load its saved
+    // mapping so re-opening this step (or hitting "Change form") shows
+    // what's currently configured instead of a blank picker.
+    if (!campaignId || !campaign?.pco_form_id) return;
+    setPickedFormId(campaign.pco_form_id);
+    pledgeCampaignsApi
+      .getPledgeFormMapping(campaignId)
+      .then((m) => {
+        setInitialAmountFieldId(m.initial_amount_field_id);
+        setDueDateFieldId(m.due_date_field_id);
+        setMonthlyAmountFieldId(m.monthly_amount_field_id);
+        setContactMethodFieldId(m.contact_method_field_id);
+      })
+      .catch((err) => setError((err as Error).message));
+  }, [campaignId, campaign?.pco_form_id]);
+
+  useEffect(() => {
+    if (!pickedFormId) {
+      setFormFields(null);
+      return;
+    }
+    pledgeCampaignsApi
+      .listPcoFormFields(pickedFormId)
+      .then(setFormFields)
+      .catch((err) => setError((err as Error).message));
+  }, [pickedFormId]);
+
+  const pickedFormName = pcoForms?.find((f) => f.id === (campaign?.pco_form_id || pickedFormId))?.name || "";
+
+  async function saveMappingAndSync() {
+    if (!campaignId || !pickedFormId || !fundName) return;
+    setMappingSaving(true);
+    setError("");
+    try {
+      if (fundName !== campaign?.fund_name) {
+        const updated = await pledgeCampaignsApi.update(campaignId, { fund_name: fundName });
+        setCampaigns((prev) => prev?.map((c) => (c.id === updated.id ? updated : c)) ?? prev);
+      }
+      await pledgeCampaignsApi.setPledgeFormMapping(campaignId, {
+        form_id: pickedFormId,
+        initial_amount_field_id: initialAmountFieldId,
+        due_date_field_id: dueDateFieldId,
+        monthly_amount_field_id: monthlyAmountFieldId,
+        contact_method_field_id: contactMethodFieldId,
+      });
+      // The mapping call is what actually sets PledgeCampaign.pco_form_id
+      // server-side - patch it into local state directly rather than a
+      // throwaway extra request just to refresh it.
+      setCampaigns(
+        (prev) => prev?.map((c) => (c.id === campaignId ? { ...c, pco_form_id: pickedFormId } : c)) ?? prev
+      );
+      setShowFormPicker(false);
+      await runFormSync();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setMappingSaving(false);
+    }
+  }
+
+  async function runFormSync() {
+    if (!campaignId) return;
+    setFormSyncing(true);
+    setError("");
+    try {
+      setFormSyncSummary(await pledgeCampaignsApi.syncCampaignPledges(campaignId));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setFormSyncing(false);
     }
   }
 
@@ -564,7 +671,7 @@ export default function ImportWizard() {
 
       {step === 3 && (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>3. Upload Pledges</h3>
+          <h3 style={{ marginTop: 0 }}>3. Pledges</h3>
 
           <label className="field">
             <span>Which fund is this campaign tracking?</span>
@@ -578,18 +685,180 @@ export default function ImportWizard() {
             </select>
           </label>
 
-          <label className="field">
-            <span>Pledge form export</span>
-            <input type="file" accept=".csv" onChange={(ev) => setPledgeFile(ev.target.files?.[0] ?? null)} />
-          </label>
+          {campaign?.pco_form_id && !showFormPicker ? (
+            <div style={{ marginTop: 14 }}>
+              <div className="row" style={{ alignItems: "center" }}>
+                <span className="pill">
+                  Synced from "{pickedFormName || campaign.pco_form_id}"
+                </span>
+                <button className="btn" disabled={formSyncing} onClick={runFormSync}>
+                  {formSyncing ? "Syncing…" : "Sync now"}
+                </button>
+                <button className="btn secondary" onClick={() => setShowFormPicker(true)}>
+                  Change form
+                </button>
+              </div>
 
-          <button
-            className="btn"
-            disabled={busy || !campaignId || !fundName || !pledgeFile}
-            onClick={runPledgeImport}
-          >
-            {busy ? "Importing…" : "Import pledges"}
-          </button>
+              {formSyncSummary && (
+                <div className="stats" style={{ marginTop: 14 }}>
+                  <div className="stat">
+                    <b>{formSyncSummary.pledges_imported}</b>
+                    <span>Pledges synced</span>
+                  </div>
+                  <div className="stat">
+                    <b>{formSyncSummary.pledges_matched}</b>
+                    <span>Matched to a donor</span>
+                  </div>
+                  <div className="stat">
+                    <b>{formSyncSummary.pledges_unmatched}</b>
+                    <span>No gift yet</span>
+                  </div>
+                </div>
+              )}
+
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--muted)" }}>
+                  Import from a CSV file instead
+                </summary>
+                <label className="field" style={{ marginTop: 8 }}>
+                  <span>Pledge form export</span>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={(ev) => setPledgeFile(ev.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <button
+                  className="btn"
+                  disabled={busy || !campaignId || !fundName || !pledgeFile}
+                  onClick={runPledgeImport}
+                >
+                  {busy ? "Importing…" : "Import pledges"}
+                </button>
+              </details>
+            </div>
+          ) : (
+            <div style={{ marginTop: 14 }}>
+              <h4 style={{ marginBottom: 4 }}>Sync from a Planning Center Form</h4>
+              <p className="subtitle" style={{ marginTop: 0 }}>
+                Name and email come automatically from the submitter's own Planning Center
+                Person record - only the pledge value fields below need mapping.
+              </p>
+              <label className="field">
+                <span>Form</span>
+                <select value={pickedFormId} onChange={(ev) => setPickedFormId(ev.target.value)}>
+                  <option value="">— choose a form —</option>
+                  {(pcoForms || []).map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                      {!f.active ? " (inactive)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {formFields && (
+                <div className="row" style={{ flexWrap: "wrap", gap: 12 }}>
+                  <label className="field">
+                    <span>Pledge Amount field</span>
+                    <select value={initialAmountFieldId} onChange={(ev) => setInitialAmountFieldId(ev.target.value)}>
+                      <option value="">— none —</option>
+                      {formFields.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Due Date field</span>
+                    <select value={dueDateFieldId} onChange={(ev) => setDueDateFieldId(ev.target.value)}>
+                      <option value="">— none —</option>
+                      {formFields.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Monthly Amount field</span>
+                    <select value={monthlyAmountFieldId} onChange={(ev) => setMonthlyAmountFieldId(ev.target.value)}>
+                      <option value="">— none —</option>
+                      {formFields.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Contact Method field</span>
+                    <select value={contactMethodFieldId} onChange={(ev) => setContactMethodFieldId(ev.target.value)}>
+                      <option value="">— none —</option>
+                      {formFields.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              <button
+                className="btn"
+                disabled={mappingSaving || !pickedFormId || !fundName}
+                onClick={saveMappingAndSync}
+                style={{ marginTop: 10 }}
+              >
+                {mappingSaving ? "Saving…" : "Save & sync"}
+              </button>
+              {campaign?.pco_form_id && (
+                <button className="btn secondary" onClick={() => setShowFormPicker(false)} style={{ marginLeft: 8 }}>
+                  Cancel
+                </button>
+              )}
+
+              {formSyncSummary && (
+                <div className="stats" style={{ marginTop: 14 }}>
+                  <div className="stat">
+                    <b>{formSyncSummary.pledges_imported}</b>
+                    <span>Pledges synced</span>
+                  </div>
+                  <div className="stat">
+                    <b>{formSyncSummary.pledges_matched}</b>
+                    <span>Matched to a donor</span>
+                  </div>
+                  <div className="stat">
+                    <b>{formSyncSummary.pledges_unmatched}</b>
+                    <span>No gift yet</span>
+                  </div>
+                </div>
+              )}
+
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--muted)" }}>
+                  Import from a CSV file instead
+                </summary>
+                <label className="field" style={{ marginTop: 8 }}>
+                  <span>Pledge form export</span>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={(ev) => setPledgeFile(ev.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <button
+                  className="btn"
+                  disabled={busy || !campaignId || !fundName || !pledgeFile}
+                  onClick={runPledgeImport}
+                >
+                  {busy ? "Importing…" : "Import pledges"}
+                </button>
+              </details>
+            </div>
+          )}
 
           {pledgeSummary && (
             <>
@@ -617,7 +886,11 @@ export default function ImportWizard() {
           )}
 
           <div style={{ marginTop: 16 }}>
-            <button className="btn secondary" onClick={() => advance(4)} disabled={!pledgeSummary}>
+            <button
+              className="btn secondary"
+              onClick={() => advance(4)}
+              disabled={!pledgeSummary && !formSyncSummary}
+            >
               Next: Donors →
             </button>
           </div>
