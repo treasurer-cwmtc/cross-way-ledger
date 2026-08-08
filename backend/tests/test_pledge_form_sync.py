@@ -23,7 +23,7 @@ def _create_campaign(name: str) -> dict:
 
 def _sync_people(rows: list[PcoPersonRow]):
     h = auth_header()
-    with patch("app.routers.reimbursements.pco_people_sync.fetch_active_people", return_value=rows):
+    with patch("app.routers.reimbursements.pco_people_sync.fetch_people", return_value=rows):
         r = client.post("/api/reimbursements/pco-people/sync", headers=h)
     assert r.status_code == 200, r.text
 

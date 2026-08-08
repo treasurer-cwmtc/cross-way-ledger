@@ -27,13 +27,21 @@ REIMBURSEMENT_GATE_LIST_ID_KEY = "pco_reimbursement_gate_list_id"
 
 def is_allowed_reimbursement_submitter(db: Session, email: str) -> bool:
     """Shared by request_otp (login-code issuance) and
-    deps.get_current_submitter (every authenticated request) - one active
-    PcoPerson row with this email is always required, exactly as before.
-    If a gate list is configured (AppSetting REIMBURSEMENT_GATE_LIST_ID_KEY),
-    that person must ALSO be a synced member of it (pco_list_members) -
-    additive, not a replacement, so an unconfigured gate list changes nothing
-    for anyone (see routers/reimbursements.py's Reimbursement Access page)."""
-    person_id = db.scalar(select(PcoPerson.person_id).where(PcoPerson.email == email).limit(1))
+    deps.get_current_submitter (every authenticated request) - one PcoPerson
+    row with this email AND status "active" is always required, exactly as
+    before. The People sync now pulls every person regardless of status (so
+    the People page can show a real Status column - see
+    services/pco_people_sync.py), so this status check is what keeps an
+    inactive person from gaining portal access just by existing in the
+    table - previously that was implicit in the sync only ever importing
+    active people. If a gate list is configured (AppSetting
+    REIMBURSEMENT_GATE_LIST_ID_KEY), that person must ALSO be a synced
+    member of it (pco_list_members) - additive, not a replacement, so an
+    unconfigured gate list changes nothing for anyone (see
+    routers/reimbursements.py's Reimbursement Access page)."""
+    person_id = db.scalar(
+        select(PcoPerson.person_id).where(PcoPerson.email == email, PcoPerson.status == "active").limit(1)
+    )
     if person_id is None:
         return False
 
@@ -62,6 +70,10 @@ class PcoPersonRow:
     name: str
     email: str
     phone_number: str
+    # "active"/"inactive"/etc, PCO's own Person.status - defaults to
+    # "active" for the CSV path below, whose exports predate this field and
+    # historically only ever contained active people.
+    status: str = "active"
 
 
 def parse_pco_people_csv(text: str) -> list[PcoPersonRow]:
@@ -80,6 +92,7 @@ def parse_pco_people_csv(text: str) -> list[PcoPersonRow]:
                 name=_get(raw, lowmap, "Name"),
                 email=_get(raw, lowmap, "Primary Email", "Email").strip().lower(),
                 phone_number=_get(raw, lowmap, "Primary Phone Number", "Phone Number"),
+                status=_get(raw, lowmap, "Status") or "active",
             )
         )
     return rows
@@ -102,6 +115,7 @@ def upsert_pco_people(db: Session, rows: list[PcoPersonRow]) -> int:
         person.name = row.name
         person.email = row.email
         person.phone_number = row.phone_number
+        person.status = row.status
         imported += 1
     return imported
 

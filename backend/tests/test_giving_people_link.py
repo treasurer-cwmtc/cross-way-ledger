@@ -33,7 +33,7 @@ def _donor_row(donor_id: str, first="Jane", last="Doe") -> DonorRow:
 def _sync_people(person_ids: list[str]):
     h = auth_header()
     rows = [PcoPersonRow(person_id=pid, name=f"Person {pid}", email=f"p{pid}@example.com", phone_number="") for pid in person_ids]
-    with patch("app.routers.reimbursements.pco_people_sync.fetch_active_people", return_value=rows):
+    with patch("app.routers.reimbursements.pco_people_sync.fetch_people", return_value=rows):
         r = client.post("/api/reimbursements/pco-people/sync", headers=h)
     assert r.status_code == 200, r.text
 

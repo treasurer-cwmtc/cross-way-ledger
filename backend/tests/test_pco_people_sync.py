@@ -32,7 +32,7 @@ def test_scheduled_sync_rejects_missing_or_wrong_secret():
 
 def test_sync_now_upserts_and_updates_last_synced():
     h = auth_header()
-    with patch("app.routers.reimbursements.pco_people_sync.fetch_active_people", return_value=_fake_rows()):
+    with patch("app.routers.reimbursements.pco_people_sync.fetch_people", return_value=_fake_rows()):
         r = client.post("/api/reimbursements/pco-people/sync", headers=h)
     assert r.status_code == 200, r.text
     result = r.json()
@@ -51,7 +51,7 @@ def test_sync_now_upserts_and_updates_last_synced():
     # A repeat sync with the same rows upserts (updates) rather than
     # duplicating - same person_id key, whether the row came from the API
     # or a CSV upload (see test_api_and_csv_paths_share_the_same_upsert).
-    with patch("app.routers.reimbursements.pco_people_sync.fetch_active_people", return_value=_fake_rows()):
+    with patch("app.routers.reimbursements.pco_people_sync.fetch_people", return_value=_fake_rows()):
         r = client.post("/api/reimbursements/pco-people/sync", headers=h)
     assert r.status_code == 200, r.text
     assert r.json()["people_imported"] == 2
@@ -69,7 +69,7 @@ def test_sync_now_surfaces_missing_credentials_as_400():
     from app.services.pco_client import PcoNotConfiguredError
 
     with patch(
-        "app.routers.reimbursements.pco_people_sync.fetch_active_people",
+        "app.routers.reimbursements.pco_people_sync.fetch_people",
         side_effect=PcoNotConfiguredError("Planning Center API credentials are not configured."),
     ):
         r = client.post("/api/reimbursements/pco-people/sync", headers=h)
@@ -82,7 +82,7 @@ def test_api_and_csv_paths_share_the_same_upsert():
     CSV with updated details, must update the same row rather than creating
     a duplicate (and vice versa)."""
     h = auth_header()
-    with patch("app.routers.reimbursements.pco_people_sync.fetch_active_people", return_value=_fake_rows()):
+    with patch("app.routers.reimbursements.pco_people_sync.fetch_people", return_value=_fake_rows()):
         client.post("/api/reimbursements/pco-people/sync", headers=h)
 
     csv_text = "Person ID,Name,Primary Email,Primary Phone Number\n9001,Priya T. Thomas,priya@example.com,(214) 555-0000\n"

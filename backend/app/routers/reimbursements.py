@@ -182,7 +182,7 @@ def _sync_gate_list_membership(db: Session) -> None:
 
 def _run_pco_people_sync(db: Session) -> PcoPeopleImportSummary:
     try:
-        rows = pco_people_sync.fetch_active_people()
+        rows = pco_people_sync.fetch_people()
     except PcoNotConfiguredError as e:
         raise HTTPException(400, str(e))
     except requests.RequestException as e:  # network / non-2xx after retries

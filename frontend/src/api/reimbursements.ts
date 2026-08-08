@@ -10,6 +10,11 @@ export interface PcoPerson {
   name: string;
   email: string;
   phone_number: string;
+  // PCO's own Person.status ("active", "inactive", etc.) - only "active"
+  // people can log into the Reimbursement portal (see backend's
+  // is_allowed_reimbursement_submitter), but every status is synced and
+  // shown here.
+  status: string;
 }
 
 export interface PcoPeopleImportSummary {
@@ -83,8 +88,8 @@ export const reimbursementsApi = {
   listPcoPeople: () =>
     fetch(`${BASE}/api/reimbursements/pco-people`, { headers: authHeaders() }).then(j<PcoPerson[]>),
 
-  /** Live counterpart to importPcoPeople - pulls active members straight
-   * from the PCO People API instead of a manual CSV upload. */
+  /** Live counterpart to importPcoPeople - pulls every member (any status)
+   * straight from the PCO People API instead of a manual CSV upload. */
   syncPcoPeople: () =>
     fetch(`${BASE}/api/reimbursements/pco-people/sync`, {
       method: "POST",

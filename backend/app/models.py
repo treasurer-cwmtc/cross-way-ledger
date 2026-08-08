@@ -807,9 +807,13 @@ class PcoPerson(Base):
     """The Planning Center (PCO) People export, upserted by person_id (PCO's
     own stable ID) - mirrors Donor/import_donors_for_campaign's exact upsert
     shape. This is the login allowlist for the Reimbursements portal: a
-    submitter's email must match a row here before they can even request a
-    one-time login code. email is deliberately NOT unique - real households
-    share a single email across multiple person rows (confirmed from a real
+    submitter's email must match a row here *with status "active"* before
+    they can even request a one-time login code (see services/
+    reimbursements.is_allowed_reimbursement_submitter) - the sync itself
+    pulls every person regardless of status, so the Planning Center > People
+    page can show a real status column, but only "active" rows ever grant
+    portal access. email is deliberately NOT unique - real households share
+    a single email across multiple person rows (confirmed from a real
     export), so it's an index, not a key.
     """
 
@@ -819,6 +823,11 @@ class PcoPerson(Base):
     name: Mapped[str] = mapped_column(String(200), default="")
     email: Mapped[str] = mapped_column(String(255), default="", index=True)
     phone_number: Mapped[str] = mapped_column(String(40), default="")
+    # PCO's own Person.status ("active", "inactive", etc.) - blank for rows
+    # synced before this column existed, or CSV-imported rows whose export
+    # had no status column (treated as "active" by the CSV parser, matching
+    # this table's pre-status behavior of only ever holding active people).
+    status: Mapped[str] = mapped_column(String(20), default="")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
