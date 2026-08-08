@@ -10,11 +10,11 @@
 
 ### 1. Date range
 
-Shows the most recent transaction date already sitting in each staging table (`ledger_plaid`, `ledger_stripe`), plus the latest `posted_date` already sitting in the Actual ledger itself - the first two tell you whether a sync is even needed, the third tells you exactly where a prior reconciliation left off, so you know where to start the range below.
+Shows the most recent transaction date already sitting in each staging table (`transactions_bank`, `transactions_stripe`), plus the latest `posted_date` already sitting in the Actual ledger itself - the first two tell you whether a sync is even needed, the third tells you exactly where a prior reconciliation left off, so you know where to start the range below.
 
 Two independent **Sync now** buttons follow - one for Stripe, one for Bank Transactions (Plaid). Either can be skipped if you already synced recently on their own pages. Note the asymmetry: **Stripe's sync respects a lookback window** (its own recent-activity re-pull, see [Stripe: Automated Transaction Sync](stripe-sync.md)), while **Plaid's sync is cursor-based** - it always catches up on everything new since its last sync, not scoped to the date range chosen here (see [Bank Transactions: Automated Chase Sync (Plaid)](bank-transactions-plaid-sync.md#how-far-back-a-connection-reaches)).
 
-Clicking **Next: Review** builds the run: it pulls whatever's now in `ledger_plaid` for the chosen date range and categorizes it - the exact same categorization step the Upload Wizard's first stage always did, just reading from the synced table instead of a freshly uploaded CSV.
+Clicking **Next: Review** builds the run: it pulls whatever's now in `transactions_bank` for the chosen date range and categorizes it - the exact same categorization step the Upload Wizard's first stage always did, just reading from the synced table instead of a freshly uploaded CSV.
 
 ### 2. Review
 
@@ -26,7 +26,7 @@ Identical to the Upload Wizard's own Stripe fund-coverage check - every donation
 
 ### 4. Reconcile
 
-Identical to the Upload Wizard's own Reconcile step (same component, unmodified) - matches every Stripe bank deposit found in the range to its underlying donations from `ledger_stripe`, explodes each into per-donation lines, and flags anything that couldn't be matched automatically for review.
+Identical to the Upload Wizard's own Reconcile step (same component, unmodified) - matches every Stripe bank deposit found in the range to its underlying donations from `transactions_stripe`, explodes each into per-donation lines, and flags anything that couldn't be matched automatically for review.
 
 ### 5. Data validation
 

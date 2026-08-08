@@ -36,7 +36,7 @@ Recent milestones, most recent first:
 
 - ✅ **Plaid Sandbox bank sync** - new **Bank Transactions** page. "Connect
   bank" (Plaid Link) + "Sync now" (cursor-based `transactions/sync`) pull
-  Chase-shaped transaction data into a new `ledger_plaid`/`ledger_plaid_items`
+  Chase-shaped transaction data into a new `transactions_bank`/`transactions_bank_items`
   staging table, mirroring the Stripe sync pattern below column-for-column
   with `BankRow` (see [ARCHITECTURE.md](ARCHITECTURE.md#4d-automated-bankpayment-sync-staging-tables-stripe-plaid)).
   Verified end-to-end live against real Plaid Sandbox on dev - connected a
@@ -56,7 +56,7 @@ Recent milestones, most recent first:
 - ✅ **Automated Stripe sync** - "Sync now" (and a future scheduled job, see
   [issue #100](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/100))
   pulls donations/payouts directly from Stripe's API into a new
-  `ledger_stripe` staging table, replacing the manual CSV export for
+  `transactions_stripe` staging table, replacing the manual CSV export for
   everyday use. Verified byte-identical to the manual CSV path via a
   dedicated parity test - a real date-format bug was caught and fixed by
   that test before shipping. Stripe page redesigned: sortable/filterable
@@ -309,7 +309,7 @@ for the latest.
 > the issue tracker, not as a live todo.
 
 - **[#105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105)
-  Wire `ledger_stripe`/`ledger_plaid` into the Upload Wizard** as a
+  Wire `transactions_stripe`/`transactions_bank` into the Upload Wizard** as a
   reconciliation source, replacing the manual CSV upload step entirely -
   the natural next step once both staging-table syncs (above) were
   verified working. Not started.

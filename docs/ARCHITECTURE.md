@@ -69,7 +69,7 @@ flowchart LR
 - **Stripe** and **Plaid** are the two automated bank/payment sync
   integrations (Stripe donations/payouts, Plaid → Chase). Both follow the
   identical pattern: pull data into a dedicated staging table
-  (`ledger_stripe` / `ledger_plaid`), never touch a real ledger directly.
+  (`transactions_stripe` / `transactions_bank`), never touch a real ledger directly.
   See § 4d and the [Stripe](guides/stripe-sync.md) /
   [Bank Transactions](guides/bank-transactions-plaid-sync.md) guides. Plaid
   additionally involves the **frontend** directly for its Link widget (the
@@ -376,7 +376,7 @@ erDiagram
   see [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105)
   for wiring that up as a direct alternative to a manual CSV upload.
 - **Deliberately shaped to match the wizard's existing manual-upload row
-  types** - `ledger_stripe` mirrors `StripeRow`, `ledger_plaid` mirrors
+  types** - `transactions_stripe` mirrors `StripeRow`, `transactions_bank` mirrors
   `BankRow` (see `backend/app/services/parsers.py`) - column-for-column,
   not Stripe's or Plaid's own native field names. This is why a backend
   test (`test_api_path_matches_csv_path_for_the_same_donation` in
@@ -384,14 +384,14 @@ erDiagram
   API-synced row for the same real-world transaction come out identical on
   every field the reconciler reads - the two ingestion paths must never be
   allowed to silently diverge.
-- **`ledger_stripe`** is fully re-synced and re-upserted (keyed by
+- **`transactions_stripe`** is fully re-synced and re-upserted (keyed by
   `stripe_id`) on every "Sync now" - simple and self-healing (a later
   refund/amendment is picked up automatically), affordable at this
   account's transaction volume. Stripe's own API is called directly with a
   secret key - no separate "connect" step, no per-item access token.
-- **`ledger_plaid` / `ledger_plaid_items`** use Plaid's cursor-based
+- **`transactions_bank` / `transactions_bank_items`** use Plaid's cursor-based
   `transactions/sync` endpoint instead - each sync resumes from
-  `ledger_plaid_items.cursor` rather than re-scanning a date window, and a
+  `transactions_bank_items.cursor` rather than re-scanning a date window, and a
   connection has to be established once first (Plaid's Link widget, an
   OAuth-style consent flow - see the sequence below) before anything can
   sync at all. Plaid's own amount-sign convention (positive = money out) is
@@ -445,7 +445,7 @@ sequenceDiagram
     FE->>BE: POST /api/plaid/sync
     BE->>P: transactions/sync (cursor)
     P-->>BE: added/modified/removed + next_cursor
-    BE->>BE: upsert ledger_plaid, save next_cursor
+    BE->>BE: upsert transactions_bank, save next_cursor
     BE-->>FE: counts (added/modified/removed)
 ```
 

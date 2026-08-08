@@ -104,7 +104,7 @@ def sync_transactions(access_token: str, cursor: str | None):
 
 def plaid_txn_to_fields(t) -> dict:
     """Maps one raw Plaid transaction (from transactions/sync's added or
-    modified lists) onto ledger_plaid's Chase-CSV-shaped columns - see
+    modified lists) onto transactions_bank's Chase-CSV-shaped columns - see
     PlaidTransaction's docstring in models.py for why `amount` is negated
     and `details`/`type` are only best-effort equivalents of Chase's own
     CSV columns, not identical to them."""
@@ -126,7 +126,7 @@ def plaid_txn_to_fields(t) -> dict:
 
 
 def to_bank_row(t) -> BankRow:
-    """Adapts a staged (already-synced) ledger_plaid row back into the
+    """Adapts a staged (already-synced) transactions_bank row back into the
     BankRow shape the reconciler's existing bank-CSV pipeline expects - not
     wired into the Upload wizard yet, but this is what makes that follow-up
     a small change instead of a second parallel code path, same reasoning

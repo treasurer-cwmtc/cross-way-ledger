@@ -119,7 +119,7 @@ Named bank account lookup (e.g. "Chase Operating").
 
 ---
 
-## `ledger_stripe`
+## `transactions_stripe`
 
 Staged Stripe balance-transaction data, pulled automatically via the Stripe
 API (the "Sync now" button on the [Stripe page](guides/stripe-sync.md), or a
@@ -150,7 +150,7 @@ A pure staging table - nothing here touches a real ledger by itself.
 
 ---
 
-## `ledger_plaid_items`
+## `transactions_bank_items`
 
 One connected bank login ("Item," in Plaid's terminology) - created once
 when someone completes the Plaid Link flow on the
@@ -170,21 +170,21 @@ re-scanning everything.
 
 ---
 
-## `ledger_plaid`
+## `transactions_bank`
 
 Staged Chase bank transaction data, pulled automatically via the Plaid API
 (the "Sync now" button on the [Bank Transactions page](guides/bank-transactions-plaid-sync.md)).
 Deliberately shaped to match a manually-exported Chase CSV's own columns
 (`BankRow` in `backend/app/services/parsers.py` -
 `details`/`posting_date`/`description`/`amount`/`type`) rather than Plaid's
-own field names, for the same reason as `ledger_stripe` above. `amount` is
+own field names, for the same reason as `transactions_stripe` above. `amount` is
 normalized to this app's own convention (positive = deposit) even though
 Plaid's own sign convention is the opposite.
 
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
 | `plaid_transaction_id` | string(60) | PK | Plaid's own transaction id - repeated syncs upsert cleanly. |
-| `item_id` | string(60) | FK -> `ledger_plaid_items.item_id`, indexed | Which connection this transaction came from. |
+| `item_id` | string(60) | FK -> `transactions_bank_items.item_id`, indexed | Which connection this transaction came from. |
 | `account_id` | string(60) | default `""` | Which linked account under that connection (a Plaid Item can cover multiple accounts). |
 | `details` | string(20) | default `""` | `DEBIT` or `CREDIT` - derived from `amount`'s sign after normalization, since Plaid doesn't expose Chase's own internal type codes. |
 | `posting_date` | string(20) | default `""` | Plain date string (`M/D/YYYY`), matching the manual CSV's format - not a real `Date` column. |

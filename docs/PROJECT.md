@@ -512,7 +512,7 @@ All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.
 - Not yet built (candidate next steps): saved run history UI, roster-based donor
   normalization, direct export to the accounting system.
 - **Automated Stripe/Chase pulls** — built, as of 2026-08. Both now sync into
-  their own staging tables (`ledger_stripe`, `ledger_plaid`) instead of
+  their own staging tables (`transactions_stripe`, `transactions_bank`) instead of
   requiring a manual CSV export — see
   [docs/guides/stripe-sync.md](guides/stripe-sync.md) and
   [docs/guides/bank-transactions-plaid-sync.md](guides/bank-transactions-plaid-sync.md),

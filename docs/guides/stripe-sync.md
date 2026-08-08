@@ -37,7 +37,7 @@ Today, syncing is entirely on-demand (you click Sync now). A nightly scheduled s
 
 ## What's next
 
-Wiring `ledger_stripe` into the Upload Wizard as a reconciliation source (alongside the equivalent Plaid/Chase staging table), so this page's data can flow straight into a reconciled ledger entry without a manual CSV step at all — see [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105).
+Wiring `transactions_stripe` into the Upload Wizard as a reconciliation source (alongside the equivalent Plaid/Chase staging table), so this page's data can flow straight into a reconciled ledger entry without a manual CSV step at all — see [issue #105](https://github.com/treasurer-cwmtc/cross-way-ledger/issues/105).
 
 ---
 
