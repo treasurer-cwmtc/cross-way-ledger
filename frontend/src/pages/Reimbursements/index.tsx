@@ -210,9 +210,10 @@ function AssignmentsSection() {
     loadSummary();
   }, []);
 
-  // Budget accounts are planning figures, never real expenses/income - a
-  // reimbursement should never be allowed to post against one.
-  const assignableAccounts = accounts.filter((a) => a.category !== "Budget");
+  // A reimbursement is always an expense - Budget accounts are planning
+  // figures (never real transactions) and Income accounts don't apply to
+  // money going out, so only Expense accounts are assignable here.
+  const assignableAccounts = accounts.filter((a) => a.category === "Expense");
 
   async function selectEmails(values: string[]) {
     setEmails(values);
@@ -326,8 +327,8 @@ export default function Reimbursements() {
       <QueueSection />
       <AssignmentsSection />
       <p className="subtitle">
-        Who's allowed to log into the portal is managed under Planning Center &gt; People and
-        Planning Center &gt; Reimbursement Access.
+        Who's allowed to log into the portal is managed under Planning Center &gt; People (any
+        active PCO Person can request a login code).
       </p>
     </div>
   );

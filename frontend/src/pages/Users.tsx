@@ -35,7 +35,7 @@ const GRANTABLE_PAGES: { keys: string[]; label: string }[] = [
   { keys: ["donors"], label: "Planning Center - Donors" },
   {
     keys: ["reimbursements"],
-    label: "Reimbursements (also grants Planning Center People + Reimbursement Access)",
+    label: "Reimbursements (also grants Planning Center People)",
   },
 ];
 
