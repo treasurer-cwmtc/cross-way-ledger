@@ -111,7 +111,7 @@ export default function GivingPeopleLinkDetailModal({
         <p className="subtitle" style={{ marginTop: 0 }}>
           Pick this donor's People record by hand, or clear it to unlink.
         </p>
-        <div className="row" style={{ alignItems: "center", gap: 8 }}>
+        <div className="toolbar">
           <select
             value={picked}
             onChange={(e) => setPicked(e.target.value)}
