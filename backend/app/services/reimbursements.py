@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import AccrualEntry, Reimbursement, ReimbursementOtpCode
+from ..models import AccrualEntry, PcoPerson, Reimbursement, ReimbursementOtpCode
 from ..security import hash_password, verify_password
 from .parsers import _get, _lower_map
 
@@ -54,6 +54,27 @@ def parse_pco_people_csv(text: str) -> list[PcoPersonRow]:
             )
         )
     return rows
+
+
+def upsert_pco_people(db: Session, rows: list[PcoPersonRow]) -> int:
+    """Upserts by person_id - shared by both the CSV import path
+    (routers/reimbursements.py's import_pco_people) and the live People API
+    sync (services/pco_people_sync.py + the /pco-people/sync endpoint), so
+    the two ingestion paths can never drift out of sync with each other.
+    Caller is responsible for db.commit()."""
+    existing = {p.person_id: p for p in db.scalars(select(PcoPerson))}
+    imported = 0
+    for row in rows:
+        person = existing.get(row.person_id)
+        if person is None:
+            person = PcoPerson(person_id=row.person_id)
+            db.add(person)
+            existing[row.person_id] = person
+        person.name = row.name
+        person.email = row.email
+        person.phone_number = row.phone_number
+        imported += 1
+    return imported
 
 
 def generate_otp_code() -> str:
