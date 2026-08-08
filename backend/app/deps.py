@@ -112,8 +112,8 @@ def get_current_submitter(
     creds: HTTPAuthorizationCredentials | None = Depends(submitter_bearer_scheme),
     db: Session = Depends(get_db),
 ) -> str:
-    """Returns the submitter's verified email. Re-checks `pco_people` on
-    every request rather than trusting the JWT claim alone - mirrors
+    """Returns the submitter's verified email. Re-checks `pco_people_people`
+    on every request rather than trusting the JWT claim alone - mirrors
     get_current_user re-fetching its User row instead of trusting stale
     claims - so removing someone from the PCO People list revokes their
     portal access immediately, not just at their next code request."""

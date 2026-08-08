@@ -202,6 +202,9 @@ All sensitive configuration lives in **Secret Manager**, never in the repository
 | `ledger-plaid-client-id-dev` / `ledger-plaid-secret-dev` | Plaid API credentials for dev - always point at Plaid's **Sandbox** environment (`PLAID_ENV=sandbox`, the app's default), never real Chase data |
 | `ledger-plaid-secret-prod` | Plaid's **Production** secret (same `client_id` as dev - only the `secret` differs by environment) - prod runs `PLAID_ENV=production` against the real Chase account |
 | `ledger-plaid-sync-secret` | Shared secret the nightly Plaid Cloud Scheduler job presents as `X-Sync-Secret` - **prod only**, same pattern as Stripe's, deliberately a separate value so the two integrations' secrets rotate independently |
+| `ledger-pco-app-id` / `ledger-pco-secret` | Planning Center Personal Access Token (App ID + Secret, HTTP Basic Auth) for the People + Giving API syncs - **one shared secret pair**, not per-environment; both dev and prod sync against the same real Planning Center account |
+| `ledger-pco-people-sync-secret` | Shared secret the nightly People Cloud Scheduler job presents as `X-Sync-Secret` on `POST /api/reimbursements/pco-people/scheduled-sync` - **prod only**, dev has no scheduled job |
+| `ledger-pco-giving-sync-secret` | Shared secret the nightly Giving Cloud Scheduler job presents as `X-Sync-Secret` on `POST /api/pledge-campaigns/donors/scheduled-sync` and `POST /api/donations/scheduled-sync` (one secret covers both Giving endpoints) - **prod only**, same pattern as Stripe/Plaid's |
 
 > **Cloud Run only re-reads a secret injected as an environment variable at
 > container *startup*, not live** - unlike secret *volumes*, pointing

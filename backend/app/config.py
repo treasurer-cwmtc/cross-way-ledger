@@ -98,6 +98,23 @@ class Settings(BaseSettings):
     # independently.
     plaid_sync_secret: str = ""
 
+    # --- Planning Center Online API (People + Giving sync) ---
+    # Personal Access Token (App ID + Secret), presented as HTTP Basic Auth -
+    # see services/pco_client.py. Empty by default; sync endpoints return a
+    # clear error until configured, same convention as Stripe/Plaid above.
+    pco_app_id: str = ""
+    pco_secret: str = ""
+    # Separate shared secrets (not stripe_sync_secret's value) so each
+    # integration's scheduled-sync secret can be rotated independently -
+    # same reasoning as stripe_sync_secret vs plaid_sync_secret.
+    pco_people_sync_secret: str = ""
+    pco_giving_sync_secret: str = ""
+    # Re-pulled/re-upserted donations in this trailing window on every sync
+    # (by dedup_key) rather than an incremental cursor - same reasoning as
+    # stripe_sync_lookback_days: cheap at this account's volume, and
+    # self-healing if a donation gets refunded/amended after first sync.
+    pco_giving_sync_lookback_days: int = 30
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -1,17 +1,20 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import or_, select
+import requests
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_user, require_any_permission, require_permission
-from ..models import Donation, Donor, Pledge, PledgeCampaign, PledgeDonorMatch, User
+from ..models import AppSetting, Donation, Donor, Pledge, PledgeCampaign, PledgeDonorMatch, User
 from ..schemas import (
     CampaignDetailOut,
     CampaignDetailRow,
     DonationOut,
     DonorImportSummary,
+    PcoLastSyncedOut,
     PledgeCampaignCreate,
     PledgeCampaignOut,
     PledgeCampaignUpdate,
@@ -21,11 +24,23 @@ from ..schemas import (
     PledgeMatchUpdate,
     PledgeOut,
 )
-from ..services.pledge_import import match_pledge_to_donor, parse_donor_csv, parse_pledge_csv
+from ..services import pco_giving_sync
+from ..services.pco_client import PcoNotConfiguredError
+from ..services.pledge_import import DonorRow, match_pledge_to_donor, parse_donor_csv, parse_pledge_csv
 
 router = APIRouter(
     prefix="/api/pledge-campaigns", tags=["pledge-campaigns"], dependencies=[Depends(get_current_user)]
 )
+# Separate, un-authenticated router for the scheduled-sync endpoint only -
+# `router` above requires a logged-in user for every route via its
+# router-level dependency, which would swallow the Cloud Scheduler job's
+# request with a 401 before _verify_pco_giving_sync_secret ever ran. Mirrors
+# routers/donations.py's per-route (not router-level) dependency approach,
+# scoped down to just this one endpoint since every other route on `router`
+# genuinely does need a real login. Registered separately in main.py.
+scheduled_sync_router = APIRouter(prefix="/api/pledge-campaigns", tags=["pledge-campaigns"])
+
+PCO_GIVING_DONORS_LAST_SYNCED_KEY = "pco_giving_donors_last_synced_at"
 
 
 async def _read_csv(file: UploadFile) -> str:
@@ -192,26 +207,15 @@ async def import_pledges(
     )
 
 
-@router.post(
-    "/{campaign_id}/import/donors", response_model=DonorImportSummary,
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
-async def import_donors_for_campaign(
-    campaign_id: int,
-    donor_file: UploadFile = File(...),
-    source_file_name: str = Form(""),
-    source_file_link: str = Form(""),
-    db: Session = Depends(get_db),
-) -> DonorImportSummary:
-    """Step 3 of the wizard: the donor list (general, not campaign-scoped -
-    shared with every campaign and the Config > Giving App - Donors page).
-    Upserts by donor_id, then re-runs matching for this campaign's pledges
-    now that fresh donor data has arrived - a pledge left unmatched in step
-    2 can resolve here without re-uploading anything. source_file_name/link
-    identify the Drive-archived copy of this CSV - see import_pledges."""
-    _get_campaign(db, campaign_id)
-
-    rows = parse_donor_csv(await _read_csv(donor_file))
+def _upsert_donors(
+    db: Session, rows: list[DonorRow], source_file_name: str = "", source_file_link: str = ""
+) -> int:
+    """Upserts by donor_id - shared by the CSV import path
+    (import_donors_for_campaign below) and the live Giving API sync
+    (services/pco_giving_sync.py + /donors/sync), same reasoning as
+    services.reimbursements.upsert_pco_people. source_file_name/link are
+    left blank for API-sourced rows (there's no CSV to archive a copy of).
+    Caller is responsible for db.commit()."""
     existing = {d.donor_id: d for d in db.scalars(select(Donor))}
     imported = 0
     for row in rows:
@@ -238,12 +242,146 @@ async def import_donors_for_campaign(
             donor.source_file_name = source_file_name
             donor.source_file_link = source_file_link
         imported += 1
+    return imported
+
+
+def _recompute_donor_totals(db: Session) -> None:
+    """Recomputes every Donor's donation_count/total_given/first_donated
+    from the current campaign_donations rows - the source of truth after a
+    Giving API sync, since the API doesn't reliably expose a lifetime total
+    directly on the Person record (see pco_giving_sync.fetch_donors). Run
+    after every Donor+Donation sync so these three fields stay consistent
+    with whatever donations actually landed locally, including the
+    per-fund rows a split donation explodes into. donation_count/total_given
+    are reset to 0 for a donor with zero donations on file (never stale),
+    but first_donated is deliberately NOT reset the same way: it takes the
+    earlier of whatever's already stored (which may have come straight from
+    the Giving API's first_donated_at - see pco_giving_sync.fetch_donors,
+    which reflects the donor's full lifetime history) and whatever this
+    recompute finds locally (which only reflects donations actually synced/
+    imported so far, e.g. just the last pco_giving_sync_lookback_days
+    window on a fresh API sync). Never overwritten to something *later*."""
+    totals = db.execute(
+        select(
+            Donation.donor_id,
+            func.count(Donation.id),
+            func.sum(Donation.net_amount),
+            func.min(Donation.received_date),
+        )
+        .where(Donation.donor_id.is_not(None))
+        .group_by(Donation.donor_id)
+    ).all()
+    by_donor_id = {donor_id: (count, total, first) for donor_id, count, total, first in totals}
+    for donor in db.scalars(select(Donor)):
+        count, total, first = by_donor_id.get(donor.donor_id, (0, 0.0, None))
+        donor.donation_count = count
+        donor.total_given = round(total or 0.0, 2)
+        candidates = [d for d in (donor.first_donated, first) if d is not None]
+        donor.first_donated = min(candidates) if candidates else None
+
+
+def _rematch_every_active_campaign(db: Session) -> tuple[int, int]:
+    """Not-campaign-scoped counterpart to _rematch_campaign_pledges - the
+    donor sync isn't tied to one campaign (donors never were, see Donor's
+    docstring), so a fresh sync re-runs matching across every active
+    campaign instead of the one the CSV wizard happened to be on."""
+    matched_total = 0
+    unmatched_total = 0
+    for campaign_id in db.scalars(
+        select(PledgeCampaign.id).where(PledgeCampaign.is_active == True)  # noqa: E712
+    ):
+        matched, unmatched = _rematch_campaign_pledges(db, campaign_id)
+        matched_total += matched
+        unmatched_total += unmatched
+    return matched_total, unmatched_total
+
+
+@router.post(
+    "/{campaign_id}/import/donors", response_model=DonorImportSummary,
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+async def import_donors_for_campaign(
+    campaign_id: int,
+    donor_file: UploadFile = File(...),
+    source_file_name: str = Form(""),
+    source_file_link: str = Form(""),
+    db: Session = Depends(get_db),
+) -> DonorImportSummary:
+    """Step 3 of the wizard: the donor list (general, not campaign-scoped -
+    shared with every campaign and the Config > Giving App - Donors page).
+    Upserts by donor_id, then re-runs matching for this campaign's pledges
+    now that fresh donor data has arrived - a pledge left unmatched in step
+    2 can resolve here without re-uploading anything. source_file_name/link
+    identify the Drive-archived copy of this CSV - see import_pledges.
+    Manual fallback path, kept intact alongside the live sync below
+    (POST /donors/sync) in case API access is ever lost."""
+    _get_campaign(db, campaign_id)
+
+    rows = parse_donor_csv(await _read_csv(donor_file))
+    imported = _upsert_donors(db, rows, source_file_name, source_file_link)
     db.commit()
 
     matched, unmatched = _rematch_campaign_pledges(db, campaign_id)
     return DonorImportSummary(
         donors_imported=imported, pledges_matched=matched, pledges_unmatched=unmatched
     )
+
+
+def _run_pco_donors_sync(db: Session) -> DonorImportSummary:
+    try:
+        rows = pco_giving_sync.fetch_donors()
+    except PcoNotConfiguredError as e:
+        raise HTTPException(400, str(e))
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Planning Center API error: {e}")
+
+    imported = _upsert_donors(db, rows)
+    _recompute_donor_totals(db)
+
+    now_iso = datetime.now(tz=timezone.utc).isoformat()
+    setting = db.get(AppSetting, PCO_GIVING_DONORS_LAST_SYNCED_KEY)
+    if setting is None:
+        db.add(AppSetting(key=PCO_GIVING_DONORS_LAST_SYNCED_KEY, value=now_iso))
+    else:
+        setting.value = now_iso
+    db.commit()
+
+    matched, unmatched = _rematch_every_active_campaign(db)
+    return DonorImportSummary(
+        donors_imported=imported, pledges_matched=matched, pledges_unmatched=unmatched
+    )
+
+
+@router.post(
+    "/donors/sync", response_model=DonorImportSummary,
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def sync_donors_now(db: Session = Depends(get_db)) -> DonorImportSummary:
+    """Not campaign-scoped - see _rematch_every_active_campaign."""
+    return _run_pco_donors_sync(db)
+
+
+def _verify_pco_giving_sync_secret(x_sync_secret: str = Header(default="")) -> None:
+    settings = get_settings()
+    if not settings.pco_giving_sync_secret or x_sync_secret != settings.pco_giving_sync_secret:
+        raise HTTPException(403, "Invalid or missing sync secret.")
+
+
+@scheduled_sync_router.post(
+    "/donors/scheduled-sync", response_model=DonorImportSummary,
+    dependencies=[Depends(_verify_pco_giving_sync_secret)],
+)
+def scheduled_donors_sync(db: Session = Depends(get_db)) -> DonorImportSummary:
+    return _run_pco_donors_sync(db)
+
+
+@router.get(
+    "/donors/last-synced", response_model=PcoLastSyncedOut,
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def get_donors_last_synced(db: Session = Depends(get_db)) -> PcoLastSyncedOut:
+    setting = db.get(AppSetting, PCO_GIVING_DONORS_LAST_SYNCED_KEY)
+    return PcoLastSyncedOut(last_synced_at=setting.value if setting else None)
 
 
 def _donation_totals_by_donor(db: Session, fund_name: str) -> dict[str, float]:

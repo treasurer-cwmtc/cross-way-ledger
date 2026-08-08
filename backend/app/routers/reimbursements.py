@@ -12,7 +12,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+import requests
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_submitter, require_permission
 from ..models import (
+    AppSetting,
     ChartOfAccount,
     PcoPerson,
     Reimbursement,
@@ -27,6 +29,7 @@ from ..models import (
     ReimbursementLine,
 )
 from ..schemas import (
+    PcoLastSyncedOut,
     PcoPeopleImportSummary,
     PcoPersonOut,
     ReceiptUploadOut,
@@ -42,9 +45,10 @@ from ..schemas import (
     ReimbursementTokenOut,
 )
 from ..security import create_submitter_token
-from ..services import reimbursements as svc
+from ..services import pco_people_sync, reimbursements as svc
 from ..services.email import render_email_html, send_email, send_email_best_effort
 from ..services.google_drive import upload_receipt
+from ..services.pco_client import PcoNotConfiguredError
 
 router = APIRouter(prefix="/api/reimbursements", tags=["reimbursements"])
 settings = get_settings()
@@ -136,22 +140,74 @@ async def import_pco_people(
     people_file: UploadFile = File(...), db: Session = Depends(get_db)
 ) -> PcoPeopleImportSummary:
     """Upserts by person_id (PCO's own ID) - see PcoPerson's docstring for
-    why email is deliberately not the key."""
+    why email is deliberately not the key. Manual fallback path, kept intact
+    alongside the live sync below (POST /pco-people/sync) in case API access
+    is ever lost."""
     rows = svc.parse_pco_people_csv(await _read_csv(people_file))
-    existing = {p.person_id: p for p in db.scalars(select(PcoPerson))}
-    imported = 0
-    for row in rows:
-        person = existing.get(row.person_id)
-        if person is None:
-            person = PcoPerson(person_id=row.person_id)
-            db.add(person)
-            existing[row.person_id] = person
-        person.name = row.name
-        person.email = row.email
-        person.phone_number = row.phone_number
-        imported += 1
+    imported = svc.upsert_pco_people(db, rows)
     db.commit()
     return PcoPeopleImportSummary(people_imported=imported)
+
+
+PCO_PEOPLE_LAST_SYNCED_KEY = "pco_people_last_synced_at"
+
+
+def _run_pco_people_sync(db: Session) -> PcoPeopleImportSummary:
+    try:
+        rows = pco_people_sync.fetch_active_people()
+    except PcoNotConfiguredError as e:
+        raise HTTPException(400, str(e))
+    except requests.RequestException as e:  # network / non-2xx after retries
+        raise HTTPException(502, f"Planning Center API error: {e}")
+
+    imported = svc.upsert_pco_people(db, rows)
+
+    now_iso = datetime.now(tz=timezone.utc).isoformat()
+    setting = db.get(AppSetting, PCO_PEOPLE_LAST_SYNCED_KEY)
+    if setting is None:
+        db.add(AppSetting(key=PCO_PEOPLE_LAST_SYNCED_KEY, value=now_iso))
+    else:
+        setting.value = now_iso
+    db.commit()
+    return PcoPeopleImportSummary(people_imported=imported, last_synced_at=now_iso)
+
+
+@router.post(
+    "/pco-people/sync",
+    response_model=PcoPeopleImportSummary,
+    dependencies=[Depends(require_permission("reimbursements"))],
+)
+def sync_pco_people_now(db: Session = Depends(get_db)) -> PcoPeopleImportSummary:
+    return _run_pco_people_sync(db)
+
+
+def _verify_pco_people_sync_secret(x_sync_secret: str = Header(default="")) -> None:
+    """Guards the scheduled endpoint in place of a user login - same
+    pattern as stripe_sync.py's _verify_sync_secret. Configuring
+    pco_people_sync_secret is required before this endpoint does anything;
+    it's otherwise always rejected, never open-by-default."""
+    settings = get_settings()
+    if not settings.pco_people_sync_secret or x_sync_secret != settings.pco_people_sync_secret:
+        raise HTTPException(403, "Invalid or missing sync secret.")
+
+
+@router.post(
+    "/pco-people/scheduled-sync",
+    response_model=PcoPeopleImportSummary,
+    dependencies=[Depends(_verify_pco_people_sync_secret)],
+)
+def scheduled_pco_people_sync(db: Session = Depends(get_db)) -> PcoPeopleImportSummary:
+    return _run_pco_people_sync(db)
+
+
+@router.get(
+    "/pco-people/last-synced",
+    response_model=PcoLastSyncedOut,
+    dependencies=[Depends(require_permission("reimbursements"))],
+)
+def get_pco_people_last_synced(db: Session = Depends(get_db)) -> PcoLastSyncedOut:
+    setting = db.get(AppSetting, PCO_PEOPLE_LAST_SYNCED_KEY)
+    return PcoLastSyncedOut(last_synced_at=setting.value if setting else None)
 
 
 @router.get(

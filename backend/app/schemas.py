@@ -807,6 +807,13 @@ class DonationImportSummary(BaseModel):
     funds: list[FundSummary]
 
 
+class DonationSyncResult(BaseModel):
+    fetched: int
+    imported: int
+    funds: list[FundSummary]
+    last_synced_at: str
+
+
 class PledgeImportSummary(BaseModel):
     pledges_imported: int
     pledges_matched: int
@@ -933,6 +940,14 @@ class PcoPersonOut(BaseModel):
 
 class PcoPeopleImportSummary(BaseModel):
     people_imported: int
+    # Only set by the live-sync endpoints (POST /pco-people/sync and its
+    # scheduled counterpart) - left None for the CSV import path, which has
+    # no comparable "last synced" concept of its own.
+    last_synced_at: str | None = None
+
+
+class PcoLastSyncedOut(BaseModel):
+    last_synced_at: str | None = None
 
 
 class ReimbursementAssignmentOut(BaseModel):

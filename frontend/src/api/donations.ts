@@ -13,6 +13,17 @@ export interface DonationImportSummary {
   funds: FundSummary[];
 }
 
+export interface DonationSyncResult {
+  fetched: number;
+  imported: number;
+  funds: FundSummary[];
+  last_synced_at: string;
+}
+
+export interface PcoLastSynced {
+  last_synced_at: string | null;
+}
+
 export const donationsApi = {
   funds: () => fetch(`${BASE}/api/donations/funds`, { headers: authHeaders() }).then(j<FundSummary[]>),
 
@@ -38,4 +49,15 @@ export const donationsApi = {
       method: "DELETE",
       headers: authHeaders(),
     }).then(j<FundSummary[]>),
+
+  /** Live counterpart to import() - pulls donations from the trailing
+   * lookback window straight from the Giving API instead of a manual CSV
+   * upload, exploding a multi-fund donation into one row per fund. */
+  sync: () =>
+    fetch(`${BASE}/api/donations/sync`, { method: "POST", headers: authHeaders() }).then(
+      j<DonationSyncResult>
+    ),
+
+  getLastSynced: () =>
+    fetch(`${BASE}/api/donations/last-synced`, { headers: authHeaders() }).then(j<PcoLastSynced>),
 };

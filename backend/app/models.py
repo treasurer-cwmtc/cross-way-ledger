@@ -633,7 +633,7 @@ class Donor(Base):
     refreshed via the pledge campaign wizard, upserted by donor_id.
     """
 
-    __tablename__ = "campaign_donors"
+    __tablename__ = "pco_giving_people"
 
     donor_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     donor_number: Mapped[str] = mapped_column(String(40), default="")
@@ -719,7 +719,7 @@ class PledgeDonorMatch(Base):
         ForeignKey("campaign_pledge_submissions.id"), unique=True, index=True
     )
     donor_id: Mapped[str | None] = mapped_column(
-        ForeignKey("campaign_donors.donor_id"), nullable=True
+        ForeignKey("pco_giving_people.donor_id"), nullable=True
     )
     match_source: Mapped[str] = mapped_column(String(10), default="auto")  # auto | manual
     matched_at: Mapped[datetime] = mapped_column(
@@ -781,7 +781,7 @@ class PcoPerson(Base):
     export), so it's an index, not a key.
     """
 
-    __tablename__ = "pco_people"
+    __tablename__ = "pco_people_people"
 
     person_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     name: Mapped[str] = mapped_column(String(200), default="")

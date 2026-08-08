@@ -4,6 +4,7 @@ import { donationsApi, FundSummary } from "../../api/donations";
 import { uploadCampaignImportFile, PickedFile } from "../../lib/googleDrive";
 import { getCurrentFiscalYear } from "../../api/settings";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
+import { fmtRelative } from "../../lib/fmtRelative";
 
 const STEPS = [
   { key: 1, label: "Campaign" },
@@ -201,10 +202,28 @@ export default function ImportWizard() {
   const [donationFile, setDonationFile] = useState<File | null>(null);
   const [funds, setFunds] = useState<FundSummary[] | null>(null);
   const [donationsImported, setDonationsImported] = useState<number | null>(null);
+  const [donationsSyncing, setDonationsSyncing] = useState(false);
+  const [donationsLastSyncedAt, setDonationsLastSyncedAt] = useState<string | null>(null);
 
   useEffect(() => {
     donationsApi.funds().then(setFunds).catch(() => setFunds([]));
+    donationsApi.getLastSynced().then((r) => setDonationsLastSyncedAt(r.last_synced_at)).catch(() => {});
   }, []);
+
+  async function runDonationsSync() {
+    setDonationsSyncing(true);
+    setError("");
+    try {
+      const result = await donationsApi.sync();
+      setFunds(result.funds);
+      setDonationsImported(result.imported);
+      setDonationsLastSyncedAt(result.last_synced_at);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDonationsSyncing(false);
+    }
+  }
 
   // Every upload in this wizard is also archived to Google Drive
   // (<current year>/Campaign/<campaign name>/<file>) so a row can always be
@@ -303,6 +322,15 @@ export default function ImportWizard() {
     pledges_matched: number;
     pledges_unmatched: number;
   } | null>(null);
+  const [donorsSyncing, setDonorsSyncing] = useState(false);
+  const [donorsLastSyncedAt, setDonorsLastSyncedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    pledgeCampaignsApi
+      .getDonorsLastSynced()
+      .then((r) => setDonorsLastSyncedAt(r.last_synced_at))
+      .catch(() => {});
+  }, []);
 
   async function runDonorImport() {
     if (!campaignId || !donorFile) return;
@@ -321,6 +349,22 @@ export default function ImportWizard() {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runDonorsSync() {
+    setDonorsSyncing(true);
+    setError("");
+    try {
+      const result = await pledgeCampaignsApi.syncDonors();
+      setDonorSummary(result);
+      setDonorsLastSyncedAt(new Date().toISOString());
+      pledgeCampaignsApi.getDonorsLastSynced().then((r) => setDonorsLastSyncedAt(r.last_synced_at));
+      advance(5);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDonorsSyncing(false);
     }
   }
 
@@ -432,26 +476,38 @@ export default function ImportWizard() {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>2. Upload Donations</h3>
           <p className="subtitle">
-            The Giving App's own donation export - the source of truth. No fund needs to be
-            chosen here; every fund present in the file is imported.
+            Synced automatically from the Giving API. No fund needs to be chosen here; every
+            fund present is imported.
           </p>
-          <label className="field">
-            <span>Donations export</span>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(ev) => setDonationFile(ev.target.files?.[0] ?? null)}
-            />
-          </label>
-          <button className="btn" disabled={busy || !donationFile} onClick={runDonationsImport}>
-            {busy ? "Importing…" : "Import donations"}
-          </button>
+          <div className="row" style={{ alignItems: "center" }}>
+            <button className="btn" disabled={donationsSyncing} onClick={runDonationsSync}>
+              {donationsSyncing ? "Syncing…" : "Sync donations now"}
+            </button>
+            <span className="pill">Last synced: {fmtRelative(donationsLastSyncedAt)}</span>
+          </div>
 
           {donationsImported !== null && (
             <p className="subtitle" style={{ marginTop: 10 }}>
               {donationsImported} new donations imported.
             </p>
           )}
+
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--muted)" }}>
+              Import from a CSV file instead (fallback if the API sync is unavailable)
+            </summary>
+            <label className="field" style={{ marginTop: 8 }}>
+              <span>Donations export</span>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(ev) => setDonationFile(ev.target.files?.[0] ?? null)}
+              />
+            </label>
+            <button className="btn" disabled={busy || !donationFile} onClick={runDonationsImport}>
+              {busy ? "Importing…" : "Import donations"}
+            </button>
+          </details>
 
           {funds && funds.length > 0 && (
             <>
@@ -571,17 +627,29 @@ export default function ImportWizard() {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>4. Upload Donors</h3>
           <p className="subtitle">
-            The Giving App donor list - shared across every campaign. Uploading here re-matches
-            this campaign's pledges automatically, so anyone who gave for the first time since
-            step 3 gets linked without re-uploading pledges.
+            Synced automatically from the Giving API - re-matches every active campaign's
+            pledges, so anyone who gave for the first time since step 3 gets linked without
+            re-uploading anything.
           </p>
-          <label className="field">
-            <span>Donors export</span>
-            <input type="file" accept=".csv" onChange={(ev) => setDonorFile(ev.target.files?.[0] ?? null)} />
-          </label>
-          <button className="btn" disabled={busy || !donorFile} onClick={runDonorImport}>
-            {busy ? "Importing…" : "Import donors & finish"}
-          </button>
+          <div className="row" style={{ alignItems: "center" }}>
+            <button className="btn" disabled={donorsSyncing} onClick={runDonorsSync}>
+              {donorsSyncing ? "Syncing…" : "Sync donors now & finish"}
+            </button>
+            <span className="pill">Last synced: {fmtRelative(donorsLastSyncedAt)}</span>
+          </div>
+
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--muted)" }}>
+              Import from a CSV file instead (fallback if the API sync is unavailable)
+            </summary>
+            <label className="field" style={{ marginTop: 8 }}>
+              <span>Donors export</span>
+              <input type="file" accept=".csv" onChange={(ev) => setDonorFile(ev.target.files?.[0] ?? null)} />
+            </label>
+            <button className="btn" disabled={busy || !donorFile} onClick={runDonorImport}>
+              {busy ? "Importing…" : "Import donors & finish"}
+            </button>
+          </details>
 
           {donorSummary && (
             <div className="stats" style={{ marginTop: 14 }}>

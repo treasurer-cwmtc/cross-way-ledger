@@ -198,6 +198,20 @@ export const pledgeCampaignsApi = {
     }).then(j<DonorImportSummary>);
   },
 
+  /** Live counterpart to importDonors - pulls donor profiles from the
+   * Giving API instead of a manual CSV upload. Not campaign-scoped (donors
+   * never were), so this re-runs matching across every active campaign. */
+  syncDonors: () =>
+    fetch(`${BASE}/api/pledge-campaigns/donors/sync`, {
+      method: "POST",
+      headers: authHeaders(),
+    }).then(j<DonorImportSummary>),
+
+  getDonorsLastSynced: () =>
+    fetch(`${BASE}/api/pledge-campaigns/donors/last-synced`, { headers: authHeaders() }).then(
+      j<{ last_synced_at: string | null }>
+    ),
+
   dashboard: (campaignId: number) =>
     fetch(`${BASE}/api/pledge-campaigns/${campaignId}/dashboard`, {
       headers: authHeaders(),
