@@ -1,5 +1,5 @@
 """Tests for the optional PCO List-based Reimbursement portal login gate:
-GET/PUT /api/reimbursements/reimbursement-gate-list, GET /pco-lists, and the
+GET/PUT /api/pco/people/reimbursement-gate-list, GET /api/pco/people/lists, and the
 additive gate check in services.reimbursements.is_allowed_reimbursement_submitter
 (used by both request_otp and deps.get_current_submitter)."""
 
@@ -18,7 +18,7 @@ def _sync_people():
         "app.routers.reimbursements.pco_people_sync.fetch_people",
         return_value=[PERSON_A, PERSON_B],
     ):
-        r = client.post("/api/reimbursements/pco-people/sync", headers=h)
+        r = client.post("/api/pco/people/sync", headers=h)
     assert r.status_code == 200, r.text
 
 
@@ -35,12 +35,12 @@ def _login(email: str) -> str:
 
 
 def test_pco_lists_requires_auth():
-    assert client.get("/api/reimbursements/pco-lists").status_code == 401
+    assert client.get("/api/pco/people/lists").status_code == 401
 
 
 def test_gate_list_defaults_to_unset():
     h = auth_header()
-    r = client.get("/api/reimbursements/reimbursement-gate-list", headers=h)
+    r = client.get("/api/pco/people/reimbursement-gate-list", headers=h)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["list_id"] is None
@@ -56,7 +56,7 @@ def test_no_gate_list_configured_any_active_person_can_request_otp():
         assert mock_send.called
     # Clean up so later tests in this file start from "no gate configured".
     client.put(
-        "/api/reimbursements/reimbursement-gate-list", headers=h, json={"list_id": None}
+        "/api/pco/people/reimbursement-gate-list", headers=h, json={"list_id": None}
     )
 
 
@@ -70,7 +70,7 @@ def test_set_gate_list_syncs_membership():
         return_value={"9101"},
     ):
         r = client.put(
-            "/api/reimbursements/reimbursement-gate-list", headers=h, json={"list_id": "list1"}
+            "/api/pco/people/reimbursement-gate-list", headers=h, json={"list_id": "list1"}
         )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -113,7 +113,7 @@ def test_get_current_submitter_revoked_immediately_when_removed_from_gate_list()
         "app.routers.reimbursements.pco_people_sync.fetch_list_member_ids",
         return_value=set(),  # ada no longer on the list
     ):
-        r = client.post("/api/reimbursements/pco-people/sync", headers=admin_h)
+        r = client.post("/api/pco/people/sync", headers=admin_h)
     assert r.status_code == 200, r.text
 
     r = client.get("/api/reimbursements/my/coas", headers=h)
@@ -122,5 +122,5 @@ def test_get_current_submitter_revoked_immediately_when_removed_from_gate_list()
     # Clear the gate so later test files (which assume "any active person
     # can log in") aren't affected by state left over from this file.
     client.put(
-        "/api/reimbursements/reimbursement-gate-list", headers=admin_h, json={"list_id": None}
+        "/api/pco/people/reimbursement-gate-list", headers=admin_h, json={"list_id": None}
     )

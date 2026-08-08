@@ -24,7 +24,7 @@ def _create_campaign(name: str) -> dict:
 def _sync_people(rows: list[PcoPersonRow]):
     h = auth_header()
     with patch("app.routers.reimbursements.pco_people_sync.fetch_people", return_value=rows):
-        r = client.post("/api/reimbursements/pco-people/sync", headers=h)
+        r = client.post("/api/pco/people/sync", headers=h)
     assert r.status_code == 200, r.text
 
 
@@ -57,19 +57,19 @@ def _fake_submission_rows() -> list[FormSubmissionRow]:
 
 
 def test_pco_forms_endpoints_require_auth():
-    assert client.get("/api/pledge-campaigns/pco-forms").status_code == 401
-    assert client.get("/api/pledge-campaigns/pco-forms/1109730/fields").status_code == 401
+    assert client.get("/api/pco/forms").status_code == 401
+    assert client.get("/api/pco/forms/1109730/fields").status_code == 401
 
 
 def test_list_pco_forms_and_fields_excludes_headings():
     h = auth_header()
     with patch("app.routers.pledge_campaigns.pco_form_sync.fetch_available_forms", return_value=_fake_forms()):
-        r = client.get("/api/pledge-campaigns/pco-forms", headers=h)
+        r = client.get("/api/pco/forms", headers=h)
     assert r.status_code == 200, r.text
     assert r.json()[0]["id"] == "1109730"
 
     with patch("app.routers.pledge_campaigns.pco_form_sync.fetch_form_fields", return_value=_fake_fields()[1:]):
-        r = client.get("/api/pledge-campaigns/pco-forms/1109730/fields", headers=h)
+        r = client.get("/api/pco/forms/1109730/fields", headers=h)
     assert r.status_code == 200, r.text
     field_ids = {f["id"] for f in r.json()}
     assert "f-heading" not in field_ids
@@ -106,7 +106,7 @@ def test_save_mapping_sets_campaign_form_id():
 def test_sync_now_rejects_a_campaign_with_no_form_configured():
     campaign = _create_campaign("No Form Campaign")
     h = auth_header()
-    r = client.post(f"/api/pledge-campaigns/{campaign['id']}/pledges/sync", headers=h)
+    r = client.post(f"/api/pco/forms/{campaign['id']}/sync", headers=h)
     assert r.status_code == 400, r.text
 
 
@@ -130,7 +130,7 @@ def test_sync_now_resolves_identity_from_synced_person_and_upserts_pledge():
         "app.routers.pledge_campaigns.pco_form_sync.fetch_form_submissions",
         return_value=_fake_submission_rows(),
     ):
-        r = client.post(f"/api/pledge-campaigns/{campaign['id']}/pledges/sync", headers=h)
+        r = client.post(f"/api/pco/forms/{campaign['id']}/sync", headers=h)
     assert r.status_code == 200, r.text
     assert r.json()["pledges_imported"] == 1
 
@@ -145,7 +145,7 @@ def test_sync_now_resolves_identity_from_synced_person_and_upserts_pledge():
         "app.routers.pledge_campaigns.pco_form_sync.fetch_form_submissions",
         return_value=_fake_submission_rows(),
     ):
-        r = client.post(f"/api/pledge-campaigns/{campaign['id']}/pledges/sync", headers=h)
+        r = client.post(f"/api/pco/forms/{campaign['id']}/sync", headers=h)
     assert r.status_code == 200, r.text
     assert r.json()["pledges_imported"] == 1
     details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
@@ -153,10 +153,10 @@ def test_sync_now_resolves_identity_from_synced_person_and_upserts_pledge():
 
 
 def test_scheduled_sync_rejects_missing_or_wrong_secret():
-    assert client.post("/api/pledge-campaigns/pledges/scheduled-sync").status_code == 403
+    assert client.post("/api/pco/forms/scheduled-sync").status_code == 403
     assert (
         client.post(
-            "/api/pledge-campaigns/pledges/scheduled-sync", headers={"X-Sync-Secret": "wrong"}
+            "/api/pco/forms/scheduled-sync", headers={"X-Sync-Secret": "wrong"}
         ).status_code
         == 403
     )

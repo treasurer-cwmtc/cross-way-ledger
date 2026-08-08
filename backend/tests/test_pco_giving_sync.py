@@ -69,14 +69,14 @@ def _create_campaign(name="Sync Test Campaign") -> dict:
 
 
 def test_donors_sync_now_requires_auth():
-    assert client.post("/api/pledge-campaigns/donors/sync").status_code == 401
+    assert client.post("/api/pco/giving/donors/sync").status_code == 401
 
 
 def test_donors_scheduled_sync_rejects_missing_or_wrong_secret():
-    assert client.post("/api/pledge-campaigns/donors/scheduled-sync").status_code == 403
+    assert client.post("/api/pco/giving/donors/scheduled-sync").status_code == 403
     assert (
         client.post(
-            "/api/pledge-campaigns/donors/scheduled-sync", headers={"X-Sync-Secret": "wrong"}
+            "/api/pco/giving/donors/scheduled-sync", headers={"X-Sync-Secret": "wrong"}
         ).status_code
         == 403
     )
@@ -85,12 +85,12 @@ def test_donors_scheduled_sync_rejects_missing_or_wrong_secret():
 def test_donors_sync_upserts_and_updates_last_synced():
     h = auth_header()
     with patch("app.routers.pledge_campaigns.pco_giving_sync.fetch_donors", return_value=_fake_donor_rows()):
-        r = client.post("/api/pledge-campaigns/donors/sync", headers=h)
+        r = client.post("/api/pco/giving/donors/sync", headers=h)
     assert r.status_code == 200, r.text
     result = r.json()
     assert result["donors_imported"] == 1
 
-    r = client.get("/api/pledge-campaigns/donors/last-synced", headers=h)
+    r = client.get("/api/pco/giving/donors/last-synced", headers=h)
     assert r.status_code == 200, r.text
     assert r.json()["last_synced_at"]
 
@@ -104,10 +104,10 @@ def test_donors_sync_recomputes_totals_from_local_donations():
         "app.routers.donations.pco_giving_sync.fetch_donations",
         return_value=_fake_donation_rows("8001", "d-recompute-totals"),
     ):
-        client.post("/api/donations/sync", headers=h)
+        client.post("/api/pco/giving/donations/sync", headers=h)
 
     with patch("app.routers.pledge_campaigns.pco_giving_sync.fetch_donors", return_value=_fake_donor_rows()):
-        client.post("/api/pledge-campaigns/donors/sync", headers=h)
+        client.post("/api/pco/giving/donors/sync", headers=h)
 
     r = client.get("/api/donors", headers=h)
     assert r.status_code == 200, r.text
@@ -135,7 +135,7 @@ def test_donors_sync_rematches_every_active_campaign_not_just_one():
         assert r.status_code == 200, r.text
 
     with patch("app.routers.pledge_campaigns.pco_giving_sync.fetch_donors", return_value=_fake_donor_rows()):
-        r = client.post("/api/pledge-campaigns/donors/sync", headers=h)
+        r = client.post("/api/pco/giving/donors/sync", headers=h)
     assert r.status_code == 200, r.text
     # Both campaigns' pledges for priya@example.com resolve against the one
     # synced donor - not campaign-scoped (see Donor's docstring).
@@ -150,7 +150,7 @@ def test_donors_sync_surfaces_missing_credentials_as_400():
         "app.routers.pledge_campaigns.pco_giving_sync.fetch_donors",
         side_effect=PcoNotConfiguredError("not configured"),
     ):
-        r = client.post("/api/pledge-campaigns/donors/sync", headers=h)
+        r = client.post("/api/pco/giving/donors/sync", headers=h)
     assert r.status_code == 400, r.text
 
 
@@ -160,14 +160,14 @@ def test_donors_sync_surfaces_missing_credentials_as_400():
 
 
 def test_donations_sync_now_requires_auth():
-    assert client.post("/api/donations/sync").status_code == 401
+    assert client.post("/api/pco/giving/donations/sync").status_code == 401
 
 
 def test_donations_scheduled_sync_rejects_missing_or_wrong_secret():
-    assert client.post("/api/donations/scheduled-sync").status_code == 403
+    assert client.post("/api/pco/giving/donations/scheduled-sync").status_code == 403
     assert (
         client.post(
-            "/api/donations/scheduled-sync", headers={"X-Sync-Secret": "wrong"}
+            "/api/pco/giving/donations/scheduled-sync", headers={"X-Sync-Secret": "wrong"}
         ).status_code
         == 403
     )
@@ -177,20 +177,20 @@ def test_donations_sync_upserts_by_dedup_key_and_skips_repeats():
     h = auth_header()
     rows = _fake_donation_rows("8002", "d-upsert-dedup")
     with patch("app.routers.donations.pco_giving_sync.fetch_donations", return_value=rows):
-        r = client.post("/api/donations/sync", headers=h)
+        r = client.post("/api/pco/giving/donations/sync", headers=h)
     assert r.status_code == 200, r.text
     result = r.json()
     assert result["fetched"] == 1
     assert result["imported"] == 1
     assert result["last_synced_at"]
 
-    r = client.get("/api/donations/last-synced", headers=h)
+    r = client.get("/api/pco/giving/donations/last-synced", headers=h)
     assert r.json()["last_synced_at"] == result["last_synced_at"]
 
     # A repeat sync with the same dedup_key is skipped, not duplicated -
     # Donations are immutable once landed (see Donation's docstring).
     with patch("app.routers.donations.pco_giving_sync.fetch_donations", return_value=rows):
-        r = client.post("/api/donations/sync", headers=h)
+        r = client.post("/api/pco/giving/donations/sync", headers=h)
     assert r.json()["imported"] == 0
 
 
@@ -199,6 +199,6 @@ def test_donations_sync_passes_lookback_days_setting_through():
     with patch(
         "app.routers.donations.pco_giving_sync.fetch_donations", return_value=[]
     ) as mock_fetch:
-        r = client.post("/api/donations/sync", headers=h)
+        r = client.post("/api/pco/giving/donations/sync", headers=h)
     assert r.status_code == 200, r.text
     mock_fetch.assert_called_once_with(30)  # default pco_giving_sync_lookback_days

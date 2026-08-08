@@ -249,25 +249,23 @@ export const pledgeCampaignsApi = {
    * Giving API instead of a manual CSV upload. Not campaign-scoped (donors
    * never were), so this re-runs matching across every active campaign. */
   syncDonors: () =>
-    fetch(`${BASE}/api/pledge-campaigns/donors/sync`, {
+    fetch(`${BASE}/api/pco/giving/donors/sync`, {
       method: "POST",
       headers: authHeaders(),
     }).then(j<DonorImportSummary>),
 
   getDonorsLastSynced: () =>
-    fetch(`${BASE}/api/pledge-campaigns/donors/last-synced`, { headers: authHeaders() }).then(
+    fetch(`${BASE}/api/pco/giving/donors/last-synced`, { headers: authHeaders() }).then(
       j<{ last_synced_at: string | null }>
     ),
 
   /** Every PCO Form in the account, for the wizard's "Sync from a Planning
    * Center Form" picker. */
   listPcoForms: () =>
-    fetch(`${BASE}/api/pledge-campaigns/pco-forms`, { headers: authHeaders() }).then(
-      j<PcoFormOption[]>
-    ),
+    fetch(`${BASE}/api/pco/forms`, { headers: authHeaders() }).then(j<PcoFormOption[]>),
 
   listPcoFormFields: (formId: string) =>
-    fetch(`${BASE}/api/pledge-campaigns/pco-forms/${encodeURIComponent(formId)}/fields`, {
+    fetch(`${BASE}/api/pco/forms/${encodeURIComponent(formId)}/fields`, {
       headers: authHeaders(),
     }).then(j<PcoFormFieldOption[]>),
 
@@ -287,18 +285,18 @@ export const pledgeCampaignsApi = {
 
   /** Manual "Sync now" for a campaign already configured with a form. */
   syncCampaignPledges: (campaignId: number) =>
-    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/pledges/sync`, {
+    fetch(`${BASE}/api/pco/forms/${campaignId}/sync`, {
       method: "POST",
       headers: authHeaders(),
     }).then(j<PledgeFormSyncSummary>),
 
   listGivingPeopleLinks: () =>
-    fetch(`${BASE}/api/pledge-campaigns/giving-people-links`, { headers: authHeaders() }).then(
+    fetch(`${BASE}/api/pco/giving/people-links`, { headers: authHeaders() }).then(
       j<GivingPersonLink[]>
     ),
 
   setGivingPeopleLink: (donorId: string, personId: string | null) =>
-    fetch(`${BASE}/api/pledge-campaigns/giving-people-links/${encodeURIComponent(donorId)}`, {
+    fetch(`${BASE}/api/pco/giving/people-links/${encodeURIComponent(donorId)}`, {
       method: "PUT",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ person_id: personId }),
