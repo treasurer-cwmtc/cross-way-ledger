@@ -26,7 +26,7 @@ from ..schemas import (
 )
 from ..services.categorizer import Categorizer
 from ..services.ledger import build_dedup_key, friendly_method, parse_date
-from ..services.reconciler import UNCATEGORIZED_NOTE
+from ..services.reconciler import is_review_hint_note
 
 router = APIRouter(
     prefix="/api/reconciliation",
@@ -392,13 +392,13 @@ def import_run(
                 amount=line.amount,
                 check_invoice_name=line.reference,
                 bank_description=line.bank_description,
-                # UNCATEGORIZED_NOTE is a wizard-only review hint (surfaced
-                # in Step 3's "What's wrong" column) - not something that
-                # belongs permanently on the ledger, which already shows
-                # uncategorized rows via a red Statement Description
-                # instead. Only strip that exact auto-generated text, so a
-                # real note the user typed on the line is never lost.
-                notes="" if line.notes == UNCATEGORIZED_NOTE else line.notes,
+                # Review-only "go fix this" hints (surfaced in Step 3's
+                # "What's wrong" column) don't belong permanently on the
+                # ledger, which already shows uncategorized rows via a red
+                # Statement Description instead - strip them, but keep any
+                # real note the treasurer typed, or a purely descriptive
+                # one (see is_review_hint_note's docstring).
+                notes="" if is_review_hint_note(line.notes) else line.notes,
                 dedup_key=key,
                 source_run_id=run.id,
                 source_file_name=run.stripe_filename if line.source == "stripe" else run.bank_filename,

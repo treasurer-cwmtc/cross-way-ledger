@@ -21,7 +21,7 @@ from app.services.parsers import (
     parse_fund_breakdown,
     parse_stripe_csv,
 )
-from app.services.reconciler import merge_stripe, reconcile
+from app.services.reconciler import is_review_hint_note, merge_stripe, reconcile
 
 from _db_safety import assert_safe_test_database
 
@@ -232,6 +232,25 @@ def test_split_fund_donation_posts_to_each_funds_own_account():
         assert "Split gift" in by_account["I101210"].notes
     finally:
         db.close()
+
+
+def test_is_review_hint_note_recognizes_every_generated_wizard_hint():
+    # Every "go fix this" note reconciler.py actually generates must be
+    # recognized, or it'll leak into the permanent ledger on import - see
+    # the "Uncategorized - add a rule" note that used to survive import.
+    assert is_review_hint_note("No Stripe payout matched this bank amount.")
+    assert is_review_hint_note("No fund rule for 'Building Fund'")
+    assert is_review_hint_note(
+        "No fund rule for 'Building Fund' (split gift 1 of 2)"
+    )
+    assert is_review_hint_note("Payout po_abc123 had no linked donations.")
+    assert not is_review_hint_note("")
+    # Purely descriptive notes (not "go fix this") are kept, not stripped.
+    assert not is_review_hint_note(
+        "Bank payout minus sum of donation net amounts (fees / timing)."
+    )
+    assert not is_review_hint_note("Split gift (1 of 2): 'Building Fund'")
+    assert not is_review_hint_note("A real note the treasurer typed.")
 
 
 def test_bank_keyword_rule_description_fills_description():
