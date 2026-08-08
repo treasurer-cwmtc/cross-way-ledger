@@ -1023,6 +1023,27 @@ class PledgeFormSyncSummary(BaseModel):
     pledges_unmatched: int
 
 
+class IntegrationStatusOut(BaseModel):
+    key: str
+    label: str
+    description: str
+    # What actually calling this integration's sync looks like - shown so
+    # an admin can see exactly which endpoint a "Sync now" click or the
+    # nightly Cloud Scheduler job hits, without digging through the repo.
+    sync_now_endpoint: str
+    scheduled_sync_endpoint: str
+    last_synced_at: str | None
+    last_error: str | None
+    last_error_at: str | None
+    # Base API credentials present (e.g. pco_app_id/pco_secret) - false
+    # means every sync attempt will fail with a 400 until configured.
+    configured: bool
+    # The nightly Cloud Scheduler job's shared secret is set - false means
+    # the endpoint above 403s any request, including the real scheduler's,
+    # so only the manual "Sync now" button works until this is configured.
+    scheduled_sync_configured: bool
+
+
 class ReimbursementAssignmentOut(BaseModel):
     account_no: str
     statement_description: str

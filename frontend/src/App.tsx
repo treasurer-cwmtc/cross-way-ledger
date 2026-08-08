@@ -28,6 +28,7 @@ import PlanningCenterPeople from "./pages/PlanningCenter/People";
 import PlanningCenterDonations from "./pages/PlanningCenter/Donations";
 import ReimbursementAccess from "./pages/PlanningCenter/ReimbursementAccess";
 import GivingPeopleLink from "./pages/PlanningCenter/GivingPeopleLink";
+import IntegrationsStatus from "./pages/IntegrationsStatus";
 
 type Tab =
   | "home"
@@ -54,7 +55,8 @@ type Tab =
   | "pco-people"
   | "pco-donations"
   | "pco-reimbursement-access"
-  | "pco-giving-people-link";
+  | "pco-giving-people-link"
+  | "integrations-status";
 
 interface NavItem {
   tab: Tab;
@@ -139,6 +141,7 @@ const NAV_GROUPS: NavGroup[] = [
       { tab: "accounts", label: "Chart of Accounts" },
       { tab: "link-receipts", label: "Link Receipts" },
       { tab: "config", label: "Config" },
+      { tab: "integrations-status", label: "Integrations Status", adminOnly: true },
       { tab: "users", label: "Users", adminOnly: true },
     ],
   },
@@ -406,6 +409,7 @@ export default function App() {
           {tab === "pco-donations" && <PlanningCenterDonations />}
           {tab === "pco-reimbursement-access" && <ReimbursementAccess />}
           {tab === "pco-giving-people-link" && <GivingPeopleLink />}
+          {tab === "integrations-status" && user.is_admin && <IntegrationsStatus />}
           {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
         </div>
       </main>

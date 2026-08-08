@@ -10,7 +10,7 @@ from ..database import get_db
 from ..deps import require_permission
 from ..models import AppSetting, Donation
 from ..schemas import DonationImportSummary, DonationSyncResult, FundSummary, PcoLastSyncedOut
-from ..services import pco_giving_sync
+from ..services import integration_status, pco_giving_sync
 from ..services.pco_client import PcoNotConfiguredError
 from ..services.pledge_import import parse_donation_csv
 from .pledge_campaigns import _recompute_donor_totals
@@ -119,8 +119,14 @@ def _run_pco_donations_sync(db: Session) -> DonationSyncResult:
     try:
         rows = pco_giving_sync.fetch_donations(settings.pco_giving_sync_lookback_days)
     except PcoNotConfiguredError as e:
+        integration_status.record_failure(db, PCO_GIVING_DONATIONS_LAST_SYNCED_KEY, str(e))
+        db.commit()
         raise HTTPException(400, str(e))
     except requests.RequestException as e:
+        integration_status.record_failure(
+            db, PCO_GIVING_DONATIONS_LAST_SYNCED_KEY, f"Planning Center API error: {e}"
+        )
+        db.commit()
         raise HTTPException(502, f"Planning Center API error: {e}")
 
     imported = _upsert_donations(db, rows)
@@ -131,6 +137,7 @@ def _run_pco_donations_sync(db: Session) -> DonationSyncResult:
         db.add(AppSetting(key=PCO_GIVING_DONATIONS_LAST_SYNCED_KEY, value=now_iso))
     else:
         setting.value = now_iso
+    integration_status.clear_failure(db, PCO_GIVING_DONATIONS_LAST_SYNCED_KEY)
     db.commit()
 
     # A fresh batch of donations changes every affected donor's totals -

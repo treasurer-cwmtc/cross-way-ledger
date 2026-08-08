@@ -15,7 +15,7 @@ from ..schemas import (
     PlaidSyncResult,
     PlaidTransactionsOut,
 )
-from ..services import plaid_client
+from ..services import integration_status, plaid_client
 
 LAST_SYNCED_KEY = "plaid_last_synced_at"
 
@@ -160,7 +160,10 @@ def _run_sync(db: Session) -> PlaidSyncResult:
             added, modified, removed = _sync_one_item(db, item)
         except Exception as e:
             db.rollback()
-            raise _plaid_error_response(e)
+            error = _plaid_error_response(e)
+            integration_status.record_failure(db, LAST_SYNCED_KEY, error.detail)
+            db.commit()
+            raise error
         total_added += added
         total_modified += modified
         total_removed += removed
@@ -171,6 +174,7 @@ def _run_sync(db: Session) -> PlaidSyncResult:
         db.add(AppSetting(key=LAST_SYNCED_KEY, value=now_iso))
     else:
         setting.value = now_iso
+    integration_status.clear_failure(db, LAST_SYNCED_KEY)
     db.commit()
 
     return PlaidSyncResult(

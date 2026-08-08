@@ -49,7 +49,7 @@ from ..schemas import (
     ReimbursementTokenOut,
 )
 from ..security import create_submitter_token
-from ..services import pco_people_sync, reimbursements as svc
+from ..services import integration_status, pco_people_sync, reimbursements as svc
 from ..services.email import render_email_html, send_email, send_email_best_effort
 from ..services.google_drive import upload_receipt
 from ..services.pco_client import PcoNotConfiguredError
@@ -184,8 +184,14 @@ def _run_pco_people_sync(db: Session) -> PcoPeopleImportSummary:
     try:
         rows = pco_people_sync.fetch_people()
     except PcoNotConfiguredError as e:
+        integration_status.record_failure(db, PCO_PEOPLE_LAST_SYNCED_KEY, str(e))
+        db.commit()
         raise HTTPException(400, str(e))
     except requests.RequestException as e:  # network / non-2xx after retries
+        integration_status.record_failure(
+            db, PCO_PEOPLE_LAST_SYNCED_KEY, f"Planning Center API error: {e}"
+        )
+        db.commit()
         raise HTTPException(502, f"Planning Center API error: {e}")
 
     imported = svc.upsert_pco_people(db, rows)
@@ -202,6 +208,7 @@ def _run_pco_people_sync(db: Session) -> PcoPeopleImportSummary:
         db.add(AppSetting(key=PCO_PEOPLE_LAST_SYNCED_KEY, value=now_iso))
     else:
         setting.value = now_iso
+    integration_status.clear_failure(db, PCO_PEOPLE_LAST_SYNCED_KEY)
     db.commit()
     return PcoPeopleImportSummary(people_imported=imported, last_synced_at=now_iso)
 

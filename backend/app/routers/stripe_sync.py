@@ -10,6 +10,7 @@ from ..database import get_db
 from ..deps import require_permission
 from ..models import AppSetting, StripeTransaction
 from ..schemas import StripeSyncResult, StripeTransactionsOut
+from ..services import integration_status
 from ..services.stripe_sync import fetch_recent_transactions
 
 LAST_SYNCED_KEY = "stripe_last_synced_at"
@@ -21,8 +22,12 @@ def _run_sync(db: Session, days: int | None = None) -> StripeSyncResult:
     try:
         rows = fetch_recent_transactions(lookback_days=days)
     except RuntimeError as e:
+        integration_status.record_failure(db, LAST_SYNCED_KEY, str(e))
+        db.commit()
         raise HTTPException(400, str(e))
     except Exception as e:  # Stripe SDK errors (bad key, network, rate limit)
+        integration_status.record_failure(db, LAST_SYNCED_KEY, f"Stripe API error: {e}")
+        db.commit()
         raise HTTPException(502, f"Stripe API error: {e}")
 
     added = 0
@@ -70,6 +75,7 @@ def _run_sync(db: Session, days: int | None = None) -> StripeSyncResult:
         db.add(AppSetting(key=LAST_SYNCED_KEY, value=now_iso))
     else:
         setting.value = now_iso
+    integration_status.clear_failure(db, LAST_SYNCED_KEY)
     db.commit()
 
     return StripeSyncResult(

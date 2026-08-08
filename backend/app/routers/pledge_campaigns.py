@@ -42,7 +42,7 @@ from ..schemas import (
     PledgeMatchUpdate,
     PledgeOut,
 )
-from ..services import pco_form_sync, pco_giving_sync
+from ..services import integration_status, pco_form_sync, pco_giving_sync
 from ..services.pco_client import PcoNotConfiguredError
 from ..services.pledge_import import DonorRow, match_pledge_to_donor, parse_donor_csv, parse_pledge_csv
 
@@ -59,6 +59,12 @@ router = APIRouter(
 scheduled_sync_router = APIRouter(prefix="/api/pledge-campaigns", tags=["pledge-campaigns"])
 
 PCO_GIVING_DONORS_LAST_SYNCED_KEY = "pco_giving_donors_last_synced_at"
+# Pledge Form sync is per-campaign (no single "the sync" the way People/
+# Donors/Donations are), but the Setup > Integrations Status page still
+# wants one "when did this integration last succeed" timestamp for it - so
+# this key is stamped after ANY campaign's form sync succeeds, distinct
+# from any one campaign's own state.
+PCO_PLEDGE_FORM_LAST_SYNCED_KEY = "pco_pledge_form_last_synced_at"
 
 
 async def _read_csv(file: UploadFile) -> str:
@@ -353,11 +359,24 @@ def _run_pledge_form_sync(db: Session, campaign: PledgeCampaign) -> PledgeFormSy
             mapping.contact_method_field_id,
         )
     except PcoNotConfiguredError as e:
+        integration_status.record_failure(db, PCO_PLEDGE_FORM_LAST_SYNCED_KEY, str(e))
+        db.commit()
         raise HTTPException(400, str(e))
     except requests.RequestException as e:
+        integration_status.record_failure(
+            db, PCO_PLEDGE_FORM_LAST_SYNCED_KEY, f"Planning Center API error: {e}"
+        )
+        db.commit()
         raise HTTPException(502, f"Planning Center API error: {e}")
 
     new_ids, updated_ids = _upsert_pledges_from_form_submissions(db, campaign.id, rows)
+    now_iso = datetime.now(tz=timezone.utc).isoformat()
+    setting = db.get(AppSetting, PCO_PLEDGE_FORM_LAST_SYNCED_KEY)
+    if setting is None:
+        db.add(AppSetting(key=PCO_PLEDGE_FORM_LAST_SYNCED_KEY, value=now_iso))
+    else:
+        setting.value = now_iso
+    integration_status.clear_failure(db, PCO_PLEDGE_FORM_LAST_SYNCED_KEY)
     db.commit()
     matched, unmatched = _rematch_campaign_pledges(db, campaign.id)
     return PledgeFormSyncSummary(
@@ -567,8 +586,14 @@ def _run_pco_donors_sync(db: Session) -> DonorImportSummary:
     try:
         rows = pco_giving_sync.fetch_donors()
     except PcoNotConfiguredError as e:
+        integration_status.record_failure(db, PCO_GIVING_DONORS_LAST_SYNCED_KEY, str(e))
+        db.commit()
         raise HTTPException(400, str(e))
     except requests.RequestException as e:
+        integration_status.record_failure(
+            db, PCO_GIVING_DONORS_LAST_SYNCED_KEY, f"Planning Center API error: {e}"
+        )
+        db.commit()
         raise HTTPException(502, f"Planning Center API error: {e}")
 
     imported = _upsert_donors(db, rows)
@@ -587,6 +612,7 @@ def _run_pco_donors_sync(db: Session) -> DonorImportSummary:
         db.add(AppSetting(key=PCO_GIVING_DONORS_LAST_SYNCED_KEY, value=now_iso))
     else:
         setting.value = now_iso
+    integration_status.clear_failure(db, PCO_GIVING_DONORS_LAST_SYNCED_KEY)
     db.commit()
 
     matched, unmatched = _rematch_every_active_campaign(db)
