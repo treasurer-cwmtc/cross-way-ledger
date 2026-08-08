@@ -618,12 +618,44 @@ class PledgeCampaign(Base):
     # tracking began - entered once on the import wizard, not derived.
     starting_balance: Mapped[float] = mapped_column(Float, default=0.0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Which PCO Form (People API) this campaign syncs pledges from live -
+    # blank means the campaign still uses the manual CSV pledge import
+    # (see routers/pledge_campaigns.py's import_pledges). Set together with
+    # a PledgeFormMapping row the first time a treasurer picks a form.
+    pco_form_id: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
     pledges: Mapped[list["Pledge"]] = relationship(
         back_populates="campaign", cascade="all, delete-orphan"
+    )
+
+
+class PledgeFormMapping(Base):
+    """One row per campaign that syncs pledges from a live PCO Form (see
+    PledgeCampaign.pco_form_id) - which of that form's own FormField ids
+    corresponds to each *value* field a Pledge needs. Only value fields are
+    mapped: a FormSubmission is already linked to a real PCO Person (see
+    services/pco_form_sync.py), so first_name/last_name/email resolve from
+    the already-synced pco_people_people table, never from a mapped form
+    field. submission_id/date_submitted likewise come straight from the
+    FormSubmission resource's own id/created_at. Field ids, not label text -
+    a form's field labels can be edited in PCO without changing the
+    underlying field id, so the mapping keeps working across a label rename.
+    Explicit typed columns (not a JSON blob) to match this codebase's
+    existing config-table convention (AppSetting, CategoryRule, etc.).
+    """
+
+    __tablename__ = "campaign_pledge_form_mapping"
+
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaign.id"), primary_key=True)
+    initial_amount_field_id: Mapped[str] = mapped_column(String(40), default="")
+    due_date_field_id: Mapped[str] = mapped_column(String(40), default="")
+    monthly_amount_field_id: Mapped[str] = mapped_column(String(40), default="")
+    contact_method_field_id: Mapped[str] = mapped_column(String(40), default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 

@@ -109,6 +109,7 @@ class Settings(BaseSettings):
     # same reasoning as stripe_sync_secret vs plaid_sync_secret.
     pco_people_sync_secret: str = ""
     pco_giving_sync_secret: str = ""
+    pco_pledge_form_sync_secret: str = ""
     # Re-pulled/re-upserted donations in this trailing window on every sync
     # (by dedup_key) rather than an incremental cursor - same reasoning as
     # stripe_sync_lookback_days: cheap at this account's volume, and

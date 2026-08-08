@@ -11,6 +11,9 @@ export interface PledgeCampaign {
   goal_amount: number;
   starting_balance: number;
   is_active: boolean;
+  // Which PCO Form this campaign syncs pledges from live - blank means it
+  // still uses the manual CSV pledge import (see PledgeFormMapping below).
+  pco_form_id: string;
 }
 
 export interface PledgeCampaignCreate {
@@ -25,6 +28,7 @@ export interface PledgeCampaignUpdate {
   goal_amount?: number;
   starting_balance?: number;
   is_active?: boolean;
+  pco_form_id?: string;
 }
 
 export interface Pledge {
@@ -110,6 +114,41 @@ export interface CampaignDetail {
 
 export interface DonorImportSummary {
   donors_imported: number;
+  pledges_matched: number;
+  pledges_unmatched: number;
+}
+
+export interface PcoFormOption {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+export interface PcoFormFieldOption {
+  id: string;
+  label: string;
+  field_type: string;
+}
+
+export interface PledgeFormMapping {
+  campaign_id: number;
+  initial_amount_field_id: string;
+  due_date_field_id: string;
+  monthly_amount_field_id: string;
+  contact_method_field_id: string;
+}
+
+export interface PledgeFormMappingUpdate {
+  form_id: string;
+  initial_amount_field_id: string;
+  due_date_field_id: string;
+  monthly_amount_field_id: string;
+  contact_method_field_id: string;
+}
+
+export interface PledgeFormSyncSummary {
+  campaign_id: number;
+  pledges_imported: number;
   pledges_matched: number;
   pledges_unmatched: number;
 }
@@ -219,6 +258,39 @@ export const pledgeCampaignsApi = {
     fetch(`${BASE}/api/pledge-campaigns/donors/last-synced`, { headers: authHeaders() }).then(
       j<{ last_synced_at: string | null }>
     ),
+
+  /** Every PCO Form in the account, for the wizard's "Sync from a Planning
+   * Center Form" picker. */
+  listPcoForms: () =>
+    fetch(`${BASE}/api/pledge-campaigns/pco-forms`, { headers: authHeaders() }).then(
+      j<PcoFormOption[]>
+    ),
+
+  listPcoFormFields: (formId: string) =>
+    fetch(`${BASE}/api/pledge-campaigns/pco-forms/${encodeURIComponent(formId)}/fields`, {
+      headers: authHeaders(),
+    }).then(j<PcoFormFieldOption[]>),
+
+  getPledgeFormMapping: (campaignId: number) =>
+    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/pledge-form-mapping`, {
+      headers: authHeaders(),
+    }).then(j<PledgeFormMapping>),
+
+  /** Saves the field mapping and - in the same call - sets/changes which
+   * form the campaign syncs from (see PledgeFormMappingUpdate). */
+  setPledgeFormMapping: (campaignId: number, payload: PledgeFormMappingUpdate) =>
+    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/pledge-form-mapping`, {
+      method: "PUT",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    }).then(j<PledgeFormMapping>),
+
+  /** Manual "Sync now" for a campaign already configured with a form. */
+  syncCampaignPledges: (campaignId: number) =>
+    fetch(`${BASE}/api/pledge-campaigns/${campaignId}/pledges/sync`, {
+      method: "POST",
+      headers: authHeaders(),
+    }).then(j<PledgeFormSyncSummary>),
 
   listGivingPeopleLinks: () =>
     fetch(`${BASE}/api/pledge-campaigns/giving-people-links`, { headers: authHeaders() }).then(

@@ -17,6 +17,7 @@ from ..models import (
     Pledge,
     PledgeCampaign,
     PledgeDonorMatch,
+    PledgeFormMapping,
     User,
 )
 from ..schemas import (
@@ -26,17 +27,22 @@ from ..schemas import (
     DonorImportSummary,
     GivingPersonLinkOut,
     GivingPersonLinkUpdate,
+    PcoFormFieldOption,
+    PcoFormOption,
     PcoLastSyncedOut,
     PledgeCampaignCreate,
     PledgeCampaignOut,
     PledgeCampaignUpdate,
     PledgeDashboardOut,
     PledgeDashboardPoint,
+    PledgeFormMappingOut,
+    PledgeFormMappingUpdate,
+    PledgeFormSyncSummary,
     PledgeImportSummary,
     PledgeMatchUpdate,
     PledgeOut,
 )
-from ..services import pco_giving_sync
+from ..services import pco_form_sync, pco_giving_sync
 from ..services.pco_client import PcoNotConfiguredError
 from ..services.pledge_import import DonorRow, match_pledge_to_donor, parse_donor_csv, parse_pledge_csv
 
@@ -61,6 +67,21 @@ async def _read_csv(file: UploadFile) -> str:
         return raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         return raw.decode("latin-1")
+
+
+def _blank_form_mapping(campaign_id: int) -> PledgeFormMapping:
+    """An unsaved (never db.add()'d) PledgeFormMapping - the column
+    defaults on the model (default="") only apply on INSERT flush, not on
+    plain construction, so a not-yet-configured campaign's fields would
+    otherwise serialize as None instead of "" (fails PledgeFormMappingOut's
+    str-typed fields). Explicit here rather than relying on the model."""
+    return PledgeFormMapping(
+        campaign_id=campaign_id,
+        initial_amount_field_id="",
+        due_date_field_id="",
+        monthly_amount_field_id="",
+        contact_method_field_id="",
+    )
 
 
 def _get_campaign(db: Session, campaign_id: int) -> PledgeCampaign:
@@ -217,6 +238,174 @@ async def import_pledges(
         new_pledges=[_out(sid) for sid in new_ids],
         updated_pledges=[_out(sid) for sid in updated_ids],
     )
+
+
+@router.get(
+    "/pco-forms", response_model=list[PcoFormOption],
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def list_pco_forms() -> list[dict]:
+    """Every PCO Form in the account, for the wizard's "Sync from a
+    Planning Center Form" picker - an on-demand admin call (forms rarely
+    change), not something evaluated per sync."""
+    try:
+        return pco_form_sync.fetch_available_forms()
+    except PcoNotConfiguredError as e:
+        raise HTTPException(400, str(e))
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Planning Center API error: {e}")
+
+
+@router.get(
+    "/pco-forms/{form_id}/fields", response_model=list[PcoFormFieldOption],
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def list_pco_form_fields(form_id: str) -> list[dict]:
+    try:
+        return pco_form_sync.fetch_form_fields(form_id)
+    except PcoNotConfiguredError as e:
+        raise HTTPException(400, str(e))
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Planning Center API error: {e}")
+
+
+@router.get(
+    "/{campaign_id}/pledge-form-mapping", response_model=PledgeFormMappingOut,
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def get_pledge_form_mapping(campaign_id: int, db: Session = Depends(get_db)) -> PledgeFormMapping:
+    _get_campaign(db, campaign_id)
+    return db.get(PledgeFormMapping, campaign_id) or _blank_form_mapping(campaign_id)
+
+
+@router.put(
+    "/{campaign_id}/pledge-form-mapping", response_model=PledgeFormMappingOut,
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def set_pledge_form_mapping(
+    campaign_id: int, payload: PledgeFormMappingUpdate, db: Session = Depends(get_db)
+) -> PledgeFormMapping:
+    """Saves which form's fields map to which pledge value, and - in the
+    same call - sets/changes the campaign's pco_form_id (see
+    PledgeFormMappingUpdate's docstring). Doesn't sync immediately; the
+    wizard calls POST /{campaign_id}/pledges/sync right after saving."""
+    campaign = _get_campaign(db, campaign_id)
+    mapping = db.get(PledgeFormMapping, campaign_id)
+    if mapping is None:
+        mapping = PledgeFormMapping(campaign_id=campaign_id)
+        db.add(mapping)
+    mapping.initial_amount_field_id = payload.initial_amount_field_id
+    mapping.due_date_field_id = payload.due_date_field_id
+    mapping.monthly_amount_field_id = payload.monthly_amount_field_id
+    mapping.contact_method_field_id = payload.contact_method_field_id
+    campaign.pco_form_id = payload.form_id
+    db.commit()
+    db.refresh(mapping)
+    return mapping
+
+
+def _upsert_pledges_from_form_submissions(
+    db: Session, campaign_id: int, rows: list["pco_form_sync.FormSubmissionRow"]
+) -> tuple[list[str], list[str]]:
+    """Same upsert-by-submission_id shape as import_pledges' CSV loop above,
+    except first_name/last_name/email are resolved from the already-synced
+    pco_people_people table via each submission's linked Person, not from
+    any mapped form field (see services/pco_form_sync.py's module
+    docstring) - left blank if that Person was never synced/active rather
+    than failing the whole row."""
+    people = {p.person_id: p for p in db.scalars(select(PcoPerson))}
+    existing = {
+        p.submission_id: p
+        for p in db.scalars(select(Pledge).where(Pledge.campaign_id == campaign_id))
+    }
+    new_ids: list[str] = []
+    updated_ids: list[str] = []
+    for row in rows:
+        pledge = existing.get(row.submission_id)
+        if pledge is None:
+            pledge = Pledge(campaign_id=campaign_id, submission_id=row.submission_id)
+            db.add(pledge)
+            existing[row.submission_id] = pledge
+            new_ids.append(row.submission_id)
+        else:
+            updated_ids.append(row.submission_id)
+        person = people.get(row.person_id)
+        name_parts = (person.name if person else "").split(" ", 1)
+        pledge.first_name = name_parts[0] if name_parts and name_parts[0] else ""
+        pledge.last_name = name_parts[1] if len(name_parts) > 1 else ""
+        pledge.email = person.email if person else ""
+        pledge.date_submitted = row.date_submitted
+        pledge.initial_amount = row.initial_amount
+        pledge.due_date = row.due_date
+        pledge.monthly_amount = row.monthly_amount
+        pledge.contact_method = row.contact_method
+    return new_ids, updated_ids
+
+
+def _run_pledge_form_sync(db: Session, campaign: PledgeCampaign) -> PledgeFormSyncSummary:
+    mapping = db.get(PledgeFormMapping, campaign.id) or _blank_form_mapping(campaign.id)
+    try:
+        rows = pco_form_sync.fetch_form_submissions(
+            campaign.pco_form_id,
+            mapping.initial_amount_field_id,
+            mapping.due_date_field_id,
+            mapping.monthly_amount_field_id,
+            mapping.contact_method_field_id,
+        )
+    except PcoNotConfiguredError as e:
+        raise HTTPException(400, str(e))
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Planning Center API error: {e}")
+
+    new_ids, updated_ids = _upsert_pledges_from_form_submissions(db, campaign.id, rows)
+    db.commit()
+    matched, unmatched = _rematch_campaign_pledges(db, campaign.id)
+    return PledgeFormSyncSummary(
+        campaign_id=campaign.id,
+        pledges_imported=len(new_ids) + len(updated_ids),
+        pledges_matched=matched,
+        pledges_unmatched=unmatched,
+    )
+
+
+@router.post(
+    "/{campaign_id}/pledges/sync", response_model=PledgeFormSyncSummary,
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def sync_campaign_pledges_now(campaign_id: int, db: Session = Depends(get_db)) -> PledgeFormSyncSummary:
+    campaign = _get_campaign(db, campaign_id)
+    if not campaign.pco_form_id:
+        raise HTTPException(
+            400,
+            "This campaign isn't synced from a Planning Center Form - pick a form and map "
+            "its fields first (or keep using the CSV import below).",
+        )
+    return _run_pledge_form_sync(db, campaign)
+
+
+def _verify_pco_pledge_form_sync_secret(x_sync_secret: str = Header(default="")) -> None:
+    settings = get_settings()
+    if not settings.pco_pledge_form_sync_secret or x_sync_secret != settings.pco_pledge_form_sync_secret:
+        raise HTTPException(403, "Invalid or missing sync secret.")
+
+
+@scheduled_sync_router.post(
+    "/pledges/scheduled-sync", response_model=list[PledgeFormSyncSummary],
+    dependencies=[Depends(_verify_pco_pledge_form_sync_secret)],
+)
+def scheduled_pledges_sync(db: Session = Depends(get_db)) -> list[PledgeFormSyncSummary]:
+    """One Cloud Scheduler job covers every campaign that syncs from a
+    form, same "one job, loop every active campaign" shape as
+    donations.scheduled-sync - rather than one job per campaign."""
+    campaigns = list(
+        db.scalars(
+            select(PledgeCampaign).where(
+                PledgeCampaign.is_active == True,  # noqa: E712
+                PledgeCampaign.pco_form_id != "",
+            )
+        )
+    )
+    return [_run_pledge_form_sync(db, c) for c in campaigns]
 
 
 def _upsert_donors(
