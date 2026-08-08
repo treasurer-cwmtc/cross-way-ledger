@@ -14,6 +14,11 @@ export interface PcoPerson {
 
 export interface PcoPeopleImportSummary {
   people_imported: number;
+  last_synced_at: string | null;
+}
+
+export interface PcoLastSynced {
+  last_synced_at: string | null;
 }
 
 export interface ReimbursementAssignment {
@@ -66,6 +71,19 @@ export const reimbursementsApi = {
 
   listPcoPeople: () =>
     fetch(`${BASE}/api/reimbursements/pco-people`, { headers: authHeaders() }).then(j<PcoPerson[]>),
+
+  /** Live counterpart to importPcoPeople - pulls active members straight
+   * from the PCO People API instead of a manual CSV upload. */
+  syncPcoPeople: () =>
+    fetch(`${BASE}/api/reimbursements/pco-people/sync`, {
+      method: "POST",
+      headers: authHeaders(),
+    }).then(j<PcoPeopleImportSummary>),
+
+  getPcoPeopleLastSynced: () =>
+    fetch(`${BASE}/api/reimbursements/pco-people/last-synced`, { headers: authHeaders() }).then(
+      j<PcoLastSynced>
+    ),
 
   getAssignments: (email: string) =>
     fetch(`${BASE}/api/reimbursements/assignments?email=${encodeURIComponent(email)}`, {

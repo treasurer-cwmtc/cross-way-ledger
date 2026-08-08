@@ -6,6 +6,7 @@ import {
   ReimbursementAccessSummary,
   reimbursementsApi,
 } from "../../api/reimbursements";
+import { fmtRelative } from "../../lib/fmtRelative";
 import MultiAccountPicker from "../ledger/MultiAccountPicker";
 import MultiEmailPicker from "./MultiEmailPicker";
 import AccessDetailModal from "./AccessDetailModal";
@@ -323,6 +324,30 @@ function PcoImportSection() {
   const [file, setFile] = useState<File | null>(null);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    reimbursementsApi
+      .getPcoPeopleLastSynced()
+      .then((r) => setLastSyncedAt(r.last_synced_at))
+      .catch(() => {});
+  }, []);
+
+  async function syncNow() {
+    setSyncing(true);
+    setError("");
+    setMsg("");
+    try {
+      const result = await reimbursementsApi.syncPcoPeople();
+      setMsg(`Synced ${result.people_imported} active people from Planning Center.`);
+      setLastSyncedAt(result.last_synced_at);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function upload() {
     if (!file) return;
@@ -339,19 +364,31 @@ function PcoImportSection() {
 
   return (
     <div className="card">
-      <h3 style={{ marginTop: 0 }}>Import PCO People</h3>
+      <h3 style={{ marginTop: 0 }}>PCO People</h3>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        Upload the Planning Center People export. This is the allowlist for who can log into
+        Synced automatically from Planning Center. This is the allowlist for who can log into
         the Reimbursement portal - only emails on this list can request a login code.
       </p>
-      <div className="row">
-        <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-        <button className="btn" onClick={upload} disabled={!file}>
-          Import
+      <div className="row" style={{ alignItems: "center" }}>
+        <button className="btn" onClick={syncNow} disabled={syncing}>
+          {syncing ? "Syncing…" : "Sync now"}
         </button>
+        <span className="pill">Last synced: {fmtRelative(lastSyncedAt)}</span>
       </div>
       {msg && <div className="ok">{msg}</div>}
       {error && <div className="error">{error}</div>}
+
+      <details style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--muted)" }}>
+          Import from a CSV file instead (fallback if the API sync is unavailable)
+        </summary>
+        <div className="row" style={{ marginTop: 8 }}>
+          <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          <button className="btn" onClick={upload} disabled={!file}>
+            Import
+          </button>
+        </div>
+      </details>
     </div>
   );
 }
