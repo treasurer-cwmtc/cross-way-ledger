@@ -374,14 +374,19 @@ derived live (`count x cost`) rather than stored._
 | Table | Was | Purpose |
 | --- | --- | --- |
 | `campaign` | `pledge_campaigns` | One row per fundraising campaign (goal, starting balance, which `fund` it tracks). |
-| `campaign_donors` | `donors` | The persistent Giving App donor list, reusable across campaigns. |
+| `pco_giving_people` | `donors` (via `campaign_donors`) | The persistent donor list, reusable across campaigns - synced live from the Planning Center Giving API (`POST /api/pledge-campaigns/donors/sync`), CSV upload kept as a fallback. Renamed from `campaign_donors` to the `pco_<product>_people` convention once the API sync replaced the manual CSV import. |
 | `campaign_pledge_submissions` | `pledges` | One row per pledge form submission against a campaign. |
 | `campaign_pledge_matches` | `pledge_donor_matches` | Links a pledge submission to a donor (auto or manual). |
-| `campaign_donations` | `donations` | The Giving App's full donation export - not scoped to any one campaign; a campaign just claims a `fund` value. |
+| `campaign_donations` | `donations` | The Giving App's full donation export - not scoped to any one campaign; a campaign just claims a `fund` value. Synced live from the Giving API (`POST /api/donations/sync`), exploding a multi-fund donation into one row per fund; CSV upload kept as a fallback. |
 
 See `backend/app/models.py` for full column definitions - unchanged other
 than table names and the FKs that follow them (`campaign.id`,
-`campaign_donors.donor_id`, `campaign_pledge_submissions.id`).
+`pco_giving_people.donor_id`, `campaign_pledge_submissions.id`).
+
+The Reimbursements module's login allowlist follows the same convention:
+`pco_people_people` (renamed from `pco_people`) - the Planning Center
+People export, synced live from the People API (`POST /api/reimbursements/
+pco-people/sync`, active members only), CSV upload kept as a fallback.
 
 ---
 
