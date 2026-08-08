@@ -14,13 +14,42 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import AccrualEntry, PcoPerson, Reimbursement, ReimbursementOtpCode
+from ..models import AccrualEntry, AppSetting, PcoListMember, PcoPerson, Reimbursement, ReimbursementOtpCode
 from ..security import hash_password, verify_password
 from .parsers import _get, _lower_map
 
 OTP_TTL_MINUTES = 10
 OTP_RATE_LIMIT_PER_HOUR = 5
 OTP_MAX_ATTEMPTS = 5
+
+REIMBURSEMENT_GATE_LIST_ID_KEY = "pco_reimbursement_gate_list_id"
+
+
+def is_allowed_reimbursement_submitter(db: Session, email: str) -> bool:
+    """Shared by request_otp (login-code issuance) and
+    deps.get_current_submitter (every authenticated request) - one active
+    PcoPerson row with this email is always required, exactly as before.
+    If a gate list is configured (AppSetting REIMBURSEMENT_GATE_LIST_ID_KEY),
+    that person must ALSO be a synced member of it (pco_list_members) -
+    additive, not a replacement, so an unconfigured gate list changes nothing
+    for anyone (see routers/reimbursements.py's Reimbursement Access page)."""
+    person_id = db.scalar(select(PcoPerson.person_id).where(PcoPerson.email == email).limit(1))
+    if person_id is None:
+        return False
+
+    gate_list_id = db.get(AppSetting, REIMBURSEMENT_GATE_LIST_ID_KEY)
+    if not gate_list_id or not gate_list_id.value:
+        return True
+
+    return (
+        db.scalar(
+            select(PcoListMember.id).where(
+                PcoListMember.list_id == gate_list_id.value,
+                PcoListMember.person_id == person_id,
+            ).limit(1)
+        )
+        is not None
+    )
 
 
 class TooManyOtpRequestsError(Exception):

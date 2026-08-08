@@ -792,6 +792,54 @@ class PcoPerson(Base):
     )
 
 
+class PcoListMember(Base):
+    """Synced membership of a Planning Center People "List" - list_id/person_id
+    pairs, refreshed on every People sync alongside pco_people_people (see
+    routers/reimbursements.py's _run_pco_people_sync). Exists so the
+    Reimbursement portal's optional list-based login gate is a fast local DB
+    read (matching deps.get_current_submitter's existing "always re-check the
+    DB, never a live API call mid-request" design) rather than hitting the PCO
+    API on every OTP request. Only ever holds membership for whichever list is
+    currently configured as the gate (see AppSetting key
+    "pco_reimbursement_gate_list_id") - not a general-purpose sync of every
+    list in the account.
+    """
+
+    __tablename__ = "pco_list_members"
+    __table_args__ = (UniqueConstraint("list_id", "person_id", name="uq_pco_list_member"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    list_id: Mapped[str] = mapped_column(String(40), index=True)
+    person_id: Mapped[str] = mapped_column(ForeignKey("pco_people_people.person_id"), index=True)
+
+
+class GivingPersonLink(Base):
+    """Links a Giving donor (pco_giving_people.donor_id) to a People record
+    (pco_people_people.person_id). PCO's Giving and People APIs already share
+    one organization-wide person ID space (confirmed against a real account -
+    see services/pco_giving_sync.py's fetch_donors docstring), so most links
+    are auto-detected on every Donor sync (routers/pledge_campaigns.py's
+    _run_pco_donors_sync) simply by matching IDs - person_id is left null (no
+    row is created at all; see the Giving<->People Link page, which treats a
+    missing row as "unmatched") only for a donor with no corresponding synced
+    Person, e.g. a guest/one-time online giver who was never a church member.
+    A treasurer can override an auto-detected (or fill an unmatched) link by
+    hand - match_source records which happened, same auto/manual distinction
+    as PledgeDonorMatch.match_source.
+    """
+
+    __tablename__ = "pco_giving_people_link"
+
+    donor_id: Mapped[str] = mapped_column(
+        ForeignKey("pco_giving_people.donor_id"), primary_key=True
+    )
+    person_id: Mapped[str] = mapped_column(ForeignKey("pco_people_people.person_id"))
+    match_source: Mapped[str] = mapped_column(String(10), default="auto")  # auto | manual
+    linked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ReimbursementAssignment(Base):
     """Which Chart-of-Accounts a given email is pre-authorized by the
     treasurer to submit reimbursements against - one row per (email,

@@ -27,10 +27,16 @@ const GRANTABLE_PAGES: { keys: string[]; label: string }[] = [
   { keys: ["accounts"], label: "Chart of Accounts" },
   { keys: ["link-receipts"], label: "Link Receipts" },
   { keys: ["config"], label: "Config" },
-  { keys: ["pledge-campaign-status"], label: "Campaign Status" },
+  {
+    keys: ["pledge-campaign-status"],
+    label: "Campaign Status (also grants Planning Center Donations + Giving↔People Link)",
+  },
   { keys: ["pledge-campaign-pledges", "pledge-campaign-actuals"], label: "Campaign Details" },
-  { keys: ["donors"], label: "Giving App - Donors" },
-  { keys: ["reimbursements"], label: "Reimbursements" },
+  { keys: ["donors"], label: "Planning Center - Donors" },
+  {
+    keys: ["reimbursements"],
+    label: "Reimbursements (also grants Planning Center People + Reimbursement Access)",
+  },
 ];
 
 type AccountType = "local" | "google";

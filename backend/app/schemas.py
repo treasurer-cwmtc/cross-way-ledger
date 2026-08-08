@@ -950,6 +950,33 @@ class PcoLastSyncedOut(BaseModel):
     last_synced_at: str | None = None
 
 
+class PcoListOption(BaseModel):
+    id: str
+    name: str
+
+
+class ReimbursementGateListOut(BaseModel):
+    list_id: str | None = None
+    list_name: str | None = None  # resolved from PcoListOption when set, else None
+    member_count: int = 0
+
+
+class ReimbursementGateListUpdate(BaseModel):
+    list_id: str | None = None  # null/blank clears the gate (back to "any active person")
+
+
+class GivingPersonLinkOut(BaseModel):
+    donor_id: str
+    donor_name: str
+    person_id: str | None = None
+    person_name: str | None = None
+    match_source: str | None = None  # None when unmatched (no link row at all)
+
+
+class GivingPersonLinkUpdate(BaseModel):
+    person_id: str | None = None  # null clears a manual link back to unmatched
+
+
 class ReimbursementAssignmentOut(BaseModel):
     account_no: str
     statement_description: str
