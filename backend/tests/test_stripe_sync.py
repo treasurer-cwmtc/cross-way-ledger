@@ -1,5 +1,5 @@
 """Tests for the automated Stripe sync: the on-demand/scheduled endpoints
-that pull ledger_stripe from the Stripe API (mocked here) instead of a CSV
+that pull transactions_stripe from the Stripe API (mocked here) instead of a CSV
 upload, and the fund-check/merge-stripe endpoints that now read from it.
 """
 

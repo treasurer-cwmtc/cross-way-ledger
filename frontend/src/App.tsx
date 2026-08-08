@@ -62,23 +62,34 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   { label: "Overview", items: [{ tab: "home", label: "Home" }] },
   {
+    // The five things that actually hold the books - split out from the
+    // sync/reconciliation workflow below (which feeds these, but isn't
+    // itself a ledger) per the treasurer's own re-categorization.
     label: "Ledgers",
     items: [
-      // "Upload" is deliberately hidden from nav (deprecated in favor of
-      // the automated Stripe/Plaid sync + the upcoming Reconciliation
-      // page, see issue #105) but the tab/route/component below are left
-      // fully intact - re-adding this one line brings it back if the
-      // treasurer ever needs the manual-CSV path again (e.g. Stripe or
-      // Plaid access is lost).
-      // { tab: "upload", label: "Upload" },
-      { tab: "reconcile-wizard", label: "Reconciliation" },
-      { tab: "stripe", label: "Stripe" },
-      { tab: "plaid", label: "Bank Transactions" },
       { tab: "reconciliation", label: "Actual" },
       { tab: "accrual", label: "Accrual" },
       { tab: "budget", label: "Budget" },
       { tab: "restricted-net-assets", label: "Restricted Net Assets" },
       { tab: "assets", label: "Assets" },
+    ],
+  },
+  {
+    // The automated data feeds (Stripe/Plaid) and the guided workflow that
+    // reconciles them into the ledgers above - conceptually separate from
+    // the ledgers themselves.
+    label: "Sync",
+    items: [
+      // "Upload" is deliberately hidden from nav (deprecated in favor of
+      // the automated Stripe/Plaid sync + the Reconciliation page, see
+      // issue #105) but the tab/route/component below are left fully
+      // intact - re-adding this one line brings it back if the treasurer
+      // ever needs the manual-CSV path again (e.g. Stripe or Plaid access
+      // is lost).
+      // { tab: "upload", label: "Upload" },
+      { tab: "reconcile-wizard", label: "Reconciliation" },
+      { tab: "stripe", label: "Stripe Transactions" },
+      { tab: "plaid", label: "Bank Transactions" },
     ],
   },
   {
@@ -128,11 +139,18 @@ function defaultCollapsedGroups(): Record<string, boolean> {
 }
 
 function loadCollapsedGroups(): Record<string, boolean> {
+  const defaults = defaultCollapsedGroups();
   try {
     const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
-    return raw ? JSON.parse(raw) : defaultCollapsedGroups();
+    // Merge onto defaults rather than returning the stored object as-is -
+    // a returning user's saved preferences predate any nav-group renamed
+    // or added since they last visited (e.g. the Ledgers/Sync split), so
+    // without this a brand-new group key would be missing from their
+    // stored object entirely and default to *expanded* (falsy/undefined),
+    // not collapsed like every other group starts.
+    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
   } catch {
-    return defaultCollapsedGroups();
+    return defaults;
   }
 }
 

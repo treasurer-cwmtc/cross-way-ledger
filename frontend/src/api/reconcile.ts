@@ -97,7 +97,7 @@ export const reconcileApi = {
     }).then(j<ReconLine>),
 
   /** Wizard step 3: match this run's bank-payout placeholders against the
-   * Stripe data already pulled into the ledger_stripe table by a sync (see
+   * Stripe data already pulled into the transactions_stripe table by a sync (see
    * pages/Stripe) - no file to upload anymore. Every other line (including
    * edits from step 1) survives. */
   mergeStripe: (runId: number) =>
@@ -130,7 +130,7 @@ export const reconcileApi = {
     }).then(j<DuplicateCheckResult>),
 
   /** Reconciliation page step 1: the most recent transaction date already
-   * sitting in each staging table (ledger_plaid / ledger_stripe), to help
+   * sitting in each staging table (transactions_bank / transactions_stripe), to help
    * pick where the date range should start. */
   syncStatus: () =>
     fetch(`${BASE}/api/reconcile/sync-status`, { headers: authHeaders() }).then(
@@ -138,7 +138,7 @@ export const reconcileApi = {
     ),
 
   /** Reconciliation page step 1/2: builds a run from the already-synced
-   * ledger_plaid staging table for the chosen date range, instead of a
+   * transactions_bank staging table for the chosen date range, instead of a
    * manual bank-file upload - same downstream shape as bankOnly() above
    * (Stripe-payout lines come back as unmatched placeholders, merged in
    * via mergeStripe() exactly like the old CSV-upload path). Dates are

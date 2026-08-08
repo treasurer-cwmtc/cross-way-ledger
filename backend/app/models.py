@@ -276,7 +276,7 @@ class StripeTransaction(Base):
     treasurer confirms the wizard import, same review step as before.
     Keyed by Stripe's own transaction id so repeated syncs upsert cleanly."""
 
-    __tablename__ = "ledger_stripe"
+    __tablename__ = "transactions_stripe"
 
     stripe_id: Mapped[str] = mapped_column(String(60), primary_key=True)
     # Stripe's real balance-transaction type values go past 20 chars over a
@@ -320,7 +320,7 @@ class PlaidItem(Base):
     protected the same way the rest of this database is (Cloud SQL IAM auth,
     encryption at rest, backups), not by any extra app-level encryption."""
 
-    __tablename__ = "ledger_plaid_items"
+    __tablename__ = "transactions_bank_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     item_id: Mapped[str] = mapped_column(String(60), unique=True, index=True)
@@ -354,11 +354,11 @@ class PlaidTransaction(Base):
     cleanly; a transaction Plaid later retracts (e.g. a pending charge that
     never posted) is flagged via `removed` rather than deleted outright."""
 
-    __tablename__ = "ledger_plaid"
+    __tablename__ = "transactions_bank"
 
     plaid_transaction_id: Mapped[str] = mapped_column(String(60), primary_key=True)
     item_id: Mapped[str] = mapped_column(
-        ForeignKey("ledger_plaid_items.item_id"), index=True
+        ForeignKey("transactions_bank_items.item_id"), index=True
     )
     account_id: Mapped[str] = mapped_column(String(60), default="")  # which linked account
     details: Mapped[str] = mapped_column(String(20), default="")  # DEBIT | CREDIT

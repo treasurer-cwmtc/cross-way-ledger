@@ -1,4 +1,4 @@
-"""Shared test helper: seeds ledger_stripe rows directly into the test DB
+"""Shared test helper: seeds transactions_stripe rows directly into the test DB
 from a fixture CSV, standing in for a real Stripe API sync (get-or-create by
 stripe_id, so it's safe to call more than once across test functions that
 share one un-reset DB - mirrors the real sync endpoint's own upsert

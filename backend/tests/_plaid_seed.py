@@ -1,4 +1,4 @@
-"""Shared test helper: seeds a PlaidItem + ledger_plaid rows directly into
+"""Shared test helper: seeds a PlaidItem + transactions_bank rows directly into
 the test DB from a fixture bank CSV, standing in for a real Plaid sync -
 mirrors _stripe_seed.py's shape and the real sync endpoint's own
 upsert-by-id semantics, so it's safe to call more than once across test

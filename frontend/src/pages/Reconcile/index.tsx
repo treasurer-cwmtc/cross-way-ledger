@@ -14,7 +14,7 @@ import Step4Reconcile from "./Step4Reconcile";
  * file-upload steps with the automated Stripe/Plaid sync - every review
  * step the Upload wizard had (bank-line categorization, Stripe fund
  * coverage, day-by-day reconcile, data validation) is preserved, just fed
- * by a run that came from ledger_plaid/ledger_stripe instead of an
+ * by a run that came from transactions_bank/transactions_stripe instead of an
  * uploaded CSV. See docs/guides/bank-reconciliation-upload-wizard.md and
  * issues #105/#122 for the full design reasoning. */
 export default function Reconcile() {

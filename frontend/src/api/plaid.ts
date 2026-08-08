@@ -1,6 +1,6 @@
 // Automated Chase bank sync via Plaid - the "Bank Transactions" page. Shape
 // mirrors api/stripe.ts closely: connect once (Plaid Link), then Sync now
-// pulls new/changed transactions into a staging table (ledger_plaid) with
+// pulls new/changed transactions into a staging table (transactions_bank) with
 // the same columns as a manually-exported Chase CSV (see BankRow in
 // backend/app/services/parsers.py) - nothing here touches the ledger by
 // itself.

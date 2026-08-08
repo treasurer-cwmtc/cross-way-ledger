@@ -107,7 +107,7 @@ def start_from_bank_sync(
     start_date: str, end_date: str, db: Session = Depends(get_db)
 ) -> ReconRun:
     """The Reconciliation page's Step 1, replacing a manual bank-file
-    upload with the already-synced ledger_plaid staging table - same
+    upload with the already-synced transactions_bank staging table - same
     downstream shape as run_reconciliation() below (categorize_bank_only(),
     a fresh ReconRun), just a different source for the BankRow list.
     start_date/end_date are plain YYYY-MM-DD strings from the frontend's
@@ -164,7 +164,7 @@ async def run_reconciliation(
 ) -> ReconRun:
     """Wizard step 1: bank file only. Stripe payout-looking lines become
     placeholders awaiting merge-stripe (step 3), which now pulls its Stripe
-    data from the synced ledger_stripe table (see pages/Stripe) rather than a
+    data from the synced transactions_stripe table (see pages/Stripe) rather than a
     second uploaded file."""
     bank_rows = parse_bank_csv(await _read_csv(bank_file))
     if not bank_rows:
@@ -223,7 +223,7 @@ def update_line(
 @router.post("/reconcile/{run_id}/merge-stripe", response_model=ReconRunDetail)
 def merge_stripe_endpoint(run_id: int, db: Session = Depends(get_db)) -> ReconRun:
     """Wizard step 3: match this run's bank-payout placeholders (from step 1)
-    against the Stripe data already pulled into ledger_stripe by a sync (see
+    against the Stripe data already pulled into transactions_stripe by a sync (see
     pages/Stripe) - leaving every other line, including anything the user has
     edited, untouched."""
     run = db.get(ReconRun, run_id)
@@ -306,7 +306,7 @@ def recategorize_endpoint(run_id: int, db: Session = Depends(get_db)) -> ReconRu
 @router.post("/reconcile/stripe-fund-check", response_model=StripeFundCheckOut)
 def stripe_fund_check(db: Session = Depends(get_db)) -> StripeFundCheckOut:
     """Wizard step 2: which donation funds in the currently-synced Stripe
-    data (ledger_stripe) don't yet have a stripe_fund rule."""
+    data (transactions_stripe) don't yet have a stripe_fund rule."""
     staged = list(db.scalars(select(StripeTransaction)).all())
 
     # Self-heal rows synced before issue #124's fix: they never captured
