@@ -78,7 +78,7 @@ export default function PlanningCenterDonations() {
         multi-fund donation explodes into one row per fund. A Pledge Campaign picks a fund from
         what's on file here.
       </p>
-      <div className="row" style={{ alignItems: "center" }}>
+      <div className="toolbar">
         <button className="btn" onClick={syncNow} disabled={syncing}>
           {syncing ? "Syncing…" : "Sync now"}
         </button>

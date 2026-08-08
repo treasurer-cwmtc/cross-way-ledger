@@ -175,7 +175,7 @@ export default function PlanningCenterPeople() {
         log into the Reimbursement portal (see Reimbursement Access to narrow that further to a
         specific List). Click a row for full detail.
       </p>
-      <div className="row" style={{ alignItems: "center" }}>
+      <div className="toolbar">
         <button className="btn" onClick={syncNow} disabled={syncing}>
           {syncing ? "Syncing…" : "Sync now"}
         </button>
