@@ -67,8 +67,13 @@ def test_old_scattered_paths_no_longer_exist():
 
 def test_old_paths_actually_404_not_redirect():
     """Belt-and-suspenders on top of the route-table check above: hitting an
-    old URL over HTTP gets a plain 404, never a 3xx - there is no redirect
-    shim anywhere in this reorganization."""
+    old URL over HTTP never returns a 3xx - there is no redirect shim
+    anywhere in this reorganization. Usually a plain 404; a couple of these
+    old paths (e.g. "pco-forms") happen to collide with the still-live
+    generic /{campaign_id} route on the same router (FastAPI matches the
+    path shape first, method second), so those come back 405 Method Not
+    Allowed instead - still definitive proof no working endpoint sits at
+    the old path, just a different status code."""
     for old in [
         "/api/reimbursements/pco-people",
         "/api/reimbursements/pco-lists",
@@ -76,4 +81,5 @@ def test_old_paths_actually_404_not_redirect():
         "/api/pledge-campaigns/donors/last-synced",
     ]:
         r = client.get(old, follow_redirects=False)
-        assert r.status_code == 404, f"{old} should 404, got {r.status_code}"
+        assert r.status_code in (404, 405), f"{old} should 404/405, got {r.status_code}"
+        assert not (300 <= r.status_code < 400), f"{old} must never redirect, got {r.status_code}"
