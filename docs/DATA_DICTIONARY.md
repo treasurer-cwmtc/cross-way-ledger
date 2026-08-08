@@ -373,11 +373,13 @@ derived live (`count x cost`) rather than stored._
 
 | Table | Was | Purpose |
 | --- | --- | --- |
-| `campaign` | `pledge_campaigns` | One row per fundraising campaign (goal, starting balance, which `fund` it tracks). |
+| `campaign` | `pledge_campaigns` | One row per fundraising campaign (goal, starting balance, which `fund` it tracks). `pco_form_id` (blank by default) is which PCO Form the campaign syncs pledges from live - set together with `campaign_pledge_form_mapping` the first time a treasurer picks a form; blank means the campaign still uses the manual CSV pledge import. |
 | `pco_giving_people` | `donors` (via `campaign_donors`) | The persistent donor list, reusable across campaigns - synced live from the Planning Center Giving API (`POST /api/pledge-campaigns/donors/sync`), CSV upload kept as a fallback. Renamed from `campaign_donors` to the `pco_<product>_people` convention once the API sync replaced the manual CSV import. |
 | `campaign_pledge_submissions` | `pledges` | One row per pledge form submission against a campaign. |
 | `campaign_pledge_matches` | `pledge_donor_matches` | Links a pledge submission to a donor (auto or manual). |
+| `campaign_pledge_form_mapping` | _(new)_ | One row per campaign synced from a live PCO Form (`campaign.pco_form_id`) - which of that form's FormField ids maps to each pledge *value* field (`initial_amount_field_id`, `due_date_field_id`, `monthly_amount_field_id`, `contact_method_field_id`). Identity fields (name/email) are never mapped here - a FormSubmission is already linked to a real PCO Person, resolved via `pco_people_people`. |
 | `campaign_donations` | `donations` | The Giving App's full donation export - not scoped to any one campaign; a campaign just claims a `fund` value. Synced live from the Giving API (`POST /api/donations/sync`), exploding a multi-fund donation into one row per fund; CSV upload kept as a fallback. |
+| `pco_giving_people_link` | _(new)_ | Maps a `pco_giving_people.donor_id` to a `pco_people_people.person_id` - auto-linked on every Donor sync when the ids match (PCO's Giving and People APIs share one organization-wide person id space), with a manual override available (`match_source`: `auto`/`manual`). No row means unmatched. |
 
 See `backend/app/models.py` for full column definitions - unchanged other
 than table names and the FKs that follow them (`campaign.id`,
@@ -387,6 +389,10 @@ The Reimbursements module's login allowlist follows the same convention:
 `pco_people_people` (renamed from `pco_people`) - the Planning Center
 People export, synced live from the People API (`POST /api/reimbursements/
 pco-people/sync`, active members only), CSV upload kept as a fallback.
+`pco_list_members` optionally narrows that allowlist further to a specific
+PCO List's membership (`AppSetting` key `pco_reimbursement_gate_list_id`) -
+synced alongside every People sync, empty gate list id means "any active
+person" (today's default behavior).
 
 ---
 
