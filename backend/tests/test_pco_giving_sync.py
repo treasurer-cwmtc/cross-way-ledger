@@ -33,13 +33,18 @@ def _fake_donor_rows() -> list[DonorRow]:
     ]
 
 
-def _fake_donation_rows(donor_id="8001") -> list[DonationRow]:
+def _fake_donation_rows(donor_id="8001", dedup_key="d-sync-1") -> list[DonationRow]:
+    # "PCO Sync Test Fund" (not "Building Fund"/"Other Fund") so this never
+    # collides with test_pledge_campaigns.py's DONATIONS_CSV fixture -
+    # Donation is a shared, unscoped table across the whole test session
+    # (see Donation's docstring), so a generic fund name here would silently
+    # inflate that other file's fund-count/dashboard assertions.
     return [
         DonationRow(
-            dedup_key="d-sync-1",
+            dedup_key=dedup_key,
             donor_id=donor_id,
             received_date=date(2026, 6, 1),
-            fund="Building Fund",
+            fund="PCO Sync Test Fund",
             amount=100.0,
             net_amount=98.0,
             method="card",
@@ -96,7 +101,8 @@ def test_donors_sync_recomputes_totals_from_local_donations():
     donations already exist locally, not leave them at the API's blank 0."""
     h = auth_header()
     with patch(
-        "app.routers.donations.pco_giving_sync.fetch_donations", return_value=_fake_donation_rows("8001")
+        "app.routers.donations.pco_giving_sync.fetch_donations",
+        return_value=_fake_donation_rows("8001", "d-recompute-totals"),
     ):
         client.post("/api/donations/sync", headers=h)
 
@@ -169,9 +175,8 @@ def test_donations_scheduled_sync_rejects_missing_or_wrong_secret():
 
 def test_donations_sync_upserts_by_dedup_key_and_skips_repeats():
     h = auth_header()
-    with patch(
-        "app.routers.donations.pco_giving_sync.fetch_donations", return_value=_fake_donation_rows("8002")
-    ):
+    rows = _fake_donation_rows("8002", "d-upsert-dedup")
+    with patch("app.routers.donations.pco_giving_sync.fetch_donations", return_value=rows):
         r = client.post("/api/donations/sync", headers=h)
     assert r.status_code == 200, r.text
     result = r.json()
@@ -184,9 +189,7 @@ def test_donations_sync_upserts_by_dedup_key_and_skips_repeats():
 
     # A repeat sync with the same dedup_key is skipped, not duplicated -
     # Donations are immutable once landed (see Donation's docstring).
-    with patch(
-        "app.routers.donations.pco_giving_sync.fetch_donations", return_value=_fake_donation_rows("8002")
-    ):
+    with patch("app.routers.donations.pco_giving_sync.fetch_donations", return_value=rows):
         r = client.post("/api/donations/sync", headers=h)
     assert r.json()["imported"] == 0
 

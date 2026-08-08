@@ -31,6 +31,14 @@ from ..services.pledge_import import DonorRow, match_pledge_to_donor, parse_dono
 router = APIRouter(
     prefix="/api/pledge-campaigns", tags=["pledge-campaigns"], dependencies=[Depends(get_current_user)]
 )
+# Separate, un-authenticated router for the scheduled-sync endpoint only -
+# `router` above requires a logged-in user for every route via its
+# router-level dependency, which would swallow the Cloud Scheduler job's
+# request with a 401 before _verify_pco_giving_sync_secret ever ran. Mirrors
+# routers/donations.py's per-route (not router-level) dependency approach,
+# scoped down to just this one endpoint since every other route on `router`
+# genuinely does need a real login. Registered separately in main.py.
+scheduled_sync_router = APIRouter(prefix="/api/pledge-campaigns", tags=["pledge-campaigns"])
 
 PCO_GIVING_DONORS_LAST_SYNCED_KEY = "pco_giving_donors_last_synced_at"
 
@@ -244,8 +252,15 @@ def _recompute_donor_totals(db: Session) -> None:
     directly on the Person record (see pco_giving_sync.fetch_donors). Run
     after every Donor+Donation sync so these three fields stay consistent
     with whatever donations actually landed locally, including the
-    per-fund rows a split donation explodes into. Donors with zero
-    donations on file are reset to 0/None rather than left stale."""
+    per-fund rows a split donation explodes into. donation_count/total_given
+    are reset to 0 for a donor with zero donations on file (never stale),
+    but first_donated is deliberately NOT reset the same way: it takes the
+    earlier of whatever's already stored (which may have come straight from
+    the Giving API's first_donated_at - see pco_giving_sync.fetch_donors,
+    which reflects the donor's full lifetime history) and whatever this
+    recompute finds locally (which only reflects donations actually synced/
+    imported so far, e.g. just the last pco_giving_sync_lookback_days
+    window on a fresh API sync). Never overwritten to something *later*."""
     totals = db.execute(
         select(
             Donation.donor_id,
@@ -261,7 +276,8 @@ def _recompute_donor_totals(db: Session) -> None:
         count, total, first = by_donor_id.get(donor.donor_id, (0, 0.0, None))
         donor.donation_count = count
         donor.total_given = round(total or 0.0, 2)
-        donor.first_donated = first
+        candidates = [d for d in (donor.first_donated, first) if d is not None]
+        donor.first_donated = min(candidates) if candidates else None
 
 
 def _rematch_every_active_campaign(db: Session) -> tuple[int, int]:
@@ -351,7 +367,7 @@ def _verify_pco_giving_sync_secret(x_sync_secret: str = Header(default="")) -> N
         raise HTTPException(403, "Invalid or missing sync secret.")
 
 
-@router.post(
+@scheduled_sync_router.post(
     "/donors/scheduled-sync", response_model=DonorImportSummary,
     dependencies=[Depends(_verify_pco_giving_sync_secret)],
 )
