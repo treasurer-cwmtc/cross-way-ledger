@@ -69,6 +69,21 @@ async def _read_csv(file: UploadFile) -> str:
         return raw.decode("latin-1")
 
 
+def _blank_form_mapping(campaign_id: int) -> PledgeFormMapping:
+    """An unsaved (never db.add()'d) PledgeFormMapping - the column
+    defaults on the model (default="") only apply on INSERT flush, not on
+    plain construction, so a not-yet-configured campaign's fields would
+    otherwise serialize as None instead of "" (fails PledgeFormMappingOut's
+    str-typed fields). Explicit here rather than relying on the model."""
+    return PledgeFormMapping(
+        campaign_id=campaign_id,
+        initial_amount_field_id="",
+        due_date_field_id="",
+        monthly_amount_field_id="",
+        contact_method_field_id="",
+    )
+
+
 def _get_campaign(db: Session, campaign_id: int) -> PledgeCampaign:
     campaign = db.get(PledgeCampaign, campaign_id)
     if campaign is None:
@@ -260,7 +275,7 @@ def list_pco_form_fields(form_id: str) -> list[dict]:
 )
 def get_pledge_form_mapping(campaign_id: int, db: Session = Depends(get_db)) -> PledgeFormMapping:
     _get_campaign(db, campaign_id)
-    return db.get(PledgeFormMapping, campaign_id) or PledgeFormMapping(campaign_id=campaign_id)
+    return db.get(PledgeFormMapping, campaign_id) or _blank_form_mapping(campaign_id)
 
 
 @router.put(
@@ -328,7 +343,7 @@ def _upsert_pledges_from_form_submissions(
 
 
 def _run_pledge_form_sync(db: Session, campaign: PledgeCampaign) -> PledgeFormSyncSummary:
-    mapping = db.get(PledgeFormMapping, campaign.id) or PledgeFormMapping(campaign_id=campaign.id)
+    mapping = db.get(PledgeFormMapping, campaign.id) or _blank_form_mapping(campaign.id)
     try:
         rows = pco_form_sync.fetch_form_submissions(
             campaign.pco_form_id,
