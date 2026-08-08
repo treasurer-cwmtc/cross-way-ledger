@@ -123,14 +123,19 @@ const NAV_GROUPS: NavGroup[] = [
   {
     // Every Planning Center-sourced screen, consolidated in one place -
     // People/Donors/Donations are all live syncs (Sync Now + last-synced,
-    // CSV fallback tucked away), plus the two admin config screens that sit
-    // on top of that synced data.
+    // CSV fallback tucked away), plus the admin config screen that sits on
+    // top of that synced data.
+    // "Reimbursement Access" (the List-based login gate) is deliberately
+    // NOT listed here - deprecated per the treasurer (didn't make sense as
+    // a separate page from the account-assignment editor on Reimbursements
+    // itself). The page component, its route below, and the backend
+    // endpoints are all left fully intact - re-adding one line here brings
+    // it straight back if it's ever wanted again.
     label: "Planning Center",
     items: [
       { tab: "pco-people", label: "People" },
       { tab: "donors", label: "Donors" },
       { tab: "pco-donations", label: "Donations" },
-      { tab: "pco-reimbursement-access", label: "Reimbursement Access" },
       { tab: "pco-giving-people-link", label: "Giving ↔ People Link" },
     ],
   },

@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { PcoListOption, reimbursementsApi } from "../../api/reimbursements";
 
-/** Planning Center > Reimbursement Access - optionally narrows who can log
+/** DEPRECATED - removed from the nav per the treasurer (a separate page for
+ * this didn't make sense next to the account-assignment editor on
+ * Reimbursements itself). Component, route (App.tsx), and backend
+ * endpoints (GET/PUT /api/reimbursements/reimbursement-gate-list,
+ * GET /api/reimbursements/pco-lists) are all left fully intact - re-adding
+ * one line to App.tsx's "Planning Center" NavGroup brings this straight
+ * back if it's ever wanted again.
+ *
+ * Planning Center > Reimbursement Access - optionally narrows who can log
  * into the Reimbursement portal from "every active PCO Person" (the
  * default, see PlanningCenter/People.tsx) down to members of one specific
  * PCO List. Clearing the selection goes back to the default. Every People
