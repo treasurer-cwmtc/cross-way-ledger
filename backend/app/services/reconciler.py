@@ -14,10 +14,26 @@ from datetime import date, datetime
 from .categorizer import Categorizer
 from .parsers import BankRow, StripeRow
 
-# A wizard-only review hint, not a real user note - reconciliation.py's
-# import_run strips this exact text back out so it never ends up
-# permanently on the Actual/Accrual ledger's Notes field.
-UNCATEGORIZED_NOTE = "Uncategorized - add a rule"
+
+def is_review_hint_note(notes: str) -> bool:
+    """True for a wizard-only "you need to fix something" note (missing
+    fund rule, unmatched payout, etc.) - these get shown during the
+    wizard's review steps to prompt action, but must never survive
+    permanently onto the Actual/Accrual ledger once imported (they were
+    already stale the moment the treasurer fixed the underlying problem,
+    if they did). Purely descriptive/audit-trail notes - a
+    STRIPE PAYOUT ADJUSTMENT's fee/timing explanation, a split gift's
+    "(1 of 3)" line marker - are NOT review hints and are kept; they
+    describe what the line *is*, not something to go fix."""
+    if not notes:
+        return False
+    if notes == "No Stripe payout matched this bank amount.":
+        return True
+    if notes.startswith("No fund rule for '"):
+        return True
+    if notes.startswith("Payout ") and notes.endswith(" had no linked donations."):
+        return True
+    return False
 
 
 @dataclass
@@ -91,7 +107,11 @@ def _categorize_bank_row(bank: BankRow, categorizer: Categorizer) -> OutputLine:
         reference=bank.raw.get("Check or Slip #", "") or "",
         bank_description=bank.description,
         matched=bool(cat.account_no),
-        notes="" if cat.account_no else UNCATEGORIZED_NOTE,
+        # No auto-generated hint text here - the "✗ Uncategorized" status
+        # pill (driven by `matched`, not this field) already signals it, and
+        # the treasurer doesn't want review-only hints polluting a field
+        # they treat as their own real notes.
+        notes="",
     )
 
 
