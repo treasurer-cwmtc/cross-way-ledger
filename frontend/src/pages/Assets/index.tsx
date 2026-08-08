@@ -221,7 +221,25 @@ export default function Assets() {
       <div className="card">
         <div className="table-wrap">
           <table className="resizable-cols">
-            <ColGroup columns={COLUMNS} widths={widths} />
+            <ColGroup
+              columns={COLUMNS}
+              widths={widths}
+              defaultWidths={{
+                // "item" and "category" don't match ColumnResize's
+                // key-name-guessing regexes (only "description"/"notes" do
+                // for wide text, "amount" for numbers), so they fell back
+                // to the same generic 140px as count/cost/total - starving
+                // Item's actual long free-text content while count/cost/
+                // total sat mostly empty. Set explicitly instead.
+                date: 110,
+                category: 130,
+                item: 380,
+                count: 70,
+                cost: 100,
+                total: 100,
+                notes: 200,
+              }}
+            />
             <thead>
               <tr>
                 <SortableHeader
