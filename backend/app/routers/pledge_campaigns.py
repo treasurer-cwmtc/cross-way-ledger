@@ -383,6 +383,12 @@ def _run_pco_donors_sync(db: Session) -> DonorImportSummary:
         raise HTTPException(502, f"Planning Center API error: {e}")
 
     imported = _upsert_donors(db, rows)
+    # SessionLocal is autoflush=False (see database.py) - a brand-new Donor
+    # row just added above via db.add() is otherwise invisible to the
+    # select(Donor) queries both helpers below run in this same request
+    # (masked in earlier testing only because the donor being asserted on
+    # already existed from a prior, separately-committed request).
+    db.flush()
     _recompute_donor_totals(db)
     _auto_link_giving_people(db)
 

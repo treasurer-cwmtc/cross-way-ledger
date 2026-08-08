@@ -189,6 +189,11 @@ def _run_pco_people_sync(db: Session) -> PcoPeopleImportSummary:
         raise HTTPException(502, f"Planning Center API error: {e}")
 
     imported = svc.upsert_pco_people(db, rows)
+    # SessionLocal is autoflush=False (see database.py) - a brand-new
+    # PcoPerson row just added above via db.add() is otherwise invisible to
+    # _sync_gate_list_membership's select(PcoPerson.person_id) in this same
+    # request, which would silently drop a newly-synced gate-list member.
+    db.flush()
     _sync_gate_list_membership(db)
 
     now_iso = datetime.now(tz=timezone.utc).isoformat()
