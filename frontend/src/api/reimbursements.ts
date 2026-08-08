@@ -78,7 +78,7 @@ export const reimbursementsApi = {
   importPcoPeople: (file: File) => {
     const form = new FormData();
     form.append("people_file", file);
-    return fetch(`${BASE}/api/reimbursements/pco-people/import`, {
+    return fetch(`${BASE}/api/pco/people/import`, {
       method: "POST",
       headers: authHeaders(),
       body: form,
@@ -86,33 +86,33 @@ export const reimbursementsApi = {
   },
 
   listPcoPeople: () =>
-    fetch(`${BASE}/api/reimbursements/pco-people`, { headers: authHeaders() }).then(j<PcoPerson[]>),
+    fetch(`${BASE}/api/pco/people`, { headers: authHeaders() }).then(j<PcoPerson[]>),
 
   /** Live counterpart to importPcoPeople - pulls every member (any status)
    * straight from the PCO People API instead of a manual CSV upload. */
   syncPcoPeople: () =>
-    fetch(`${BASE}/api/reimbursements/pco-people/sync`, {
+    fetch(`${BASE}/api/pco/people/sync`, {
       method: "POST",
       headers: authHeaders(),
     }).then(j<PcoPeopleImportSummary>),
 
   getPcoPeopleLastSynced: () =>
-    fetch(`${BASE}/api/reimbursements/pco-people/last-synced`, { headers: authHeaders() }).then(
+    fetch(`${BASE}/api/pco/people/last-synced`, { headers: authHeaders() }).then(
       j<PcoLastSynced>
     ),
 
   listPcoLists: () =>
-    fetch(`${BASE}/api/reimbursements/pco-lists`, { headers: authHeaders() }).then(
+    fetch(`${BASE}/api/pco/people/lists`, { headers: authHeaders() }).then(
       j<PcoListOption[]>
     ),
 
   getGateList: () =>
-    fetch(`${BASE}/api/reimbursements/reimbursement-gate-list`, { headers: authHeaders() }).then(
+    fetch(`${BASE}/api/pco/people/reimbursement-gate-list`, { headers: authHeaders() }).then(
       j<ReimbursementGateList>
     ),
 
   setGateList: (listId: string | null) =>
-    fetch(`${BASE}/api/reimbursements/reimbursement-gate-list`, {
+    fetch(`${BASE}/api/pco/people/reimbursement-gate-list`, {
       method: "PUT",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ list_id: listId }),

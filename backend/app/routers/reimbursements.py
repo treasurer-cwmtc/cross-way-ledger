@@ -135,11 +135,6 @@ def _apply_lines(db: Session, reimbursement: Reimbursement, payload: Reimburseme
 # --------------------------------------------------------------------------- #
 
 
-@router.post(
-    "/pco-people/import",
-    response_model=PcoPeopleImportSummary,
-    dependencies=[Depends(require_permission("reimbursements"))],
-)
 async def import_pco_people(
     people_file: UploadFile = File(...), db: Session = Depends(get_db)
 ) -> PcoPeopleImportSummary:
@@ -213,11 +208,6 @@ def _run_pco_people_sync(db: Session) -> PcoPeopleImportSummary:
     return PcoPeopleImportSummary(people_imported=imported, last_synced_at=now_iso)
 
 
-@router.post(
-    "/pco-people/sync",
-    response_model=PcoPeopleImportSummary,
-    dependencies=[Depends(require_permission("reimbursements"))],
-)
 def sync_pco_people_now(db: Session = Depends(get_db)) -> PcoPeopleImportSummary:
     return _run_pco_people_sync(db)
 
@@ -232,39 +222,19 @@ def _verify_pco_people_sync_secret(x_sync_secret: str = Header(default="")) -> N
         raise HTTPException(403, "Invalid or missing sync secret.")
 
 
-@router.post(
-    "/pco-people/scheduled-sync",
-    response_model=PcoPeopleImportSummary,
-    dependencies=[Depends(_verify_pco_people_sync_secret)],
-)
 def scheduled_pco_people_sync(db: Session = Depends(get_db)) -> PcoPeopleImportSummary:
     return _run_pco_people_sync(db)
 
 
-@router.get(
-    "/pco-people/last-synced",
-    response_model=PcoLastSyncedOut,
-    dependencies=[Depends(require_permission("reimbursements"))],
-)
 def get_pco_people_last_synced(db: Session = Depends(get_db)) -> PcoLastSyncedOut:
     setting = db.get(AppSetting, PCO_PEOPLE_LAST_SYNCED_KEY)
     return PcoLastSyncedOut(last_synced_at=setting.value if setting else None)
 
 
-@router.get(
-    "/pco-people",
-    response_model=list[PcoPersonOut],
-    dependencies=[Depends(require_permission("reimbursements"))],
-)
 def list_pco_people(db: Session = Depends(get_db)) -> list[PcoPerson]:
     return list(db.scalars(select(PcoPerson).order_by(PcoPerson.name)))
 
 
-@router.get(
-    "/pco-lists",
-    response_model=list[PcoListOption],
-    dependencies=[Depends(require_permission("reimbursements"))],
-)
 def list_pco_lists() -> list[PcoListOption]:
     """Live-fetched (not synced locally) - Lists change rarely and this is an
     on-demand admin picker, not something evaluated per login (see
@@ -278,11 +248,6 @@ def list_pco_lists() -> list[PcoListOption]:
     return [PcoListOption(**o) for o in options]
 
 
-@router.get(
-    "/reimbursement-gate-list",
-    response_model=ReimbursementGateListOut,
-    dependencies=[Depends(require_permission("reimbursements"))],
-)
 def get_reimbursement_gate_list(db: Session = Depends(get_db)) -> ReimbursementGateListOut:
     setting = db.get(AppSetting, svc.REIMBURSEMENT_GATE_LIST_ID_KEY)
     if not setting or not setting.value:
@@ -301,11 +266,6 @@ def get_reimbursement_gate_list(db: Session = Depends(get_db)) -> ReimbursementG
     return ReimbursementGateListOut(list_id=list_id, list_name=list_name, member_count=member_count or 0)
 
 
-@router.put(
-    "/reimbursement-gate-list",
-    response_model=ReimbursementGateListOut,
-    dependencies=[Depends(require_permission("reimbursements"))],
-)
 def set_reimbursement_gate_list(
     payload: ReimbursementGateListUpdate, db: Session = Depends(get_db)
 ) -> ReimbursementGateListOut:

@@ -54,10 +54,12 @@ export const donationsApi = {
    * lookback window straight from the Giving API instead of a manual CSV
    * upload, exploding a multi-fund donation into one row per fund. */
   sync: () =>
-    fetch(`${BASE}/api/donations/sync`, { method: "POST", headers: authHeaders() }).then(
+    fetch(`${BASE}/api/pco/giving/donations/sync`, { method: "POST", headers: authHeaders() }).then(
       j<DonationSyncResult>
     ),
 
   getLastSynced: () =>
-    fetch(`${BASE}/api/donations/last-synced`, { headers: authHeaders() }).then(j<PcoLastSynced>),
+    fetch(`${BASE}/api/pco/giving/donations/last-synced`, { headers: authHeaders() }).then(
+      j<PcoLastSynced>
+    ),
 };

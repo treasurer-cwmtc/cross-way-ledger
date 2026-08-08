@@ -36,8 +36,8 @@ def _build_status(db: Session) -> list[IntegrationStatusOut]:
             label="Planning Center - People",
             description="Syncs every PCO Person (any status) into the login allowlist for the "
             "Reimbursement portal.",
-            sync_now_endpoint="POST /api/reimbursements/pco-people/sync",
-            scheduled_sync_endpoint="POST /api/reimbursements/pco-people/scheduled-sync",
+            sync_now_endpoint="POST /api/pco/people/sync",
+            scheduled_sync_endpoint="POST /api/pco/people/scheduled-sync",
             last_synced_key=reimbursements.PCO_PEOPLE_LAST_SYNCED_KEY,
             configured=pco_configured,
             scheduled_sync_configured=bool(settings.pco_people_sync_secret),
@@ -47,8 +47,8 @@ def _build_status(db: Session) -> list[IntegrationStatusOut]:
             label="Planning Center - Giving Donors",
             description="Syncs the persistent Giving App donor list, shared across every pledge "
             "campaign.",
-            sync_now_endpoint="POST /api/pledge-campaigns/donors/sync",
-            scheduled_sync_endpoint="POST /api/pledge-campaigns/donors/scheduled-sync",
+            sync_now_endpoint="POST /api/pco/giving/donors/sync",
+            scheduled_sync_endpoint="POST /api/pco/giving/donors/scheduled-sync",
             last_synced_key=pledge_campaigns.PCO_GIVING_DONORS_LAST_SYNCED_KEY,
             configured=pco_configured,
             scheduled_sync_configured=bool(settings.pco_giving_sync_secret),
@@ -58,8 +58,8 @@ def _build_status(db: Session) -> list[IntegrationStatusOut]:
             label="Planning Center - Giving Donations",
             description="Syncs donations received in the trailing lookback window "
             f"({settings.pco_giving_sync_lookback_days} days).",
-            sync_now_endpoint="POST /api/donations/sync",
-            scheduled_sync_endpoint="POST /api/donations/scheduled-sync",
+            sync_now_endpoint="POST /api/pco/giving/donations/sync",
+            scheduled_sync_endpoint="POST /api/pco/giving/donations/scheduled-sync",
             last_synced_key=donations.PCO_GIVING_DONATIONS_LAST_SYNCED_KEY,
             configured=pco_configured,
             scheduled_sync_configured=bool(settings.pco_giving_sync_secret),
@@ -69,8 +69,8 @@ def _build_status(db: Session) -> list[IntegrationStatusOut]:
             label="Planning Center - Pledge Form Sync",
             description="Syncs pledge submissions for every campaign configured to sync from a "
             "PCO Form.",
-            sync_now_endpoint="POST /api/pledge-campaigns/{campaign_id}/pledges/sync",
-            scheduled_sync_endpoint="POST /api/pledge-campaigns/pledges/scheduled-sync",
+            sync_now_endpoint="POST /api/pco/forms/{campaign_id}/sync",
+            scheduled_sync_endpoint="POST /api/pco/forms/scheduled-sync",
             last_synced_key=pledge_campaigns.PCO_PLEDGE_FORM_LAST_SYNCED_KEY,
             configured=pco_configured,
             scheduled_sync_configured=bool(settings.pco_pledge_form_sync_secret),

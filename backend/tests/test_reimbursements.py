@@ -23,7 +23,7 @@ PCO_CSV = """Person ID,Name,Primary Email,Primary Phone Number
 def _import_pco_people(csv_text: str = PCO_CSV) -> dict:
     h = auth_header()
     files = {"people_file": ("people.csv", csv_text.encode(), "text/csv")}
-    r = client.post("/api/reimbursements/pco-people/import", headers=h, files=files)
+    r = client.post("/api/pco/people/import", headers=h, files=files)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -63,14 +63,14 @@ def test_pco_people_import_is_upserted_by_person_id():
     assert result["people_imported"] == 4
 
     h = auth_header()
-    people = {p["person_id"]: p for p in client.get("/api/reimbursements/pco-people", headers=h).json()}
+    people = {p["person_id"]: p for p in client.get("/api/pco/people", headers=h).json()}
     assert people["1001"]["email"] == "jane@example.com"
 
     # Re-importing with an updated name upserts, not duplicates.
     updated_csv = PCO_CSV.replace("Jane Doe", "Jane D. Doe")
     _import_pco_people(updated_csv)
     h = auth_header()
-    people_after = {p["person_id"]: p for p in client.get("/api/reimbursements/pco-people", headers=h).json()}
+    people_after = {p["person_id"]: p for p in client.get("/api/pco/people", headers=h).json()}
     assert people_after["1001"]["name"] == "Jane D. Doe"
     assert len(people_after) == len(people)
 

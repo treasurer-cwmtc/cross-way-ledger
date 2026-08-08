@@ -32,6 +32,9 @@ from .routers import (
     stripe_sync,
 )
 from .routers import settings as settings_router
+from .routers.pco import forms as pco_forms
+from .routers.pco import giving as pco_giving
+from .routers.pco import people as pco_people
 from .seed import seed
 
 logger = logging.getLogger("app.main")
@@ -74,7 +77,6 @@ app.include_router(income_statement.router)
 app.include_router(dashboard.router)
 app.include_router(settings_router.router)
 app.include_router(pledge_campaigns.router)
-app.include_router(pledge_campaigns.scheduled_sync_router)
 app.include_router(donors.router)
 app.include_router(donations.router)
 app.include_router(sheets_export.router)
@@ -83,6 +85,9 @@ app.include_router(stripe_sync.router)
 app.include_router(plaid_sync.router)
 app.include_router(assets.router)
 app.include_router(integrations.router)
+app.include_router(pco_people.router)
+app.include_router(pco_giving.router)
+app.include_router(pco_forms.router)
 
 
 @app.exception_handler(IntegrityError)

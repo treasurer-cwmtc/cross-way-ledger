@@ -23,14 +23,14 @@ def _sync_people():
         "app.routers.reimbursements.pco_people_sync.fetch_people",
         return_value=[ACTIVE_PERSON, INACTIVE_PERSON],
     ):
-        r = client.post("/api/reimbursements/pco-people/sync", headers=h)
+        r = client.post("/api/pco/people/sync", headers=h)
     assert r.status_code == 200, r.text
 
 
 def test_sync_pulls_every_status_and_exposes_it():
     _sync_people()
     h = auth_header()
-    r = client.get("/api/reimbursements/pco-people", headers=h)
+    r = client.get("/api/pco/people", headers=h)
     assert r.status_code == 200, r.text
     by_id = {p["person_id"]: p for p in r.json()}
     assert by_id["9201"]["status"] == "active"

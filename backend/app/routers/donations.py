@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 import requests
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -151,32 +151,14 @@ def _run_pco_donations_sync(db: Session) -> DonationSyncResult:
     )
 
 
-@router.post(
-    "/sync", response_model=DonationSyncResult,
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def sync_donations_now(db: Session = Depends(get_db)) -> DonationSyncResult:
     return _run_pco_donations_sync(db)
 
 
-def _verify_pco_giving_sync_secret(x_sync_secret: str = Header(default="")) -> None:
-    settings = get_settings()
-    if not settings.pco_giving_sync_secret or x_sync_secret != settings.pco_giving_sync_secret:
-        raise HTTPException(403, "Invalid or missing sync secret.")
-
-
-@router.post(
-    "/scheduled-sync", response_model=DonationSyncResult,
-    dependencies=[Depends(_verify_pco_giving_sync_secret)],
-)
 def scheduled_donations_sync(db: Session = Depends(get_db)) -> DonationSyncResult:
     return _run_pco_donations_sync(db)
 
 
-@router.get(
-    "/last-synced", response_model=PcoLastSyncedOut,
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def get_donations_last_synced(db: Session = Depends(get_db)) -> PcoLastSyncedOut:
     setting = db.get(AppSetting, PCO_GIVING_DONATIONS_LAST_SYNCED_KEY)
     return PcoLastSyncedOut(last_synced_at=setting.value if setting else None)

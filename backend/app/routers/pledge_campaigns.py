@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 
 import requests
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -49,14 +49,9 @@ from ..services.pledge_import import DonorRow, match_pledge_to_donor, parse_dono
 router = APIRouter(
     prefix="/api/pledge-campaigns", tags=["pledge-campaigns"], dependencies=[Depends(get_current_user)]
 )
-# Separate, un-authenticated router for the scheduled-sync endpoint only -
-# `router` above requires a logged-in user for every route via its
-# router-level dependency, which would swallow the Cloud Scheduler job's
-# request with a 401 before _verify_pco_giving_sync_secret ever ran. Mirrors
-# routers/donations.py's per-route (not router-level) dependency approach,
-# scoped down to just this one endpoint since every other route on `router`
-# genuinely does need a real login. Registered separately in main.py.
-scheduled_sync_router = APIRouter(prefix="/api/pledge-campaigns", tags=["pledge-campaigns"])
+# The two un-authenticated scheduled-sync endpoints that used to live here
+# (donors, pledges) moved to routers/pco/giving.py and routers/pco/forms.py
+# respectively - this module no longer has any un-authenticated routes.
 
 PCO_GIVING_DONORS_LAST_SYNCED_KEY = "pco_giving_donors_last_synced_at"
 # Pledge Form sync is per-campaign (no single "the sync" the way People/
@@ -246,10 +241,6 @@ async def import_pledges(
     )
 
 
-@router.get(
-    "/pco-forms", response_model=list[PcoFormOption],
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def list_pco_forms() -> list[dict]:
     """Every PCO Form in the account, for the wizard's "Sync from a
     Planning Center Form" picker - an on-demand admin call (forms rarely
@@ -262,10 +253,6 @@ def list_pco_forms() -> list[dict]:
         raise HTTPException(502, f"Planning Center API error: {e}")
 
 
-@router.get(
-    "/pco-forms/{form_id}/fields", response_model=list[PcoFormFieldOption],
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def list_pco_form_fields(form_id: str) -> list[dict]:
     try:
         return pco_form_sync.fetch_form_fields(form_id)
@@ -387,10 +374,6 @@ def _run_pledge_form_sync(db: Session, campaign: PledgeCampaign) -> PledgeFormSy
     )
 
 
-@router.post(
-    "/{campaign_id}/pledges/sync", response_model=PledgeFormSyncSummary,
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def sync_campaign_pledges_now(campaign_id: int, db: Session = Depends(get_db)) -> PledgeFormSyncSummary:
     campaign = _get_campaign(db, campaign_id)
     if not campaign.pco_form_id:
@@ -402,16 +385,6 @@ def sync_campaign_pledges_now(campaign_id: int, db: Session = Depends(get_db)) -
     return _run_pledge_form_sync(db, campaign)
 
 
-def _verify_pco_pledge_form_sync_secret(x_sync_secret: str = Header(default="")) -> None:
-    settings = get_settings()
-    if not settings.pco_pledge_form_sync_secret or x_sync_secret != settings.pco_pledge_form_sync_secret:
-        raise HTTPException(403, "Invalid or missing sync secret.")
-
-
-@scheduled_sync_router.post(
-    "/pledges/scheduled-sync", response_model=list[PledgeFormSyncSummary],
-    dependencies=[Depends(_verify_pco_pledge_form_sync_secret)],
-)
 def scheduled_pledges_sync(db: Session = Depends(get_db)) -> list[PledgeFormSyncSummary]:
     """One Cloud Scheduler job covers every campaign that syncs from a
     form, same "one job, loop every active campaign" shape as
@@ -621,42 +594,20 @@ def _run_pco_donors_sync(db: Session) -> DonorImportSummary:
     )
 
 
-@router.post(
-    "/donors/sync", response_model=DonorImportSummary,
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def sync_donors_now(db: Session = Depends(get_db)) -> DonorImportSummary:
     """Not campaign-scoped - see _rematch_every_active_campaign."""
     return _run_pco_donors_sync(db)
 
 
-def _verify_pco_giving_sync_secret(x_sync_secret: str = Header(default="")) -> None:
-    settings = get_settings()
-    if not settings.pco_giving_sync_secret or x_sync_secret != settings.pco_giving_sync_secret:
-        raise HTTPException(403, "Invalid or missing sync secret.")
-
-
-@scheduled_sync_router.post(
-    "/donors/scheduled-sync", response_model=DonorImportSummary,
-    dependencies=[Depends(_verify_pco_giving_sync_secret)],
-)
 def scheduled_donors_sync(db: Session = Depends(get_db)) -> DonorImportSummary:
     return _run_pco_donors_sync(db)
 
 
-@router.get(
-    "/donors/last-synced", response_model=PcoLastSyncedOut,
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def get_donors_last_synced(db: Session = Depends(get_db)) -> PcoLastSyncedOut:
     setting = db.get(AppSetting, PCO_GIVING_DONORS_LAST_SYNCED_KEY)
     return PcoLastSyncedOut(last_synced_at=setting.value if setting else None)
 
 
-@router.get(
-    "/giving-people-links", response_model=list[GivingPersonLinkOut],
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def list_giving_people_links(db: Session = Depends(get_db)) -> list[GivingPersonLinkOut]:
     """Every Giving donor, with whichever Person it's linked to (auto or
     manual) - or None if unmatched (no link row at all, see
@@ -681,10 +632,6 @@ def list_giving_people_links(db: Session = Depends(get_db)) -> list[GivingPerson
     return out
 
 
-@router.put(
-    "/giving-people-links/{donor_id}", response_model=GivingPersonLinkOut,
-    dependencies=[Depends(require_permission("pledge-campaign-status"))],
-)
 def set_giving_people_link(
     donor_id: str, payload: GivingPersonLinkUpdate, db: Session = Depends(get_db)
 ) -> GivingPersonLinkOut:

@@ -4,8 +4,8 @@ import { PcoListOption, reimbursementsApi } from "../../api/reimbursements";
 /** DEPRECATED - removed from the nav per the treasurer (a separate page for
  * this didn't make sense next to the account-assignment editor on
  * Reimbursements itself). Component, route (App.tsx), and backend
- * endpoints (GET/PUT /api/reimbursements/reimbursement-gate-list,
- * GET /api/reimbursements/pco-lists) are all left fully intact - re-adding
+ * endpoints (GET/PUT /api/pco/people/reimbursement-gate-list,
+ * GET /api/pco/people/lists) are all left fully intact - re-adding
  * one line to App.tsx's "Planning Center" NavGroup brings this straight
  * back if it's ever wanted again.
  *
