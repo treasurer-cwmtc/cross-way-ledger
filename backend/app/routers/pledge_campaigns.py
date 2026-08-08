@@ -8,12 +8,24 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_user, require_any_permission, require_permission
-from ..models import AppSetting, Donation, Donor, Pledge, PledgeCampaign, PledgeDonorMatch, User
+from ..models import (
+    AppSetting,
+    Donation,
+    Donor,
+    GivingPersonLink,
+    PcoPerson,
+    Pledge,
+    PledgeCampaign,
+    PledgeDonorMatch,
+    User,
+)
 from ..schemas import (
     CampaignDetailOut,
     CampaignDetailRow,
     DonationOut,
     DonorImportSummary,
+    GivingPersonLinkOut,
+    GivingPersonLinkUpdate,
     PcoLastSyncedOut,
     PledgeCampaignCreate,
     PledgeCampaignOut,
@@ -327,6 +339,41 @@ async def import_donors_for_campaign(
     )
 
 
+def _auto_link_giving_people(db: Session) -> None:
+    """PCO's Giving and People APIs already share one organization-wide
+    person ID space (confirmed against a real account - see
+    services/pco_giving_sync.py's fetch_donors docstring), so a donor whose
+    donor_id matches a synced PcoPerson.person_id is auto-linked here on
+    every Donor sync. A manual override (see PUT /giving-people-links/
+    {donor_id}) is never touched - only rows still on "auto" get
+    re-evaluated, so a treasurer's manual pick always sticks."""
+    person_ids = set(db.scalars(select(PcoPerson.person_id)))
+    donor_ids = set(db.scalars(select(Donor.donor_id)))
+    existing_manual = set(
+        db.scalars(
+            select(GivingPersonLink.donor_id).where(GivingPersonLink.match_source == "manual")
+        )
+    )
+    existing_auto = {
+        row.donor_id: row
+        for row in db.scalars(
+            select(GivingPersonLink).where(GivingPersonLink.match_source == "auto")
+        )
+    }
+    for donor_id in donor_ids - existing_manual:
+        if donor_id in person_ids:
+            link = existing_auto.get(donor_id)
+            if link is None:
+                db.add(GivingPersonLink(donor_id=donor_id, person_id=donor_id, match_source="auto"))
+            elif link.person_id != donor_id:
+                link.person_id = donor_id
+        elif donor_id in existing_auto:
+            # Was auto-matched before, no longer resolves (e.g. that Person
+            # was removed from PCO People) - drop the stale link rather than
+            # leaving it pointing at a person_id that may not exist anymore.
+            db.delete(existing_auto[donor_id])
+
+
 def _run_pco_donors_sync(db: Session) -> DonorImportSummary:
     try:
         rows = pco_giving_sync.fetch_donors()
@@ -336,7 +383,14 @@ def _run_pco_donors_sync(db: Session) -> DonorImportSummary:
         raise HTTPException(502, f"Planning Center API error: {e}")
 
     imported = _upsert_donors(db, rows)
+    # SessionLocal is autoflush=False (see database.py) - a brand-new Donor
+    # row just added above via db.add() is otherwise invisible to the
+    # select(Donor) queries both helpers below run in this same request
+    # (masked in earlier testing only because the donor being asserted on
+    # already existed from a prior, separately-committed request).
+    db.flush()
     _recompute_donor_totals(db)
+    _auto_link_giving_people(db)
 
     now_iso = datetime.now(tz=timezone.utc).isoformat()
     setting = db.get(AppSetting, PCO_GIVING_DONORS_LAST_SYNCED_KEY)
@@ -382,6 +436,74 @@ def scheduled_donors_sync(db: Session = Depends(get_db)) -> DonorImportSummary:
 def get_donors_last_synced(db: Session = Depends(get_db)) -> PcoLastSyncedOut:
     setting = db.get(AppSetting, PCO_GIVING_DONORS_LAST_SYNCED_KEY)
     return PcoLastSyncedOut(last_synced_at=setting.value if setting else None)
+
+
+@router.get(
+    "/giving-people-links", response_model=list[GivingPersonLinkOut],
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def list_giving_people_links(db: Session = Depends(get_db)) -> list[GivingPersonLinkOut]:
+    """Every Giving donor, with whichever Person it's linked to (auto or
+    manual) - or None if unmatched (no link row at all, see
+    _auto_link_giving_people). This pass only surfaces the mapping itself;
+    nothing else in the app reads pco_giving_people_link yet."""
+    donors = list(db.scalars(select(Donor).order_by(Donor.last_name, Donor.first_name)))
+    links = {link.donor_id: link for link in db.scalars(select(GivingPersonLink))}
+    people = {p.person_id: p for p in db.scalars(select(PcoPerson))}
+    out = []
+    for donor in donors:
+        link = links.get(donor.donor_id)
+        person = people.get(link.person_id) if link else None
+        out.append(
+            GivingPersonLinkOut(
+                donor_id=donor.donor_id,
+                donor_name=f"{donor.first_name} {donor.last_name}".strip(),
+                person_id=link.person_id if link else None,
+                person_name=person.name if person else None,
+                match_source=link.match_source if link else None,
+            )
+        )
+    return out
+
+
+@router.put(
+    "/giving-people-links/{donor_id}", response_model=GivingPersonLinkOut,
+    dependencies=[Depends(require_permission("pledge-campaign-status"))],
+)
+def set_giving_people_link(
+    donor_id: str, payload: GivingPersonLinkUpdate, db: Session = Depends(get_db)
+) -> GivingPersonLinkOut:
+    """Manual override - a null person_id clears the link back to
+    unmatched (deletes the row) rather than leaving a link with no person,
+    so "no row" stays the single source of truth for "unmatched" everywhere
+    else in the app."""
+    donor = db.get(Donor, donor_id)
+    if donor is None:
+        raise HTTPException(404, "Donor not found.")
+    link = db.get(GivingPersonLink, donor_id)
+    if not payload.person_id:
+        if link is not None:
+            db.delete(link)
+            db.commit()
+        return GivingPersonLinkOut(
+            donor_id=donor_id, donor_name=f"{donor.first_name} {donor.last_name}".strip()
+        )
+    person = db.get(PcoPerson, payload.person_id)
+    if person is None:
+        raise HTTPException(400, "That PCO Person wasn't found - sync People first.")
+    if link is None:
+        link = GivingPersonLink(donor_id=donor_id)
+        db.add(link)
+    link.person_id = payload.person_id
+    link.match_source = "manual"
+    db.commit()
+    return GivingPersonLinkOut(
+        donor_id=donor_id,
+        donor_name=f"{donor.first_name} {donor.last_name}".strip(),
+        person_id=person.person_id,
+        person_name=person.name,
+        match_source="manual",
+    )
 
 
 def _donation_totals_by_donor(db: Session, fund_name: str) -> dict[str, float]:

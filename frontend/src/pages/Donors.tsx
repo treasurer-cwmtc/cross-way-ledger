@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { donorsApi, Donor } from "../api/donors";
+import { pledgeCampaignsApi } from "../api/pledgeCampaigns";
 import DonorDetailModal from "./DonorDetailModal";
 import { TextColumnFilter } from "../components/ColumnFilter";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../components/ColumnResize";
+import { fmtRelative } from "../lib/fmtRelative";
 
 type SortKey = "donor_id" | "name" | "email" | "city" | "state" | "joint_giver_id" | "joint_giver";
 
@@ -81,10 +83,31 @@ export default function Donors() {
   const [jointGiverIdFilter, setJointGiverIdFilter] = useState<Set<string> | null>(null);
   const [jointGiverFilter, setJointGiverFilter] = useState<Set<string> | null>(null);
   const { widths, startResize } = useColumnWidths("donors-list");
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
     donorsApi.list().then(setDonors).catch((err) => setError((err as Error).message));
-  }, []);
+    pledgeCampaignsApi.getDonorsLastSynced().then((r) => setLastSyncedAt(r.last_synced_at)).catch(() => {});
+  }
+
+  useEffect(load, []);
+
+  async function syncNow() {
+    setSyncing(true);
+    setError("");
+    setSyncMsg("");
+    try {
+      const result = await pledgeCampaignsApi.syncDonors();
+      setSyncMsg(`Synced ${result.donors_imported} donors (${result.pledges_matched} pledges matched).`);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   function onSort(key: SortKey) {
     setSort((prev) =>
@@ -159,12 +182,18 @@ export default function Donors() {
 
   return (
     <div>
-      <h2 className="page-title">Giving App - Donors</h2>
+      <h2 className="page-title">Planning Center · Donors</h2>
       <p className="subtitle" style={{ marginTop: 0 }}>
-        The donor list from the Giving App, refreshed by each pledge campaign's import wizard -
-        shared across any reporting that needs it. {donors.length} donors on file. Click a row for
-        full detail and gift history.
+        The donor list from the Giving App, synced live - shared across any reporting that needs
+        it. {donors.length} donors on file. Click a row for full detail and gift history.
       </p>
+      <div className="row" style={{ alignItems: "center", marginBottom: 12 }}>
+        <button className="btn" onClick={syncNow} disabled={syncing}>
+          {syncing ? "Syncing…" : "Sync now"}
+        </button>
+        <span className="pill">Last synced: {fmtRelative(lastSyncedAt)}</span>
+      </div>
+      {syncMsg && <div className="ok">{syncMsg}</div>}
 
       <div className="table-wrap">
         <table className="resizable-cols">

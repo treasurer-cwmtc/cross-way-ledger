@@ -9,8 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import PcoPerson, User
+from .models import User
 from .security import decode_submitter_token, decode_access_token
+from .services.reimbursements import is_allowed_reimbursement_submitter
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
@@ -112,10 +113,12 @@ def get_current_submitter(
     creds: HTTPAuthorizationCredentials | None = Depends(submitter_bearer_scheme),
     db: Session = Depends(get_db),
 ) -> str:
-    """Returns the submitter's verified email. Re-checks `pco_people_people`
-    on every request rather than trusting the JWT claim alone - mirrors
-    get_current_user re-fetching its User row instead of trusting stale
-    claims - so removing someone from the PCO People list revokes their
+    """Returns the submitter's verified email. Re-checks the allowlist (PCO
+    People + optional gate-list membership - see
+    services.reimbursements.is_allowed_reimbursement_submitter) on every
+    request rather than trusting the JWT claim alone - mirrors get_current_user
+    re-fetching its User row instead of trusting stale claims - so removing
+    someone from PCO People, or from the configured gate list, revokes their
     portal access immediately, not just at their next code request."""
     if creds is None:
         raise _SUBMITTER_CREDS_EXC
@@ -124,7 +127,6 @@ def get_current_submitter(
     except jwt.PyJWTError:
         raise _SUBMITTER_CREDS_EXC
 
-    still_listed = db.scalar(select(PcoPerson.person_id).where(PcoPerson.email == email).limit(1))
-    if still_listed is None:
+    if not is_allowed_reimbursement_submitter(db, email):
         raise _SUBMITTER_CREDS_EXC
     return email

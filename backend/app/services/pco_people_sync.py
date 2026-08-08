@@ -12,8 +12,27 @@ https://developer.planning.center/docs/#/apps/people/2024-08-08/vertices/person
 
 from __future__ import annotations
 
-from .pco_client import paginate_with_included
+from .pco_client import paginate, paginate_with_included
 from .reimbursements import PcoPersonRow
+
+
+def fetch_list_options() -> list[dict]:
+    """Every PCO List in the account, for the Reimbursement Access admin
+    picker (see routers/reimbursements.py's GET /pco-lists) - an on-demand
+    admin call, not something evaluated per login, so a live fetch (no local
+    sync) is fine here, unlike fetch_list_member_ids below."""
+    return [
+        {"id": item["id"], "name": item.get("attributes", {}).get("name", "")}
+        for item in paginate("/people/v2/lists")
+    ]
+
+
+def fetch_list_member_ids(list_id: str) -> set[str]:
+    """Every current member's person_id for one PCO List - synced into
+    pco_list_members (see models.PcoListMember) whenever the configured
+    Reimbursement-access gate list is re-synced, so the login gate itself
+    stays a local DB read rather than a live API call per OTP request."""
+    return {item["id"] for item in paginate(f"/people/v2/lists/{list_id}/people")}
 
 
 def _primary_email(included_by_id: dict, relationships: dict) -> str:

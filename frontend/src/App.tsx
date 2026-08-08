@@ -24,6 +24,10 @@ import Login from "./pages/Login";
 import PledgeCampaigns from "./pages/PledgeCampaigns";
 import PledgeCampaignImportWizard from "./pages/PledgeCampaigns/ImportWizard";
 import Reimbursements from "./pages/Reimbursements";
+import PlanningCenterPeople from "./pages/PlanningCenter/People";
+import PlanningCenterDonations from "./pages/PlanningCenter/Donations";
+import ReimbursementAccess from "./pages/PlanningCenter/ReimbursementAccess";
+import GivingPeopleLink from "./pages/PlanningCenter/GivingPeopleLink";
 
 type Tab =
   | "home"
@@ -46,7 +50,11 @@ type Tab =
   | "pledge-campaigns"
   | "pledge-campaign-import"
   | "donors"
-  | "reimbursements";
+  | "reimbursements"
+  | "pco-people"
+  | "pco-donations"
+  | "pco-reimbursement-access"
+  | "pco-giving-people-link";
 
 interface NavItem {
   tab: Tab;
@@ -111,12 +119,25 @@ const NAV_GROUPS: NavGroup[] = [
     items: [{ tab: "reimbursements", label: "Reimbursements" }],
   },
   {
+    // Every Planning Center-sourced screen, consolidated in one place -
+    // People/Donors/Donations are all live syncs (Sync Now + last-synced,
+    // CSV fallback tucked away), plus the two admin config screens that sit
+    // on top of that synced data.
+    label: "Planning Center",
+    items: [
+      { tab: "pco-people", label: "People" },
+      { tab: "donors", label: "Donors" },
+      { tab: "pco-donations", label: "Donations" },
+      { tab: "pco-reimbursement-access", label: "Reimbursement Access" },
+      { tab: "pco-giving-people-link", label: "Giving ↔ People Link" },
+    ],
+  },
+  {
     label: "Setup",
     items: [
       { tab: "rules", label: "Rules" },
       { tab: "accounts", label: "Chart of Accounts" },
       { tab: "link-receipts", label: "Link Receipts" },
-      { tab: "donors", label: "Giving App - Donors" },
       { tab: "config", label: "Config" },
       { tab: "users", label: "Users", adminOnly: true },
     ],
@@ -276,6 +297,16 @@ export default function App() {
               if (item.tab === "pledge-campaign-import") {
                 return user.is_admin || user.permissions.includes("pledge-campaign-status");
               }
+              // Planning Center screens reuse whichever permission already
+              // gates their underlying API (see routers/reimbursements.py
+              // and routers/pledge_campaigns.py) rather than introducing a
+              // new permission key just for where the button lives.
+              if (item.tab === "pco-people" || item.tab === "pco-reimbursement-access") {
+                return user.is_admin || user.permissions.includes("reimbursements");
+              }
+              if (item.tab === "pco-donations" || item.tab === "pco-giving-people-link") {
+                return user.is_admin || user.permissions.includes("pledge-campaign-status");
+              }
               return user.is_admin || user.permissions.includes(item.tab);
             });
             if (items.length === 0) return null;
@@ -371,6 +402,10 @@ export default function App() {
           {tab === "pledge-campaigns" && <PledgeCampaigns user={user} />}
           {tab === "pledge-campaign-import" && <PledgeCampaignImportWizard />}
           {tab === "reimbursements" && <Reimbursements />}
+          {tab === "pco-people" && <PlanningCenterPeople />}
+          {tab === "pco-donations" && <PlanningCenterDonations />}
+          {tab === "pco-reimbursement-access" && <ReimbursementAccess />}
+          {tab === "pco-giving-people-link" && <GivingPeopleLink />}
           {tab === "users" && user.is_admin && <Users currentUserId={user.id} />}
         </div>
       </main>

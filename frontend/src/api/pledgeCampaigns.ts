@@ -114,6 +114,14 @@ export interface DonorImportSummary {
   pledges_unmatched: number;
 }
 
+export interface GivingPersonLink {
+  donor_id: string;
+  donor_name: string;
+  person_id: string | null;
+  person_name: string | null;
+  match_source: "auto" | "manual" | null;
+}
+
 export interface PledgeDashboardPoint {
   date: string;
   running_pledged_total: number;
@@ -211,6 +219,18 @@ export const pledgeCampaignsApi = {
     fetch(`${BASE}/api/pledge-campaigns/donors/last-synced`, { headers: authHeaders() }).then(
       j<{ last_synced_at: string | null }>
     ),
+
+  listGivingPeopleLinks: () =>
+    fetch(`${BASE}/api/pledge-campaigns/giving-people-links`, { headers: authHeaders() }).then(
+      j<GivingPersonLink[]>
+    ),
+
+  setGivingPeopleLink: (donorId: string, personId: string | null) =>
+    fetch(`${BASE}/api/pledge-campaigns/giving-people-links/${encodeURIComponent(donorId)}`, {
+      method: "PUT",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ person_id: personId }),
+    }).then(j<GivingPersonLink>),
 
   dashboard: (campaignId: number) =>
     fetch(`${BASE}/api/pledge-campaigns/${campaignId}/dashboard`, {

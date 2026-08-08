@@ -21,6 +21,17 @@ export interface PcoLastSynced {
   last_synced_at: string | null;
 }
 
+export interface PcoListOption {
+  id: string;
+  name: string;
+}
+
+export interface ReimbursementGateList {
+  list_id: string | null;
+  list_name: string | null;
+  member_count: number;
+}
+
 export interface ReimbursementAssignment {
   account_no: string;
   statement_description: string;
@@ -84,6 +95,23 @@ export const reimbursementsApi = {
     fetch(`${BASE}/api/reimbursements/pco-people/last-synced`, { headers: authHeaders() }).then(
       j<PcoLastSynced>
     ),
+
+  listPcoLists: () =>
+    fetch(`${BASE}/api/reimbursements/pco-lists`, { headers: authHeaders() }).then(
+      j<PcoListOption[]>
+    ),
+
+  getGateList: () =>
+    fetch(`${BASE}/api/reimbursements/reimbursement-gate-list`, { headers: authHeaders() }).then(
+      j<ReimbursementGateList>
+    ),
+
+  setGateList: (listId: string | null) =>
+    fetch(`${BASE}/api/reimbursements/reimbursement-gate-list`, {
+      method: "PUT",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ list_id: listId }),
+    }).then(j<ReimbursementGateList>),
 
   getAssignments: (email: string) =>
     fetch(`${BASE}/api/reimbursements/assignments?email=${encodeURIComponent(email)}`, {

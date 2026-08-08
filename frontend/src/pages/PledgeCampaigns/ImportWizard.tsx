@@ -477,7 +477,8 @@ export default function ImportWizard() {
           <h3 style={{ marginTop: 0 }}>2. Upload Donations</h3>
           <p className="subtitle">
             Synced automatically from the Giving API. No fund needs to be chosen here; every
-            fund present is imported.
+            fund present is imported. Browse the full donation list any time under Planning
+            Center &gt; Donations.
           </p>
           <div className="row" style={{ alignItems: "center" }}>
             <button className="btn" disabled={donationsSyncing} onClick={runDonationsSync}>
@@ -629,7 +630,8 @@ export default function ImportWizard() {
           <p className="subtitle">
             Synced automatically from the Giving API - re-matches every active campaign's
             pledges, so anyone who gave for the first time since step 3 gets linked without
-            re-uploading anything.
+            re-uploading anything. Browse the full donor list any time under Planning Center &gt;
+            Donors.
           </p>
           <div className="row" style={{ alignItems: "center" }}>
             <button className="btn" disabled={donorsSyncing} onClick={runDonorsSync}>

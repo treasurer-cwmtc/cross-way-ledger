@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 import requests
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -23,6 +23,7 @@ from ..deps import get_current_submitter, require_permission
 from ..models import (
     AppSetting,
     ChartOfAccount,
+    PcoListMember,
     PcoPerson,
     Reimbursement,
     ReimbursementAssignment,
@@ -30,6 +31,7 @@ from ..models import (
 )
 from ..schemas import (
     PcoLastSyncedOut,
+    PcoListOption,
     PcoPeopleImportSummary,
     PcoPersonOut,
     ReceiptUploadOut,
@@ -37,6 +39,8 @@ from ..schemas import (
     ReimbursementAssignmentOut,
     ReimbursementAssignmentsUpdate,
     ReimbursementCreate,
+    ReimbursementGateListOut,
+    ReimbursementGateListUpdate,
     ReimbursementLineOut,
     ReimbursementOtpRequest,
     ReimbursementOtpVerify,
@@ -152,6 +156,30 @@ async def import_pco_people(
 PCO_PEOPLE_LAST_SYNCED_KEY = "pco_people_last_synced_at"
 
 
+def _sync_gate_list_membership(db: Session) -> None:
+    """If a Reimbursement Access gate list is configured, re-pulls its
+    current membership from PCO and replaces pco_list_members for that
+    list_id - runs as part of every People sync (see _run_pco_people_sync)
+    so one "Sync now" click keeps both People and the gate list's membership
+    current together. No-op if no gate list is configured."""
+    setting = db.get(AppSetting, svc.REIMBURSEMENT_GATE_LIST_ID_KEY)
+    if not setting or not setting.value:
+        return
+    list_id = setting.value
+    try:
+        member_ids = pco_people_sync.fetch_list_member_ids(list_id)
+    except (PcoNotConfiguredError, requests.RequestException):
+        # A gate-list sync failure shouldn't fail the whole People sync -
+        # the gate simply keeps its last-known membership until the next
+        # successful sync.
+        logger.exception("Failed to sync PCO List %s membership", list_id)
+        return
+    db.execute(delete(PcoListMember).where(PcoListMember.list_id == list_id))
+    known_people = set(db.scalars(select(PcoPerson.person_id)))
+    for person_id in member_ids & known_people:
+        db.add(PcoListMember(list_id=list_id, person_id=person_id))
+
+
 def _run_pco_people_sync(db: Session) -> PcoPeopleImportSummary:
     try:
         rows = pco_people_sync.fetch_active_people()
@@ -161,6 +189,12 @@ def _run_pco_people_sync(db: Session) -> PcoPeopleImportSummary:
         raise HTTPException(502, f"Planning Center API error: {e}")
 
     imported = svc.upsert_pco_people(db, rows)
+    # SessionLocal is autoflush=False (see database.py) - a brand-new
+    # PcoPerson row just added above via db.add() is otherwise invisible to
+    # _sync_gate_list_membership's select(PcoPerson.person_id) in this same
+    # request, which would silently drop a newly-synced gate-list member.
+    db.flush()
+    _sync_gate_list_membership(db)
 
     now_iso = datetime.now(tz=timezone.utc).isoformat()
     setting = db.get(AppSetting, PCO_PEOPLE_LAST_SYNCED_KEY)
@@ -217,6 +251,74 @@ def get_pco_people_last_synced(db: Session = Depends(get_db)) -> PcoLastSyncedOu
 )
 def list_pco_people(db: Session = Depends(get_db)) -> list[PcoPerson]:
     return list(db.scalars(select(PcoPerson).order_by(PcoPerson.name)))
+
+
+@router.get(
+    "/pco-lists",
+    response_model=list[PcoListOption],
+    dependencies=[Depends(require_permission("reimbursements"))],
+)
+def list_pco_lists() -> list[PcoListOption]:
+    """Live-fetched (not synced locally) - Lists change rarely and this is an
+    on-demand admin picker, not something evaluated per login (see
+    pco_people_sync.fetch_list_options)."""
+    try:
+        options = pco_people_sync.fetch_list_options()
+    except PcoNotConfiguredError as e:
+        raise HTTPException(400, str(e))
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Planning Center API error: {e}")
+    return [PcoListOption(**o) for o in options]
+
+
+@router.get(
+    "/reimbursement-gate-list",
+    response_model=ReimbursementGateListOut,
+    dependencies=[Depends(require_permission("reimbursements"))],
+)
+def get_reimbursement_gate_list(db: Session = Depends(get_db)) -> ReimbursementGateListOut:
+    setting = db.get(AppSetting, svc.REIMBURSEMENT_GATE_LIST_ID_KEY)
+    if not setting or not setting.value:
+        return ReimbursementGateListOut()
+    list_id = setting.value
+    member_count = db.scalar(
+        select(func.count()).select_from(PcoListMember).where(PcoListMember.list_id == list_id)
+    )
+    list_name = None
+    try:
+        list_name = next(
+            (o["name"] for o in pco_people_sync.fetch_list_options() if o["id"] == list_id), None
+        )
+    except (PcoNotConfiguredError, requests.RequestException):
+        pass  # name lookup is cosmetic only - the id/count still return fine
+    return ReimbursementGateListOut(list_id=list_id, list_name=list_name, member_count=member_count or 0)
+
+
+@router.put(
+    "/reimbursement-gate-list",
+    response_model=ReimbursementGateListOut,
+    dependencies=[Depends(require_permission("reimbursements"))],
+)
+def set_reimbursement_gate_list(
+    payload: ReimbursementGateListUpdate, db: Session = Depends(get_db)
+) -> ReimbursementGateListOut:
+    """Sets (or clears, if list_id is null/blank) which PCO List gates
+    Reimbursement portal login - see
+    services.reimbursements.is_allowed_reimbursement_submitter. Clearing
+    doesn't delete previously-synced pco_list_members rows (harmless, just
+    unused until a list is configured again) - simpler than also having to
+    reason about a partial-delete-on-clear edge case."""
+    setting = db.get(AppSetting, svc.REIMBURSEMENT_GATE_LIST_ID_KEY)
+    new_value = (payload.list_id or "").strip()
+    if setting is None:
+        db.add(AppSetting(key=svc.REIMBURSEMENT_GATE_LIST_ID_KEY, value=new_value))
+    else:
+        setting.value = new_value
+    db.commit()
+    if new_value:
+        _sync_gate_list_membership(db)
+        db.commit()
+    return get_reimbursement_gate_list(db)
 
 
 @router.get(
@@ -391,8 +493,7 @@ def _otp_response(email: str) -> dict:
 @router.post("/request-otp")
 def request_otp(payload: ReimbursementOtpRequest, db: Session = Depends(get_db)) -> dict:
     email = payload.email.strip().lower()
-    known = db.scalar(select(PcoPerson.person_id).where(PcoPerson.email == email).limit(1))
-    if known is None:
+    if not svc.is_allowed_reimbursement_submitter(db, email):
         return _otp_response(email)
 
     try:
